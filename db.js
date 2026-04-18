@@ -128,6 +128,18 @@ async function ensureSchema() {
   `);
 
   await p.query(`
+    CREATE TABLE IF NOT EXISTS mood_history (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      user_id INT NOT NULL,
+      mood VARCHAR(20) NOT NULL,
+      mood_date DATE NOT NULL,
+      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE KEY uq_user_date (user_id, mood_date),
+      INDEX idx_user (user_id, mood_date)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  `);
+
+  await p.query(`
     CREATE TABLE IF NOT EXISTS family_stickers (
       id INT AUTO_INCREMENT PRIMARY KEY,
       family_id INT NOT NULL,

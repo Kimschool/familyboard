@@ -551,6 +551,24 @@ async function loadMeds() {
     }
     $('medsCard').classList.remove('hidden');
 
+    // 주간 성취율 계산
+    let totalCells = 0, doneCells = 0;
+    for (const m of list) {
+      if (m.last7) {
+        totalCells += m.last7.length;
+        doneCells += m.last7.filter((x) => x.done).length;
+      }
+    }
+    const achieveEl = $('medsAchieve');
+    if (achieveEl && totalCells > 0) {
+      const pct = Math.round((doneCells / totalCells) * 100);
+      const emoji = pct >= 90 ? '🏆' : pct >= 70 ? '👍' : pct >= 40 ? '🙂' : '💪';
+      achieveEl.textContent = `이번 주 ${emoji} ${doneCells}/${totalCells} (${pct}%)`;
+      achieveEl.classList.remove('hidden');
+    } else if (achieveEl) {
+      achieveEl.classList.add('hidden');
+    }
+
     // 스케줄별 그룹핑
     const groups = { morning: [], lunch: [], evening: [], night: [] };
     for (const m of list) (groups[m.schedule] || groups.morning).push(m);
@@ -993,7 +1011,29 @@ function openProfileSheet(m) {
   // 응원 스티커 섹션
   updateProfileStickerSections(m);
 
+  // 기분 7일 히스토리
+  loadProfileMoodWeek(m.id);
+
   $('profileSheet').classList.remove('hidden');
+}
+
+async function loadProfileMoodWeek(userId) {
+  try {
+    const days = await api(`/api/user/${userId}/moods/week`);
+    const row = $('profMoodWeekRow');
+    row.innerHTML = '';
+    let hasAny = false;
+    for (const d of days) {
+      if (d.mood) hasAny = true;
+      const cell = document.createElement('div');
+      cell.className = 'mw-cell' + (d.mood ? '' : ' empty');
+      cell.innerHTML = `
+        <div class="mw-emoji">${d.mood || '·'}</div>
+        <div class="mw-day">${d.weekday}</div>`;
+      row.appendChild(cell);
+    }
+    $('profMoodWeek').classList.toggle('hidden', !hasAny);
+  } catch { $('profMoodWeek').classList.add('hidden'); }
 }
 
 function closeProfileSheet() {
@@ -1189,7 +1229,9 @@ async function loadWeatherAndAir() {
     $('wCity').textContent = `${w.city} · 오늘`;
     $('wDesc').textContent = WMO[w.code] || '';
     $('wIcon').textContent = WMO_ICON[w.code] || '🌤️';
+    $('wIcon').classList.remove('skel');
     $('wTemp').textContent = `${w.temp}°`;
+    $('wTemp').classList.remove('skel');
     $('wMax').textContent  = `${w.max}°`;
     $('wMin').textContent  = `${w.min}°`;
     $('wFeel').textContent = `${w.feels}°`;

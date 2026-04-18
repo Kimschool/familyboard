@@ -1030,6 +1030,61 @@ body.tod-night .hero-weather { color: rgba(242,242,247,.8); }
   word-break: break-word;
 }
 
+/* ========== 프로필 시트: 기분 7일 ========== */
+.mood-week-row {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+  margin-top: 6px;
+}
+.mw-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 8px 4px;
+  background: var(--bg);
+  border-radius: 10px;
+}
+.mw-cell.empty { opacity: .4; }
+.mw-cell:last-child {
+  border: 2px solid var(--primary);
+}
+.mw-emoji { font-size: 22px; line-height: 1; }
+.mw-day { font-size: 11px; color: var(--sub); font-weight: 700; }
+
+/* ========== 약 주간 성취율 칩 ========== */
+.med-achieve {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(52,199,89,.15);
+  color: #2A7A4A;
+  border-radius: 999px;
+  padding: 4px 12px;
+  font-size: 13px;
+  font-weight: 700;
+  margin-right: auto;
+  margin-left: 8px;
+}
+@media (prefers-color-scheme: dark) {
+  .med-achieve { background: rgba(52,199,89,.2); color: #8FE0B0; }
+}
+
+/* ========== 로딩 스켈레톤 ========== */
+.skel {
+  background: linear-gradient(90deg, var(--line) 0%, var(--bg) 50%, var(--line) 100%);
+  background-size: 200% 100%;
+  animation: skel-shimmer 1.4s ease-in-out infinite;
+  color: transparent !important;
+  border-radius: 8px;
+  display: inline-block;
+}
+@keyframes skel-shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
 /* ========== 오늘 기분 ========== */
 .mood-card {
   background: linear-gradient(135deg, #E8F4FF 0%, #FFE9F4 100%);

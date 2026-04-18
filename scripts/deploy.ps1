@@ -120,7 +120,7 @@ echo '[health]'
 curl -sS http://localhost:$LocalPort/api/health || true
 echo ''
 echo '[logs]'
-sudo docker logs --tail 5 familyboard 2>&1 | sed 's/^/  /'
+sudo docker logs --tail 5 familyboard 2>&1
 "@
 
 $remote | & ssh -p $NasPort "${NasUser}@${NasHost}" 'bash -s'

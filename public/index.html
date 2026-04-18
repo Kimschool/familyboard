@@ -204,6 +204,10 @@
       <div class="sheet-row" id="profFortuneRow"><span class="sheet-k">오늘 운세</span><span id="profFortune">—</span></div>
       <div class="sheet-row" id="profTodayAnswerRow"><span class="sheet-k">오늘 질문</span><span id="profTodayAnswer">—</span></div>
       <div class="sheet-row" id="profMemoCountRow"><span class="sheet-k">오늘 메모</span><span id="profMemoCount">—</span></div>
+      <div class="mood-week hidden" id="profMoodWeek">
+        <label class="admin-label" style="margin-top: 14px">지난 7일 기분</label>
+        <div class="mood-week-row" id="profMoodWeekRow"></div>
+      </div>
       <a id="profCallBtn" class="sheet-call hidden" href="tel:">📞 전화 걸기</a>
       <div class="prof-stickers hidden" id="profStickersSection">
         <label class="admin-label" style="margin-top: 14px">응원 보내기</label>
@@ -233,8 +237,8 @@
         <p class="weather-desc" id="wDesc">—</p>
       </div>
       <div class="weather-hero">
-        <span id="wIcon" class="weather-icon">☀️</span>
-        <span id="wTemp" class="weather-temp">--°</span>
+        <span id="wIcon" class="weather-icon skel">☀️</span>
+        <span id="wTemp" class="weather-temp skel">--°</span>
       </div>
     </div>
     <div class="weather-range">
@@ -608,6 +612,7 @@
   <section class="card meds-card hidden" data-card-id="meds" id="medsCard">
     <div class="card-head-row">
       <p class="card-title">💊 오늘 약</p>
+      <span class="med-achieve hidden" id="medsAchieve"></span>
       <button type="button" class="med-mgr-btn" id="openMedMgr">관리</button>
     </div>
     <div class="meds-body" id="medsBody"></div>

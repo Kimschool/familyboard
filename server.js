@@ -123,7 +123,49 @@ app.post('/api/me/mood', requireAuth, async (req, res) => {
       'UPDATE users SET mood = ?, mood_date = ? WHERE id = ?',
       [mood || null, mood ? today : null, req.user.id]
     );
+    if (mood) {
+      await getPool().query(
+        `INSERT INTO mood_history (user_id, mood, mood_date) VALUES (?, ?, ?)
+         ON DUPLICATE KEY UPDATE mood = VALUES(mood)`,
+        [req.user.id, mood, today]
+      );
+    } else {
+      await getPool().query(
+        'DELETE FROM mood_history WHERE user_id = ? AND mood_date = ?',
+        [req.user.id, today]
+      );
+    }
     res.json({ ok: true, mood: mood || null });
+  } catch (e) { res.status(500).json({ error: 'internal', message: e.message }); }
+});
+
+app.get('/api/user/:id/moods/week', requireAuth, async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id)) return res.status(400).json({ error: 'bad-id' });
+    const [check] = await getPool().query(
+      'SELECT id FROM users WHERE id = ? AND family_id = ? LIMIT 1',
+      [id, req.user.family_id]
+    );
+    if (!check.length) return res.status(404).json({ error: 'not-found' });
+
+    const tz = process.env.DEFAULT_TZ || 'Asia/Tokyo';
+    const today = new Intl.DateTimeFormat('sv-SE', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+    const [rows] = await getPool().query(
+      `SELECT DATE_FORMAT(mood_date, '%Y-%m-%d') AS d, mood
+         FROM mood_history
+        WHERE user_id = ? AND mood_date >= DATE_SUB(?, INTERVAL 6 DAY)`,
+      [id, today]
+    );
+    const map = new Map(rows.map((r) => [r.d, r.mood]));
+    const days = [];
+    const t = new Date(today);
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(t.getFullYear(), t.getMonth(), t.getDate() - i);
+      const ymd = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+      days.push({ date: ymd, mood: map.get(ymd) || null, weekday: ['일','월','화','수','목','금','토'][d.getDay()] });
+    }
+    res.json(days);
   } catch (e) { res.status(500).json({ error: 'internal', message: e.message }); }
 });
 
