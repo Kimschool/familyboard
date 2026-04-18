@@ -397,6 +397,15 @@ function renderHeroSummary() {
     });
   }
 
+  // 우선순위 기반 정렬: 긴급(warn) → 뜨거운 이벤트(hot) → 완료/좋음(good) → 기본
+  // 같은 톤 내에선 chips 배열의 원래 순서 유지 (stable sort).
+  const tonePriority = { warn: 0, hot: 1, good: 2 };
+  chips.sort((a, b) => {
+    const pa = a.tone != null && a.tone in tonePriority ? tonePriority[a.tone] : 9;
+    const pb = b.tone != null && b.tone in tonePriority ? tonePriority[b.tone] : 9;
+    return pa - pb;
+  });
+
   el.innerHTML = '';
   if (!chips.length) { el.classList.add('hidden'); return; }
   for (const c of chips) {
