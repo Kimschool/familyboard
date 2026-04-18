@@ -274,6 +274,7 @@ function enterApp() {
   loadEmergencyContacts();
   loadStickers();
   loadMyStreak();
+  loadMeds();
 
   // 관리자 UI — 설정 화면으로 이동 (계정 카드의 '가족 관리' 버튼으로 열림)
   try {
@@ -526,6 +527,70 @@ function updateProfileStickerSections(m) {
     recvWrap.classList.add('hidden');
   }
 }
+
+// ---------- 약 복용 체크 ----------
+const MED_SCHEDULE_LABEL = { morning: '🌅 아침', lunch: '🌤️ 점심', evening: '🌆 저녁', night: '🌙 취침 전' };
+async function loadMeds() {
+  try {
+    const list = await api('/api/meds');
+    const body = $('medsBody');
+    body.innerHTML = '';
+    if (!list.length) {
+      $('medsCard').classList.add('hidden');
+      return;
+    }
+    $('medsCard').classList.remove('hidden');
+
+    // 스케줄별 그룹핑
+    const groups = { morning: [], lunch: [], evening: [], night: [] };
+    for (const m of list) (groups[m.schedule] || groups.morning).push(m);
+
+    for (const sched of Object.keys(groups)) {
+      const meds = groups[sched];
+      if (!meds.length) continue;
+      const section = document.createElement('div');
+      section.className = 'med-section';
+      section.innerHTML = `<div class="med-label">${MED_SCHEDULE_LABEL[sched]}</div>`;
+      const ul = document.createElement('ul');
+      ul.className = 'med-list';
+      for (const m of meds) {
+        const li = document.createElement('li');
+        li.className = 'med-item' + (m.done_today ? ' done' : '');
+        li.innerHTML = `
+          <button class="med-check ${m.done_today ? 'done' : ''}" aria-label="복용 체크"></button>
+          <span class="med-name"></span>
+          <button class="med-del" aria-label="삭제">✕</button>`;
+        li.querySelector('.med-name').textContent = m.name;
+        li.querySelector('.med-check').onclick = async () => {
+          await api(`/api/meds/${m.id}/check`, { method: 'POST' });
+          loadMeds();
+        };
+        li.querySelector('.med-del').onclick = async () => {
+          if (!confirm(`${m.name} 약을 목록에서 지울까요?`)) return;
+          await api(`/api/meds/${m.id}`, { method: 'DELETE' });
+          loadMeds();
+        };
+        ul.appendChild(li);
+      }
+      section.appendChild(ul);
+      body.appendChild(section);
+    }
+  } catch { $('medsCard').classList.add('hidden'); }
+}
+
+$('openMedMgr').addEventListener('click', () => {
+  $('medMgr').classList.toggle('hidden');
+});
+$('medAddBtn').addEventListener('click', async () => {
+  const name = $('medName').value.trim();
+  const schedule = $('medSchedule').value;
+  if (!name) { alert('약 이름을 입력해 주세요'); return; }
+  try {
+    await api('/api/meds', { method: 'POST', body: JSON.stringify({ name, schedule }) });
+    $('medName').value = '';
+    loadMeds();
+  } catch { alert('추가 실패'); }
+});
 
 // ---------- 빠른 연락처 ----------
 async function loadEmergencyContacts() {
@@ -1101,6 +1166,7 @@ async function loadWeatherAndAir() {
       $('tmRain').classList.toggle('hidden', (w.tomorrow.rainProb || 0) < 60);
       $('tomorrowBlock').classList.remove('hidden');
     }
+    renderHourly(w.hourly);
   } else {
     $('wDesc').textContent = '날씨 정보를 잠시 후 다시 시도해요';
   }
@@ -1113,6 +1179,32 @@ async function loadWeatherAndAir() {
   }
 
   renderTips(w, a);
+}
+
+function renderHourly(hourly) {
+  const block = $('hourlyBlock');
+  if (!block) return;
+  if (!hourly || !hourly.length) { block.classList.add('hidden'); return; }
+  const temps = hourly.map((h) => h.temp);
+  const tMin = Math.min(...temps);
+  const tMax = Math.max(...temps);
+  const range = Math.max(1, tMax - tMin);
+  block.innerHTML = hourly.map((h) => {
+    const d = new Date(h.time);
+    const hour = d.getHours();
+    const label = hour === 0 ? '자정' : hour === 12 ? '정오' : hour < 12 ? `오전 ${hour}` : `오후 ${hour - 12}`;
+    const icon = WMO_ICON[h.code] || '🌤️';
+    const barH = 18 + ((h.temp - tMin) / range) * 42;
+    const rain = h.rainProb >= 50;
+    return `
+      <div class="hr-col ${rain ? 'rain' : ''}">
+        <div class="hr-icon">${icon}</div>
+        <div class="hr-temp">${h.temp}°</div>
+        <div class="hr-bar-wrap"><div class="hr-bar" style="height:${barH}px"></div></div>
+        <div class="hr-label">${label}</div>
+      </div>`;
+  }).join('');
+  block.classList.remove('hidden');
 }
 
 function renderTips(w, a) {
@@ -1316,8 +1408,8 @@ function renderMemos(list) {
       loadMemos();
     };
     li.querySelector('.memo-del').onclick = async () => {
-      if (!confirm('이 메모를 삭제할까요?')) return;
       await api(`/api/memos/${m.id}`, { method: 'DELETE' });
+      showUndoToast(m);
       loadMemos();
     };
     targetUl.appendChild(li);
@@ -2238,6 +2330,37 @@ document.querySelectorAll('.fs-btn').forEach((b) => {
 });
 // 초기값 로드 (enterApp 후 적용되도록 setTimeout)
 setTimeout(() => applyFontScale(localStorage.getItem('fb_font_scale') || 'md'), 0);
+
+// ---------- 메모 삭제 실행 취소 토스트 ----------
+let UNDO_TIMER = null;
+function showUndoToast(memo) {
+  const el = $('undoToast');
+  const btn = $('undoBtn');
+  if (!el || !btn) return;
+  el.classList.remove('hidden');
+  clearTimeout(UNDO_TIMER);
+  UNDO_TIMER = setTimeout(() => el.classList.add('hidden'), 5000);
+  btn.onclick = async () => {
+    clearTimeout(UNDO_TIMER);
+    el.classList.add('hidden');
+    try {
+      // 같은 내용으로 재추가
+      await api('/api/memos', { method: 'POST', body: JSON.stringify({ content: memo.content }) });
+      // 원래 중요/완료 상태 복원
+      if (memo.important || memo.done) {
+        const list = await api('/api/memos');
+        const fresh = list.find((x) => x.content === memo.content);
+        if (fresh) {
+          await api(`/api/memos/${fresh.id}`, {
+            method: 'PATCH',
+            body: JSON.stringify({ important: !!memo.important, done: !!memo.done }),
+          });
+        }
+      }
+      loadMemos();
+    } catch {}
+  };
+}
 
 // ---------- PWA 설치 배너 ----------
 (function () {

@@ -305,6 +305,72 @@ app.delete('/api/users/:id', requireAdmin, async (req, res) => {
   res.json({ ok: true });
 });
 
+// ---------- 약 복용 체크 ----------
+app.get('/api/meds', requireAuth, async (req, res) => {
+  try {
+    const today = todayLocal();
+    const [rows] = await getPool().query(
+      `SELECT m.id, m.name, m.schedule, m.sort_order,
+              EXISTS (SELECT 1 FROM med_checks c WHERE c.med_id = m.id AND c.check_date = ?) AS done_today
+         FROM meds m
+        WHERE m.user_id = ? ORDER BY FIELD(m.schedule,'morning','lunch','evening','night'), m.sort_order, m.id`,
+      [today, req.user.id]
+    );
+    res.json(rows.map((r) => ({ ...r, done_today: !!r.done_today })));
+  } catch (e) { res.status(500).json({ error: 'internal', message: e.message }); }
+});
+
+app.post('/api/meds', requireAuth, async (req, res) => {
+  try {
+    const name = (req.body?.name || '').toString().trim().slice(0, 100);
+    const schedule = ['morning','lunch','evening','night'].includes(req.body?.schedule)
+      ? req.body.schedule : 'morning';
+    if (!name) return res.status(400).json({ error: 'name-required' });
+    const [r] = await getPool().query(
+      `INSERT INTO meds (family_id, user_id, name, schedule, sort_order)
+       VALUES (?, ?, ?, ?, 0)`,
+      [req.user.family_id, req.user.id, name, schedule]
+    );
+    res.json({ ok: true, id: r.insertId });
+  } catch (e) { res.status(500).json({ error: 'internal', message: e.message }); }
+});
+
+app.post('/api/meds/:id/check', requireAuth, async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id)) return res.status(400).json({ error: 'bad-id' });
+    // 본인 것만
+    const [check] = await getPool().query(
+      'SELECT id FROM meds WHERE id = ? AND user_id = ? LIMIT 1', [id, req.user.id]
+    );
+    if (!check.length) return res.status(404).json({ error: 'not-found' });
+    const today = todayLocal();
+    const [existing] = await getPool().query(
+      'SELECT id FROM med_checks WHERE med_id = ? AND check_date = ? LIMIT 1',
+      [id, today]
+    );
+    if (existing.length) {
+      await getPool().query('DELETE FROM med_checks WHERE id = ?', [existing[0].id]);
+      res.json({ ok: true, done_today: false });
+    } else {
+      await getPool().query(
+        'INSERT INTO med_checks (med_id, check_date) VALUES (?, ?)',
+        [id, today]
+      );
+      res.json({ ok: true, done_today: true });
+    }
+  } catch (e) { res.status(500).json({ error: 'internal', message: e.message }); }
+});
+
+app.delete('/api/meds/:id', requireAuth, async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'bad-id' });
+  await getPool().query(
+    'DELETE FROM meds WHERE id = ? AND user_id = ?', [id, req.user.id]
+  );
+  res.json({ ok: true });
+});
+
 // ---------- 응원 스티커 ----------
 app.get('/api/stickers/today', requireAuth, async (req, res) => {
   try {
@@ -469,6 +535,7 @@ app.get('/api/weather', async (_req, res) => {
 
     const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}` +
       `&current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m` +
+      `&hourly=temperature_2m,precipitation_probability,weather_code` +
       `&daily=temperature_2m_max,temperature_2m_min,weather_code,precipitation_probability_max` +
       `&timezone=${TZ_ENC}&forecast_days=2`;
     const j = await (await fetch(url)).json();
@@ -489,6 +556,20 @@ app.get('/api/weather', async (_req, res) => {
         rainProb: j.daily.precipitation_probability_max?.[1] ?? 0,
       } : null,
     };
+    // 시간별 — 현재 시각부터 다음 12시간 (짝수 시각만 6 포인트)
+    if (j.hourly?.time?.length) {
+      const nowIdx = j.hourly.time.findIndex((t) => new Date(t) >= new Date()) || 0;
+      const picks = [];
+      for (let i = Math.max(0, nowIdx); i < j.hourly.time.length && picks.length < 6; i += 2) {
+        picks.push({
+          time: j.hourly.time[i],
+          temp: Math.round(j.hourly.temperature_2m[i]),
+          code: j.hourly.weather_code[i],
+          rainProb: j.hourly.precipitation_probability?.[i] ?? 0,
+        });
+      }
+      out.hourly = picks;
+    }
     cacheSet(key, out);
     res.json(out);
   } catch (e) { res.status(502).json({ error: 'weather-fetch-failed', message: e.message }); }

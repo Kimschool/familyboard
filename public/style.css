@@ -466,6 +466,116 @@ body.tod-night .hero-weather { color: rgba(242,242,247,.8); }
   font-weight: 600;
 }
 
+/* ========== 약 복용 체크 ========== */
+.meds-card { background: linear-gradient(135deg, #E8F8EE 0%, #F0FAFF 100%); }
+@media (prefers-color-scheme: dark) {
+  .meds-card { background: linear-gradient(135deg, #1A2A22 0%, #1A222A 100%); }
+}
+.meds-card .card-title { color: #2A7A4A; }
+@media (prefers-color-scheme: dark) { .meds-card .card-title { color: #8FE0B0; } }
+.med-mgr-btn {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 5px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  cursor: pointer;
+  font-family: inherit;
+}
+.med-section { margin-bottom: 12px; }
+.med-section:last-child { margin-bottom: 0; }
+.med-label {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--sub);
+  letter-spacing: 0.5px;
+  margin-bottom: 6px;
+}
+.med-list { list-style: none; margin: 0; padding: 0; }
+.med-item {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 14px;
+  background: rgba(255,255,255,.75);
+  border-radius: var(--r-sm);
+  margin-bottom: 6px;
+}
+@media (prefers-color-scheme: dark) {
+  .med-item { background: rgba(255,255,255,.06); }
+}
+.med-item.done { opacity: .55; }
+.med-check {
+  width: 32px; height: 32px;
+  border-radius: 50%;
+  border: 2.5px solid var(--line);
+  background: var(--card);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all .15s;
+}
+.med-check.done {
+  background: var(--good);
+  border-color: var(--good);
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'><path fill='none' stroke='white' stroke-width='3' stroke-linecap='round' stroke-linejoin='round' d='M5 10.5l3.5 3.5L15 7'/></svg>");
+  background-size: 70%;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+.med-name { flex: 1; font-size: 16px; font-weight: 600; color: var(--text); word-break: break-word; }
+.med-item.done .med-name { text-decoration: line-through; color: var(--sub); }
+.med-del {
+  background: none;
+  border: none;
+  color: var(--sub);
+  font-size: 16px;
+  cursor: pointer;
+  padding: 4px 6px;
+}
+.med-mgr {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(0,0,0,.08);
+}
+@media (prefers-color-scheme: dark) { .med-mgr { border-top-color: rgba(255,255,255,.08); } }
+
+/* ========== 메모 삭제 실행취소 토스트 ========== */
+.undo-toast {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: calc(80px + env(safe-area-inset-bottom));
+  background: #1C1C1E;
+  color: #fff;
+  padding: 12px 18px 12px 22px;
+  border-radius: 999px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  z-index: 960;
+  box-shadow: 0 6px 20px rgba(0,0,0,.25);
+  animation: undo-in .25s cubic-bezier(.22,.61,.36,1);
+  font-size: 14px;
+  font-weight: 600;
+}
+@keyframes undo-in {
+  from { transform: translate(-50%, 20px); opacity: 0; }
+  to { transform: translate(-50%, 0); opacity: 1; }
+}
+.undo-btn {
+  background: var(--primary);
+  color: #fff;
+  border: none;
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: inherit;
+}
+
 /* ========== 월간 가족 달력 ========== */
 .calendar-card { overflow: hidden; }
 .cal-nav { display: flex; gap: 4px; align-items: center; }
@@ -1318,6 +1428,37 @@ body.tod-night .hero-weather { color: rgba(242,242,247,.8); }
 .weather-range { color: var(--sub); font-size: 16px; margin-top: 12px; }
 .weather-range b   { color: var(--text); font-weight: 600; }
 .weather-range .dot { margin: 0 6px; color: var(--line); }
+/* 시간별 미니 그래프 */
+.hourly {
+  display: flex;
+  gap: 6px;
+  margin-top: 14px;
+  padding: 12px 8px;
+  background: var(--bg);
+  border-radius: var(--r-sm);
+  overflow-x: auto;
+}
+.hr-col {
+  flex: 1 1 0;
+  min-width: 48px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+}
+.hr-icon { font-size: 22px; line-height: 1; }
+.hr-temp { font-size: 14px; font-weight: 700; color: var(--text); }
+.hr-bar-wrap { height: 64px; display: flex; align-items: flex-end; }
+.hr-bar {
+  width: 8px;
+  border-radius: 4px 4px 0 0;
+  background: linear-gradient(180deg, var(--primary), rgba(10, 132, 255, .4));
+  transition: height .35s ease;
+}
+.hr-col.rain .hr-bar { background: linear-gradient(180deg, #5AC8FA, #0A84FF); }
+.hr-label { color: var(--sub); font-size: 11px; text-align: center; line-height: 1.2; }
+
 .tomorrow {
   display: flex;
   align-items: center;

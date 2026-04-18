@@ -237,6 +237,7 @@
       <span class="chip"><span class="chip-k">초미세</span><b id="aPm25">--</b><i class="lvl" id="aPm25L"></i></span>
       <span class="chip"><span class="chip-k">꽃가루</span><b id="aPol">--</b><i class="lvl" id="aPolL"></i></span>
     </div>
+    <div class="hourly hidden" id="hourlyBlock"></div>
     <div class="tomorrow hidden" id="tomorrowBlock">
       <span class="tomorrow-label">내일</span>
       <span class="tomorrow-icon" id="tmIcon">🌤️</span>
@@ -556,6 +557,28 @@
     </div>
   </section>
 
+  <!-- 약 복용 체크 (본인) -->
+  <section class="card meds-card hidden" data-card-id="meds" id="medsCard">
+    <div class="card-head-row">
+      <p class="card-title">💊 오늘 약</p>
+      <button type="button" class="med-mgr-btn" id="openMedMgr">관리</button>
+    </div>
+    <div class="meds-body" id="medsBody"></div>
+    <div class="med-mgr hidden" id="medMgr">
+      <label class="admin-label">새 약 추가</label>
+      <div class="ufi-row">
+        <input id="medName" class="ufi" type="text" placeholder="약 이름 (예: 혈압약)" maxlength="100" />
+        <select id="medSchedule" class="ufi" style="flex:0 0 90px">
+          <option value="morning">아침</option>
+          <option value="lunch">점심</option>
+          <option value="evening">저녁</option>
+          <option value="night">취침 전</option>
+        </select>
+      </div>
+      <button id="medAddBtn" type="button" class="user-add">추가</button>
+    </div>
+  </section>
+
   <!-- 오늘 받은·보낸 응원 -->
   <section class="card stickers-card hidden" data-card-id="stickers" id="stickersCard">
     <p class="card-title">오늘의 응원</p>
@@ -613,6 +636,12 @@
   </div>
   <button id="installBtn" class="install-btn">설치</button>
   <button id="installClose" class="install-close" aria-label="닫기">✕</button>
+</div>
+
+<!-- 메모 삭제 실행 취소 토스트 -->
+<div id="undoToast" class="undo-toast hidden" role="status">
+  <span class="undo-msg">메모를 삭제했어요</span>
+  <button id="undoBtn" class="undo-btn">되돌리기</button>
 </div>
 
 <!-- 맨 위로 가기 FAB -->
