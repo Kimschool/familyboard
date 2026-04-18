@@ -1,29 +1,65 @@
-// ---------- 아이콘 세트 ----------
+// ---------- 아이콘 세트 (label 은 title 툴팁용) ----------
 const ICONS = [
-  { code: 'dad',        emoji: '👨',   label: '아빠' },
-  { code: 'mom',        emoji: '👩',   label: '엄마' },
-  { code: 'grandpa',    emoji: '👴',   label: '할아버지' },
-  { code: 'grandma',    emoji: '👵',   label: '할머니' },
-  { code: 'grandpaOut', emoji: '🧓',   label: '외할아버지' },
-  { code: 'grandmaOut', emoji: '🧕',   label: '외할머니' },
-  { code: 'son',        emoji: '👦',   label: '아들' },
-  { code: 'daughter',   emoji: '👧',   label: '딸' },
-  { code: 'uncle',      emoji: '🧔',   label: '삼촌/외삼촌' },
-  { code: 'aunt',       emoji: '👱‍♀️', label: '이모/고모' },
-  { code: 'cousin',     emoji: '🧑',   label: '사촌' },
-  { code: 'nephew',     emoji: '🧒',   label: '조카' },
-  { code: 'baby',       emoji: '👶',   label: '손주/아기' },
+  { code: 'dad',        emoji: '👨',    label: '아빠' },
+  { code: 'mom',        emoji: '👩',    label: '엄마' },
+  { code: 'grandpa',    emoji: '👴',    label: '할아버지' },
+  { code: 'grandma',    emoji: '👵',    label: '할머니' },
+  { code: 'grandpaOut', emoji: '🧓',    label: '외할아버지' },
+  { code: 'grandmaOut', emoji: '🧕',    label: '외할머니' },
+  { code: 'son',        emoji: '👦',    label: '아들' },
+  { code: 'daughter',   emoji: '👧',    label: '딸' },
   { code: 'boyTeen',    emoji: '🙋‍♂️', label: '남자아이' },
   { code: 'girlTeen',   emoji: '🙋‍♀️', label: '여자아이' },
+  { code: 'baby',       emoji: '👶',    label: '아기' },
+  { code: 'nephew',     emoji: '🧒',    label: '조카' },
+  { code: 'uncle',      emoji: '🧔',    label: '삼촌' },
+  { code: 'aunt',       emoji: '👱‍♀️', label: '이모' },
+  { code: 'cousin',     emoji: '🧑',    label: '사촌' },
   { code: 'manElder',   emoji: '🧔‍♂️', label: '아저씨' },
   { code: 'womanElder', emoji: '💇‍♀️', label: '아주머니' },
+  { code: 'manWhite',   emoji: '👨‍🦳', label: '백발 남' },
+  { code: 'womanWhite', emoji: '👩‍🦳', label: '백발 여' },
+  { code: 'manCurly',   emoji: '👨‍🦱', label: '곱슬 남' },
+  { code: 'womanCurly', emoji: '👩‍🦱', label: '곱슬 여' },
+  { code: 'manRed',     emoji: '👨‍🦰', label: '빨강머리 남' },
+  { code: 'womanRed',   emoji: '👩‍🦰', label: '빨강머리 여' },
+  { code: 'manBald',    emoji: '👨‍🦲', label: '민머리 남' },
+  { code: 'womanBald',  emoji: '👩‍🦲', label: '민머리 여' },
+  { code: 'mustache',   emoji: '🥸',    label: '콧수염' },
+  { code: 'glasses',    emoji: '🤓',    label: '안경' },
+  { code: 'cool',       emoji: '😎',    label: '멋쟁이' },
+  { code: 'smile',      emoji: '😊',    label: '웃음' },
+  { code: 'love',       emoji: '🥰',    label: '사랑' },
+  { code: 'angel',      emoji: '😇',    label: '천사' },
+  { code: 'princess',   emoji: '👸',    label: '공주' },
+  { code: 'prince',     emoji: '🤴',    label: '왕자' },
   { code: 'chef',       emoji: '👨‍🍳', label: '요리사' },
   { code: 'teacher',    emoji: '👩‍🏫', label: '선생님' },
-  { code: 'dog',        emoji: '🐶',   label: '강아지' },
-  { code: 'cat',        emoji: '🐱',   label: '고양이' },
-  { code: 'star',       emoji: '⭐',   label: '스타' },
-  { code: 'heart',      emoji: '❤️',   label: '사랑' },
-  { code: 'flower',     emoji: '🌸',   label: '꽃' },
+  { code: 'artist',     emoji: '👨‍🎨', label: '화가' },
+  { code: 'doctor',     emoji: '👨‍⚕️', label: '의사' },
+  { code: 'farmer',     emoji: '👩‍🌾', label: '농부' },
+  { code: 'santa',      emoji: '🎅',    label: '산타' },
+  { code: 'ninja',      emoji: '🥷',    label: '닌자' },
+  { code: 'dog',        emoji: '🐶',    label: '강아지' },
+  { code: 'cat',        emoji: '🐱',    label: '고양이' },
+  { code: 'bunny',      emoji: '🐰',    label: '토끼' },
+  { code: 'bear',       emoji: '🐻',    label: '곰' },
+  { code: 'panda',      emoji: '🐼',    label: '판다' },
+  { code: 'fox',        emoji: '🦊',    label: '여우' },
+  { code: 'lion',       emoji: '🦁',    label: '사자' },
+  { code: 'tiger',      emoji: '🐯',    label: '호랑이' },
+  { code: 'horse',      emoji: '🐴',    label: '말' },
+  { code: 'deer',       emoji: '🦌',    label: '사슴' },
+  { code: 'monkey',     emoji: '🐵',    label: '원숭이' },
+  { code: 'bird',       emoji: '🐦',    label: '새' },
+  { code: 'chick',      emoji: '🐥',    label: '병아리' },
+  { code: 'penguin',    emoji: '🐧',    label: '펭귄' },
+  { code: 'star',       emoji: '⭐',    label: '스타' },
+  { code: 'heart',      emoji: '❤️',    label: '하트' },
+  { code: 'flower',     emoji: '🌸',    label: '꽃' },
+  { code: 'sun',        emoji: '☀️',    label: '해' },
+  { code: 'moon',       emoji: '🌙',    label: '달' },
+  { code: 'rainbow',    emoji: '🌈',    label: '무지개' },
 ];
 const ICON_MAP = Object.fromEntries(ICONS.map((i) => [i.code, i]));
 const iconEmoji = (code) => (ICON_MAP[code] || ICON_MAP.star).emoji;
@@ -266,6 +302,11 @@ $('logoutBtn').addEventListener('click', async () => {
 });
 
 // ---------- 우리 가족 요약 ----------
+function koreanAge(birthYear) {
+  if (!birthYear) return null;
+  return new Date().getFullYear() - Number(birthYear) + 1;
+}
+
 async function loadFamilySummary() {
   try {
     const alias = ME.familyAlias;
@@ -275,14 +316,16 @@ async function loadFamilySummary() {
     const row = $('familyRow');
     row.innerHTML = '';
     for (const m of r.members) {
-      const div = document.createElement('div');
-      div.className = 'family-chip' + (m.id === ME.id ? ' me' : '') + (m.activated ? '' : ' dim');
-      div.innerHTML = `
-        <span class="family-chip-emoji">${iconEmoji(m.icon)}</span>
-        <span class="family-chip-name"></span>
+      const age = koreanAge(m.birthYear);
+      const badge = document.createElement('span');
+      badge.className = 'family-badge' + (m.id === ME.id ? ' me' : '') + (m.activated ? '' : ' dim');
+      badge.innerHTML = `
+        <span class="family-badge-emoji">${iconEmoji(m.icon)}</span>
+        <span class="family-badge-name"></span>
+        ${age ? `<span class="family-badge-age">${age}</span>` : ''}
       `;
-      div.querySelector('.family-chip-name').textContent = m.displayName;
-      row.appendChild(div);
+      badge.querySelector('.family-badge-name').textContent = m.displayName;
+      row.appendChild(badge);
     }
   } catch {}
 }
@@ -614,8 +657,9 @@ function renderIconPicker() {
     const b = document.createElement('button');
     b.type = 'button';
     b.className = 'icon-opt' + (i.code === PICKED_ICON ? ' selected' : '');
-    b.innerHTML = `<span class="icon-emoji">${i.emoji}</span><span class="icon-label"></span>`;
-    b.querySelector('.icon-label').textContent = i.label;
+    b.title = i.label;
+    b.setAttribute('aria-label', i.label);
+    b.innerHTML = `<span class="icon-emoji">${i.emoji}</span>`;
     b.onclick = () => {
       PICKED_ICON = i.code;
       renderIconPicker();

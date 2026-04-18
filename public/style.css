@@ -31,7 +31,13 @@
 }
 
 * { box-sizing: border-box; }
-html, body { margin: 0; padding: 0; }
+html, body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+}
 
 body {
   background: var(--bg);
@@ -43,6 +49,7 @@ body {
   line-height: 1.55;
   padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
 }
+img, video, iframe, svg { max-width: 100%; }
 
 .hidden { display: none !important; }
 
@@ -50,7 +57,9 @@ body {
   max-width: 560px;
   margin: 0 auto;
   padding: 20px 16px 40px;
+  width: 100%;
 }
+.card, .banner, .member-grid, .family-row, .icon-picker { max-width: 100%; }
 
 /* ========== Auth (1~3단계 · 초대) ========== */
 .login-screen, .invite-screen {
@@ -243,7 +252,7 @@ body.tod-night .hero-date, body.tod-night .hero-greeting { color: #F2F2F7; }
   word-break: keep-all;
 }
 
-/* ========== 우리 가족 요약 ========== */
+/* ========== 우리 가족 요약 (뱃지) ========== */
 .family-card { background: linear-gradient(135deg, #FFF7E6 0%, #FFE8EC 100%); }
 @media (prefers-color-scheme: dark) {
   .family-card { background: linear-gradient(135deg, #2A2219 0%, #2A1E22 100%); }
@@ -254,38 +263,47 @@ body.tod-night .hero-date, body.tod-night .hero-greeting { color: #F2F2F7; }
 }
 .family-row {
   display: flex;
-  gap: 10px;
-  overflow-x: auto;
-  padding: 4px 2px 2px;
-  scrollbar-width: none;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 2px 0;
 }
-.family-row::-webkit-scrollbar { display: none; }
-.family-chip {
-  flex: 0 0 auto;
-  display: flex;
-  flex-direction: column;
+.family-badge {
+  display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 10px 14px;
-  min-width: 78px;
+  gap: 6px;
+  padding: 7px 14px 7px 10px;
   background: rgba(255,255,255,.75);
-  border-radius: 14px;
+  border-radius: 999px;
+  font-size: 15px;
+  color: var(--text);
   transition: transform .15s;
 }
 @media (prefers-color-scheme: dark) {
-  .family-chip { background: rgba(255,255,255,.06); }
+  .family-badge { background: rgba(255,255,255,.06); }
 }
-.family-chip.me {
+.family-badge.me {
   background: #fff;
-  box-shadow: 0 2px 6px rgba(0,0,0,.08);
-  transform: translateY(-2px);
+  box-shadow: 0 2px 8px rgba(0,0,0,.08);
+  font-weight: 700;
 }
 @media (prefers-color-scheme: dark) {
-  .family-chip.me { background: var(--card); }
+  .family-badge.me { background: var(--card); }
 }
-.family-chip.dim { opacity: .5; }
-.family-chip-emoji { font-size: 34px; line-height: 1; }
-.family-chip-name { font-size: 14px; font-weight: 600; color: var(--text); }
+.family-badge.dim { opacity: .5; }
+.family-badge-emoji { font-size: 22px; line-height: 1; }
+.family-badge-name { font-weight: 600; }
+.family-badge-age {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--sub);
+  background: rgba(0,0,0,.06);
+  padding: 2px 7px;
+  border-radius: 999px;
+  margin-left: 2px;
+}
+@media (prefers-color-scheme: dark) {
+  .family-badge-age { background: rgba(255,255,255,.1); }
+}
 
 /* ========== 생일 배너 ========== */
 .banner {
@@ -421,22 +439,48 @@ body.tod-night .hero-date, body.tod-night .hero-greeting { color: #F2F2F7; }
 .fx-val   { font-size: 30px; font-weight: 700; letter-spacing: -0.6px; color: var(--text); }
 
 /* ========== 계산기 ========== */
-.calc-row { display: flex; gap: 10px; align-items: stretch; }
+.calc-row { display: flex; gap: 8px; align-items: stretch; min-width: 0; }
 .calc-input, .calc-sel {
   height: 64px; border-radius: var(--r-sm);
   border: 1.5px solid var(--line); background: var(--bg); color: var(--text);
-  font-size: 22px; padding: 0 16px; outline: none;
+  font-size: 20px; padding: 0 12px; outline: none;
+  min-width: 0;
 }
-.calc-input { flex: 1; font-weight: 600; }
+.calc-input { flex: 1 1 0; font-weight: 600; }
 .calc-input:focus { border-color: var(--primary); background: var(--card); }
-.calc-sel { width: 104px; font-size: 18px; font-weight: 600; }
+.calc-sel {
+  flex: 0 0 88px;
+  width: 88px;
+  max-width: 88px;
+  font-size: 17px;
+  font-weight: 600;
+  padding: 0 8px;
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'><path fill='none' stroke='%236E6E73' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' d='M3 4.5l3 3 3-3'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  padding-right: 24px;
+}
 .calc-arrow { text-align: center; color: var(--sub); font-size: 24px; margin: 10px 0; }
 .calc-result {
-  flex: 1; display: flex; align-items: center; justify-content: flex-end;
-  padding: 0 16px; height: 64px; border-radius: var(--r-sm); background: var(--bg);
-  font-size: 40px; font-weight: 800; letter-spacing: -0.8px;
+  flex: 1 1 0; display: flex; align-items: center; justify-content: flex-end;
+  padding: 0 12px; height: 64px; border-radius: var(--r-sm); background: var(--bg);
+  font-size: 32px; font-weight: 800; letter-spacing: -0.6px;
   color: var(--primary); overflow: hidden;
+  min-width: 0;
 }
+.calc-presets {
+  display: flex; gap: 6px; flex-wrap: wrap;
+  margin-top: 12px;
+}
+.calc-preset {
+  flex: 1 1 0; min-width: 0;
+  height: 44px; border: 1px solid var(--line); border-radius: var(--r-sm);
+  background: var(--card); color: var(--text); font-size: 13px; font-weight: 600;
+  cursor: pointer; padding: 0 4px;
+}
+.calc-preset:active { transform: scale(.97); background: var(--bg); }
 .calc-presets {
   display: flex; gap: 8px; flex-wrap: wrap;
   margin-top: 12px;
@@ -580,34 +624,39 @@ body.tod-night .hero-date, body.tod-night .hero-greeting { color: #F2F2F7; }
 }
 .user-add:active { transform: scale(.98); }
 
-/* 아이콘 픽커 */
+/* 아이콘 픽커 — 라벨 없이 이모지만, 스크롤 박스 */
 .icon-picker {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 8px;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 6px;
   margin-top: 4px;
+  max-height: 280px;
+  overflow-y: auto;
+  padding: 4px;
+  background: var(--bg);
+  border-radius: var(--r-sm);
 }
 .icon-opt {
-  background: var(--bg);
+  aspect-ratio: 1 / 1;
+  background: var(--card);
   border: 2px solid transparent;
-  border-radius: var(--r-sm);
-  padding: 10px 4px 6px;
+  border-radius: 12px;
+  padding: 0;
   display: flex;
-  flex-direction: column;
   align-items: center;
-  gap: 4px;
+  justify-content: center;
   cursor: pointer;
   font-family: inherit;
   color: var(--text);
-  transition: border-color .12s, background .12s;
+  transition: border-color .12s, background .12s, transform .1s;
 }
-.icon-opt:hover { background: var(--card); }
+.icon-opt:hover { border-color: var(--line); }
 .icon-opt.selected {
-  background: var(--card);
   border-color: var(--primary);
+  background: rgba(10, 132, 255, .08);
+  transform: scale(1.05);
 }
-.icon-emoji { font-size: 26px; line-height: 1; }
-.icon-label { font-size: 11px; color: var(--sub); text-align: center; }
+.icon-emoji { font-size: 32px; line-height: 1; }
 
 /* 초대 링크 결과 */
 .invite-result {

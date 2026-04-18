@@ -53,7 +53,7 @@ app.get('/api/family/:alias', async (req, res) => {
     );
     if (!f.length) return res.status(404).json({ error: 'not-found' });
     const [users] = await getPool().query(
-      `SELECT id, display_name, icon, role,
+      `SELECT id, display_name, icon, role, birth_year,
               (password_hash IS NOT NULL) AS activated
          FROM users WHERE family_id = ?
          ORDER BY role DESC, id ASC`,
@@ -66,6 +66,7 @@ app.get('/api/family/:alias', async (req, res) => {
         displayName: u.display_name,
         icon: u.icon,
         role: u.role,
+        birthYear: u.birth_year,
         activated: !!u.activated,
       })),
     });
