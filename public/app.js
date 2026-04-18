@@ -1768,14 +1768,80 @@ function startMemoEdit(span, memo) {
 }
 
 // 메모 템플릿
-document.querySelectorAll('.memo-template').forEach((btn) => {
-  btn.addEventListener('click', () => {
-    const text = btn.dataset.text;
-    $('memoInput').value = text;
-    $('memoInput').focus();
-    const n = text.length;
-    $('memoInput').setSelectionRange(n, n);
+// 자주 쓰는 메모 — 기본 + 사용자 커스텀 (localStorage)
+const DEFAULT_MEMO_TEMPLATES = [
+  '🛒 우유, 계란, 빵',
+  '💊 아침 약 먹기',
+  '💊 저녁 약 먹기',
+  '💧 물 2리터 마시기',
+  '🚶 30분 산책',
+  '📞 가족에게 안부 전화',
+  '🏥 병원 예약 확인',
+  '🧺 빨래 돌리기',
+];
+let MT_EDIT_MODE = false;
+function loadMemoTemplates() {
+  try {
+    const user = JSON.parse(localStorage.getItem('fb_memo_templates') || 'null');
+    return Array.isArray(user) ? user : DEFAULT_MEMO_TEMPLATES.slice();
+  } catch { return DEFAULT_MEMO_TEMPLATES.slice(); }
+}
+function saveMemoTemplates(arr) {
+  localStorage.setItem('fb_memo_templates', JSON.stringify(arr));
+}
+function renderMemoTemplates() {
+  const list = loadMemoTemplates();
+  const el = $('memoTemplateList');
+  if (!el) return;
+  el.innerHTML = '';
+  list.forEach((text, i) => {
+    const short = text.length > 14 ? text.slice(0, 13) + '…' : text;
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'memo-template';
+    btn.textContent = short;
+    btn.title = text;
+    btn.onclick = () => {
+      if (MT_EDIT_MODE) {
+        if (!confirm(`"${text}" 을(를) 목록에서 지울까요?`)) return;
+        const arr = loadMemoTemplates();
+        arr.splice(i, 1);
+        saveMemoTemplates(arr);
+        renderMemoTemplates();
+        return;
+      }
+      $('memoInput').value = text;
+      $('memoInput').focus();
+      const n = text.length;
+      $('memoInput').setSelectionRange(n, n);
+    };
+    if (MT_EDIT_MODE) {
+      const del = document.createElement('span');
+      del.className = 'mt-del';
+      del.textContent = ' ✕';
+      btn.appendChild(del);
+    }
+    el.appendChild(btn);
   });
+}
+renderMemoTemplates();
+
+$('mtEditToggle').addEventListener('click', (e) => {
+  e.preventDefault();
+  MT_EDIT_MODE = !MT_EDIT_MODE;
+  $('mtEditToggle').textContent = MT_EDIT_MODE ? '완료' : '관리';
+  $('mtAddRow').classList.toggle('hidden', !MT_EDIT_MODE);
+  document.querySelector('.memo-templates').open = true;
+  renderMemoTemplates();
+});
+$('mtAddBtn').addEventListener('click', () => {
+  const text = $('mtNewText').value.trim();
+  if (!text) return;
+  const arr = loadMemoTemplates();
+  if (!arr.includes(text)) arr.push(text);
+  saveMemoTemplates(arr);
+  $('mtNewText').value = '';
+  renderMemoTemplates();
 });
 
 // 메모 카테고리 빠른 입력
@@ -2099,11 +2165,48 @@ $('helpSheet').addEventListener('click', (e) => {
   if (e.target.id === 'helpSheet') $('helpSheet').classList.add('hidden');
 });
 
-// 초회 자동 노출 (1회)
+// ---------- 온보딩 투어 (첫 로그인 1회) ----------
+const TOUR_STEPS = [
+  { emoji: '🌿', title: '환영해요', body: '가족보드는 가족이 서로의 하루를 나누는 작은 공간이에요. 주요 기능을 5분 안에 소개해드릴게요.' },
+  { emoji: '💬', title: '오늘의 가족 질문', body: '매일 새 질문이 하나 떠요. 내 답변을 적어두면 내일 가족 모두의 답이 같이 공개돼요. 연속 답변 기록도 쌓여요.' },
+  { emoji: '😊', title: '오늘 기분 · 응원 스티커', body: '이모지 하나로 오늘 기분을 남기고, 프로필에서 가족에게 응원 스티커도 보낼 수 있어요.' },
+  { emoji: '📝', title: '메모와 약 체크', body: '메모는 글자 탭해서 수정, 별 탭으로 중요 표시, 마이크로 음성 입력도 됩니다. 약은 아침·저녁으로 체크하면 7일 히트맵이 쌓여요.' },
+  { emoji: '🧩', title: '나만의 배치', body: '계정 카드의 🧩 버튼으로 카드 순서를 바꾸거나 필요 없는 카드를 숨길 수 있어요. 글자 크기도 조절 가능.' },
+];
+let TOUR_IDX = 0;
+function showTour() {
+  TOUR_IDX = 0;
+  renderTourStep();
+  $('tourOverlay').classList.remove('hidden');
+}
+function renderTourStep() {
+  const s = TOUR_STEPS[TOUR_IDX];
+  $('tourEmoji').textContent = s.emoji;
+  $('tourTitle').textContent = s.title;
+  $('tourBody').textContent = s.body;
+  $('tourNext').textContent = TOUR_IDX < TOUR_STEPS.length - 1 ? '다음 →' : '시작하기';
+  const prog = $('tourProgress');
+  prog.innerHTML = '';
+  for (let i = 0; i < TOUR_STEPS.length; i++) {
+    const dot = document.createElement('span');
+    dot.className = 'tour-dot' + (i === TOUR_IDX ? ' active' : '') + (i < TOUR_IDX ? ' done' : '');
+    prog.appendChild(dot);
+  }
+}
+function endTour() {
+  $('tourOverlay').classList.add('hidden');
+  localStorage.setItem('fb_onboarding_v1', '1');
+}
+$('tourNext').addEventListener('click', () => {
+  if (TOUR_IDX < TOUR_STEPS.length - 1) { TOUR_IDX++; renderTourStep(); }
+  else endTour();
+});
+$('tourSkip').addEventListener('click', endTour);
+
+// 첫 로그인 1회 노출 (help 대신 tour 를 우선)
 setTimeout(() => {
-  if (!localStorage.getItem('fb_help_seen') && ME) {
-    $('helpSheet').classList.remove('hidden');
-    localStorage.setItem('fb_help_seen', '1');
+  if (!localStorage.getItem('fb_onboarding_v1') && ME) {
+    showTour();
   }
 }, 1500);
 
@@ -2398,6 +2501,29 @@ if (!('speechSynthesis' in window)) {
   document.querySelectorAll('.tts-btn').forEach((b) => b.style.display = 'none');
 }
 
+function renderCountdownToReveal() {
+  const el = $('questionCountdown');
+  if (!el) return;
+  const now = new Date();
+  // Asia/Tokyo 기준 내일 0시 — 사용자 timezone 에 관계없이 서버 TZ 따름
+  const jstOffsetMin = 9 * 60;
+  const nowJst = new Date(now.getTime() + (now.getTimezoneOffset() + jstOffsetMin) * 60000);
+  const tomorrow = new Date(nowJst.getFullYear(), nowJst.getMonth(), nowJst.getDate() + 1);
+  const diffMs = tomorrow - nowJst;
+  if (diffMs <= 0) { el.classList.add('hidden'); return; }
+  const hours = Math.floor(diffMs / 3600000);
+  const mins = Math.floor((diffMs % 3600000) / 60000);
+  const text = hours > 0
+    ? `⏳ 내일 공개까지 ${hours}시간 ${mins}분 남았어요`
+    : `⏳ 내일 공개까지 ${mins}분 남았어요`;
+  el.textContent = text;
+  el.classList.remove('hidden');
+}
+// 매 분 업데이트
+setInterval(() => {
+  if (!$('questionCountdown')?.classList.contains('hidden')) renderCountdownToReveal();
+}, 60000);
+
 // ---------- 오늘의 가족 질문 ----------
 async function loadTodayQuestion() {
   try {
@@ -2406,6 +2532,7 @@ async function loadTodayQuestion() {
     $('questionAnswer').value = q.myAnswer || '';
     $('questionMeta').textContent =
       `${q.answeredCount} / ${q.memberCount}명이 답했어요. 모든 답변은 내일 공개돼요`;
+    renderCountdownToReveal();
     const hasAnswer = !!q.myAnswer;
     const isSkip = !!q.mySkipped;
     $('qPendingBadge').classList.toggle('hidden', hasAnswer || isSkip);

@@ -302,6 +302,7 @@
     </div>
     <div class="question-participants" id="questionParticipants"></div>
     <p class="question-meta" id="questionMeta"></p>
+    <p class="question-countdown hidden" id="questionCountdown"></p>
     <p class="question-hint hidden" id="qHint">내 답변은 언제든 수정할 수 있어요. 가족에겐 <b>내일</b> 공개돼요.</p>
     <div class="question-actions">
       <button id="qHistoryBtn" type="button" class="question-action-btn">지난 질문 모아보기</button>
@@ -530,16 +531,11 @@
       <button type="button" class="memo-cat" data-emoji="🍱">🍱 식사</button>
     </div>
     <details class="memo-templates">
-      <summary class="memo-templates-head">✨ 자주 쓰는 메모</summary>
-      <div class="memo-template-list" id="memoTemplateList">
-        <button type="button" class="memo-template" data-text="🛒 우유, 계란, 빵">🛒 우유·계란·빵</button>
-        <button type="button" class="memo-template" data-text="💊 아침 약 먹기">💊 아침 약</button>
-        <button type="button" class="memo-template" data-text="💊 저녁 약 먹기">💊 저녁 약</button>
-        <button type="button" class="memo-template" data-text="💧 물 2리터 마시기">💧 물 마시기</button>
-        <button type="button" class="memo-template" data-text="🚶 30분 산책">🚶 산책</button>
-        <button type="button" class="memo-template" data-text="📞 가족에게 안부 전화">📞 안부 전화</button>
-        <button type="button" class="memo-template" data-text="🏥 병원 예약 확인">🏥 병원 예약</button>
-        <button type="button" class="memo-template" data-text="🧺 빨래 돌리기">🧺 빨래</button>
+      <summary class="memo-templates-head">✨ 자주 쓰는 메모 <span class="mt-edit-link" id="mtEditToggle">관리</span></summary>
+      <div class="memo-template-list" id="memoTemplateList"></div>
+      <div class="memo-template-add hidden" id="mtAddRow">
+        <input id="mtNewText" class="ufi" type="text" placeholder="예: 💊 혈압약" maxlength="80" />
+        <button type="button" class="ufi-btn" id="mtAddBtn">추가</button>
       </div>
     </details>
     <div class="memo-due-row" id="memoDueRow">
@@ -727,6 +723,20 @@
     <p class="foot-ver">familyboard — 부모님을 위한 하루 안내</p>
   </footer>
 </main>
+
+<!-- 온보딩 투어 오버레이 -->
+<div id="tourOverlay" class="tour-overlay hidden" role="dialog">
+  <div class="tour-card" id="tourCard">
+    <div class="tour-emoji" id="tourEmoji">🌿</div>
+    <h2 class="tour-title" id="tourTitle">—</h2>
+    <p class="tour-body" id="tourBody">—</p>
+    <div class="tour-progress" id="tourProgress"></div>
+    <div class="tour-actions">
+      <button type="button" id="tourSkip" class="tour-skip-btn">건너뛰기</button>
+      <button type="button" id="tourNext" class="tour-next-btn">다음 →</button>
+    </div>
+  </div>
+</div>
 
 <!-- PWA 설치 배너 -->
 <div id="installBanner" class="install-banner hidden">
