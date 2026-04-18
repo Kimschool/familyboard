@@ -259,6 +259,7 @@ function enterApp() {
   loadZodiac();
   loadTodayQuestion();
   loadYesterdayReveal();
+  loadEmergencyContacts();
 
   // 관리자 UI — 설정 화면으로 이동 (계정 카드의 '가족 관리' 버튼으로 열림)
   try {
@@ -268,6 +269,8 @@ function enterApp() {
       loadUsers();
       loadFamilyInfo();
       renderIconPicker();
+      renderSosIconPicker();
+      loadSosAdmin();
     }
   } catch (e) { console.warn('[admin ui]', e); }
 
@@ -362,6 +365,86 @@ $('logoutBtn').addEventListener('click', async () => {
   // 가족별칭은 기억 (다음 로그인 편의)
   location.reload();
 });
+
+// ---------- 빠른 연락처 ----------
+async function loadEmergencyContacts() {
+  try {
+    const list = await api('/api/emergency');
+    const box = $('sosList');
+    box.innerHTML = '';
+    if (!list.length) { $('sosCard').classList.add('hidden'); return; }
+    for (const c of list) {
+      const a = document.createElement('a');
+      a.className = 'sos-btn';
+      a.href = `tel:${c.phone.replace(/[^0-9+*#]/g, '')}`;
+      a.innerHTML = `
+        <span class="sos-emoji">${iconEmoji(c.icon)}</span>
+        <span class="sos-info">
+          <span class="sos-name"></span>
+          <span class="sos-phone"></span>
+        </span>
+        <span class="sos-arrow">📞</span>`;
+      a.querySelector('.sos-name').textContent = c.name;
+      a.querySelector('.sos-phone').textContent = c.phone;
+      box.appendChild(a);
+    }
+    $('sosCard').classList.remove('hidden');
+  } catch {}
+}
+
+async function loadSosAdmin() {
+  if (ME?.role !== 'admin') return;
+  try {
+    const list = await api('/api/emergency');
+    const ul = $('sosAdminList');
+    ul.innerHTML = '';
+    if (!list.length) {
+      ul.innerHTML = '<li style="color:var(--sub);font-size:13px;padding:8px 0">등록된 연락처가 없어요</li>';
+    }
+    for (const c of list) {
+      const li = document.createElement('li');
+      li.innerHTML = `
+        <span class="user-emoji">${iconEmoji(c.icon)}</span>
+        <div class="user-main">
+          <div class="user-name"></div>
+          <div class="user-sub"></div>
+        </div>
+        <div class="user-actions">
+          <button class="user-del" title="삭제">✕</button>
+        </div>`;
+      li.querySelector('.user-name').textContent = c.name;
+      li.querySelector('.user-sub').textContent = c.phone;
+      li.querySelector('.user-del').onclick = async () => {
+        if (!confirm(`"${c.name}" 연락처를 삭제할까요?`)) return;
+        await api(`/api/emergency/${c.id}`, { method: 'DELETE' });
+        loadSosAdmin();
+        loadEmergencyContacts();
+      };
+      ul.appendChild(li);
+    }
+  } catch {}
+}
+
+let SOS_PICKED_ICON = 'heart';
+function renderSosIconPicker() {
+  const grid = $('sosIconPicker');
+  if (!grid) return;
+  grid.innerHTML = '';
+  const picks = ['heart','mom','dad','grandma','grandpa','dog','cat','star','sun','flower','smile','love','angel','chef','doctor','teacher'];
+  for (const code of picks) {
+    const i = ICONS.find((x) => x.code === code) || ICONS[0];
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'icon-opt' + (code === SOS_PICKED_ICON ? ' selected' : '');
+    b.title = i.label;
+    b.innerHTML = `<span class="icon-emoji">${i.emoji}</span>`;
+    b.onclick = () => { SOS_PICKED_ICON = code; renderSosIconPicker(); };
+    grid.appendChild(b);
+  }
+}
+
+// 관리자 설정 진입 시 1회 세팅
+const _origMigrateAdmin = typeof migrateAdminToSettings === 'function' ? migrateAdminToSettings : null;
 
 // ---------- 오늘 기분 ----------
 const MOODS = [
@@ -1005,25 +1088,73 @@ function applyCardOrder() {
   }
 }
 
+// 카드 숨김 목록
+function loadHiddenCards() {
+  try { return new Set(JSON.parse(localStorage.getItem('fb_hidden_cards') || '[]')); }
+  catch { return new Set(); }
+}
+function saveHiddenCards(s) { localStorage.setItem('fb_hidden_cards', JSON.stringify([...s])); }
+function applyHiddenCards() {
+  const hidden = loadHiddenCards();
+  document.querySelectorAll('#app [data-card-id]').forEach((el) => {
+    if (el.dataset.cardId === 'account') return;
+    if (hidden.has(el.dataset.cardId)) el.classList.add('user-hidden');
+    else el.classList.remove('user-hidden');
+  });
+}
+applyHiddenCards();
+
 let REORDER_MODE = false;
 function setReorderMode(on) {
   REORDER_MODE = on;
   document.body.classList.toggle('reorder-mode', on);
-  $('reorderToggleBtn').textContent = on ? '✅ 순서 저장' : '🧩 카드 순서 편집';
-  // 각 카드에 ↑↓ 버튼 삽입/제거
+  $('reorderToggleBtn').textContent = on ? '✅ 저장하고 끝내기' : '🧩 카드 순서·표시 편집';
+
+  // 편집 모드: 숨긴 카드를 다시 보여서 선택할 수 있게
   document.querySelectorAll('#app [data-card-id]').forEach((el) => {
     el.querySelector('.reorder-actions')?.remove();
-    if (!on) return;
-    if (el.dataset.cardId === 'account') return; // 계정 카드는 고정
+    if (!on) {
+      applyHiddenCards();
+      return;
+    }
+    el.classList.remove('user-hidden'); // 편집 중엔 모두 보이게
+    el.classList.add('reorder-target');
+    if (el.dataset.cardId === 'account') return;
+    const hidden = loadHiddenCards();
+    const isHidden = hidden.has(el.dataset.cardId);
     const box = document.createElement('div');
     box.className = 'reorder-actions';
-    box.innerHTML = '<button class="reo-btn" data-dir="up">↑</button><button class="reo-btn" data-dir="down">↓</button>';
+    box.innerHTML = `
+      <button class="reo-btn" data-dir="up" title="위로">↑</button>
+      <button class="reo-btn" data-dir="down" title="아래로">↓</button>
+      <button class="reo-btn reo-toggle${isHidden ? ' off' : ''}" data-dir="toggle" title="${isHidden ? '보이기' : '숨기기'}">${isHidden ? '🙈' : '👁'}</button>`;
     el.appendChild(box);
     box.addEventListener('click', (e) => {
       const b = e.target.closest('.reo-btn'); if (!b) return;
-      moveCard(el, b.dataset.dir);
+      if (b.dataset.dir === 'toggle') toggleCardHidden(el);
+      else moveCard(el, b.dataset.dir);
     });
   });
+  if (!on) {
+    // 편집 끝, reorder 클래스 정리
+    document.querySelectorAll('#app .reorder-target').forEach((el) => el.classList.remove('reorder-target'));
+  }
+}
+
+function toggleCardHidden(el) {
+  const hidden = loadHiddenCards();
+  const id = el.dataset.cardId;
+  if (hidden.has(id)) hidden.delete(id); else hidden.add(id);
+  saveHiddenCards(hidden);
+  // 편집 모드에선 계속 보이되 버튼 상태만 업데이트
+  const btn = el.querySelector('.reo-toggle');
+  if (btn) {
+    const isHidden = hidden.has(id);
+    btn.classList.toggle('off', isHidden);
+    btn.textContent = isHidden ? '🙈' : '👁';
+    btn.title = isHidden ? '보이기' : '숨기기';
+    el.classList.toggle('dim-hidden', isHidden);
+  }
 }
 function moveCard(el, dir) {
   const parent = el.parentElement;
@@ -1046,6 +1177,21 @@ function moveCard(el, dir) {
   window.scrollBy(0, y2 - y);
 }
 $('reorderToggleBtn').addEventListener('click', () => setReorderMode(!REORDER_MODE));
+
+// 도움말 시트
+$('helpBtn').addEventListener('click', () => $('helpSheet').classList.remove('hidden'));
+$('helpClose').addEventListener('click', () => $('helpSheet').classList.add('hidden'));
+$('helpSheet').addEventListener('click', (e) => {
+  if (e.target.id === 'helpSheet') $('helpSheet').classList.add('hidden');
+});
+
+// 초회 자동 노출 (1회)
+setTimeout(() => {
+  if (!localStorage.getItem('fb_help_seen') && ME) {
+    $('helpSheet').classList.remove('hidden');
+    localStorage.setItem('fb_help_seen', '1');
+  }
+}, 1500);
 
 async function loadFamilyInfo() {
   try {
@@ -1092,6 +1238,25 @@ $('famNameSave').addEventListener('click', async () => {
     await api('/api/family', { method: 'PATCH', body: JSON.stringify({ displayName }) });
     alert('가족 이름이 변경되었어요');
   } catch { alert('변경 실패'); }
+});
+
+document.addEventListener('click', async (e) => {
+  if (e.target && e.target.id === 'sosAddBtn') {
+    const name = $('sosName').value.trim();
+    const phone = $('sosPhone').value.trim();
+    if (!name || !phone) { alert('이름과 번호를 입력해 주세요'); return; }
+    try {
+      await api('/api/emergency', {
+        method: 'POST',
+        body: JSON.stringify({ name, phone, icon: SOS_PICKED_ICON }),
+      });
+      $('sosName').value = ''; $('sosPhone').value = '';
+      SOS_PICKED_ICON = 'heart';
+      renderSosIconPicker();
+      loadSosAdmin();
+      loadEmergencyContacts();
+    } catch { alert('추가 실패'); }
+  }
 });
 
 $('famNoticeSave').addEventListener('click', async () => {

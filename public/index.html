@@ -242,6 +242,49 @@
     </div>
   </section>
 
+  <!-- 도움말 바텀시트 -->
+  <div id="helpSheet" class="sheet-backdrop hidden" role="dialog">
+    <div class="sheet sheet-tall" role="document">
+      <div class="sheet-handle"></div>
+      <h2 class="sheet-title">가족보드 도움말</h2>
+      <div class="help-content">
+        <div class="help-item">
+          <span class="help-emoji">🌤️</span>
+          <div><b>오늘 날씨</b><p>기온·습도·미세먼지·꽃가루를 한눈에. 🔊 버튼으로 읽어드려요.</p></div>
+        </div>
+        <div class="help-item">
+          <span class="help-emoji">💬</span>
+          <div><b>오늘의 가족 질문</b><p>매일 새 질문이 떠요. 내 답변을 쓰면 <b>다음날</b> 가족 모두의 답변이 같이 공개돼요. 지난 기록도 모아보기 가능.</p></div>
+        </div>
+        <div class="help-item">
+          <span class="help-emoji">😊</span>
+          <div><b>오늘 기분</b><p>이모지 하나로 오늘 기분을 가족에게 알려요. 날짜 바뀌면 다시 초기화돼요.</p></div>
+        </div>
+        <div class="help-item">
+          <span class="help-emoji">📝</span>
+          <div><b>메모</b><p>글자 탭 → 수정 · 별 탭 → 중요 표시 · 마이크 탭 → 음성으로 입력. ✕ 는 확인 후 삭제.</p></div>
+        </div>
+        <div class="help-item">
+          <span class="help-emoji">💱</span>
+          <div><b>환율 · 계산기</b><p>엔·원·달러·유로·위안 5개 통화. 아래 계산기로 원하는 금액 바로 환산.</p></div>
+        </div>
+        <div class="help-item">
+          <span class="help-emoji">📞</span>
+          <div><b>빠른 연락처</b><p>가족·병원·119 등 자주 쓰는 번호를 큰 버튼으로. 관리자가 설정 → 모두에게 표시.</p></div>
+        </div>
+        <div class="help-item">
+          <span class="help-emoji">🧩</span>
+          <div><b>카드 순서 / 숨기기</b><p>계정 카드의 🧩 버튼 → ↑↓ 로 이동, 👁 로 숨김/표시. 원하는 모양으로 맞춰 쓰세요.</p></div>
+        </div>
+        <div class="help-item">
+          <span class="help-emoji">가</span>
+          <div><b>글자 크기</b><p>계정 카드에서 가 / 가 / 가 버튼으로 조절. 시력에 맞춰 보세요.</p></div>
+        </div>
+      </div>
+      <button class="sheet-close" id="helpClose">닫기</button>
+    </div>
+  </div>
+
   <!-- 히스토리 바텀시트 -->
   <div id="historySheet" class="sheet-backdrop hidden" role="dialog">
     <div class="sheet sheet-tall" role="document">
@@ -370,6 +413,18 @@
       </div>
 
       <div class="admin-section">
+        <label class="admin-label">📞 빠른 연락처 (모두에게 표시)</label>
+        <ul class="sos-admin-list" id="sosAdminList"></ul>
+        <div class="ufi-row">
+          <input id="sosName"  class="ufi" type="text" placeholder="이름 (예: 119, 엄마)" maxlength="50" />
+          <input id="sosPhone" class="ufi" type="tel"  placeholder="번호 (예: 119, 010-...)" maxlength="30" />
+        </div>
+        <label class="admin-label" style="margin-top: 8px; font-size: 12px">아이콘</label>
+        <div id="sosIconPicker" class="icon-picker" style="max-height: 180px"></div>
+        <button id="sosAddBtn" type="button" class="user-add">연락처 추가</button>
+      </div>
+
+      <div class="admin-section">
         <label class="admin-label">가족 추가</label>
         <div class="ufi-row">
           <input id="uUsername" class="ufi" type="text"     placeholder="아이디 (예: mom)" autocapitalize="off" />
@@ -410,6 +465,12 @@
     </div>
   </section>
 
+  <!-- 응급 연락처 -->
+  <section class="card sos-card hidden" data-card-id="sos" id="sosCard">
+    <p class="card-title">📞 빠른 연락처</p>
+    <div class="sos-list" id="sosList"></div>
+  </section>
+
   <section class="card account-card" data-card-id="account">
     <div class="account-row">
       <div class="account-avatar" id="accountAvatar">✨</div>
@@ -427,7 +488,8 @@
       </div>
     </div>
     <div class="account-menu">
-      <button id="reorderToggleBtn" type="button" class="account-menu-btn">🧩 카드 순서 편집</button>
+      <button id="helpBtn" type="button" class="account-menu-btn">❓ 도움말</button>
+      <button id="reorderToggleBtn" type="button" class="account-menu-btn">🧩 카드 순서·표시 편집</button>
       <button id="openSettingsBtn" type="button" class="account-menu-btn hidden">⚙️ 가족 관리 · 설정</button>
       <button id="logoutBtn" class="account-menu-btn danger">로그아웃</button>
     </div>

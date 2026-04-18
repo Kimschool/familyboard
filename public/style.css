@@ -466,6 +466,52 @@ body.tod-night .hero-weather { color: rgba(242,242,247,.8); }
   font-weight: 600;
 }
 
+/* ========== 빠른 연락처 (SOS) ========== */
+.sos-card { background: linear-gradient(135deg, #FFF0F0 0%, #FFE7D6 100%); }
+@media (prefers-color-scheme: dark) {
+  .sos-card { background: linear-gradient(135deg, #2A1A1E 0%, #2A211A 100%); }
+}
+.sos-card .card-title { color: #9A4A2E; }
+@media (prefers-color-scheme: dark) { .sos-card .card-title { color: #E9A57A; } }
+.sos-list { display: flex; flex-direction: column; gap: 10px; }
+.sos-btn {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
+  background: rgba(255,255,255,.82);
+  border-radius: 16px;
+  text-decoration: none;
+  color: var(--text);
+  transition: transform .12s, background .12s;
+  cursor: pointer;
+  min-height: 62px;
+}
+@media (prefers-color-scheme: dark) {
+  .sos-btn { background: rgba(255,255,255,.08); }
+}
+.sos-btn:active { transform: scale(.98); background: rgba(255,255,255,.95); }
+.sos-emoji { font-size: 34px; line-height: 1; flex-shrink: 0; }
+.sos-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.sos-name { font-size: 17px; font-weight: 700; color: var(--text); }
+.sos-phone { font-size: 14px; color: var(--sub); font-variant-numeric: tabular-nums; }
+.sos-arrow {
+  flex-shrink: 0;
+  width: 44px; height: 44px;
+  border-radius: 50%;
+  background: var(--good);
+  color: #fff;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 20px;
+}
+
+.sos-admin-list { list-style: none; margin: 0 0 12px; padding: 0; }
+.sos-admin-list li {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 0; border-bottom: 1px solid var(--line);
+}
+.sos-admin-list li:last-child { border-bottom: none; }
+
 /* ========== 이번 주 기념일 ========== */
 .upcoming-card { background: linear-gradient(135deg, #E6F3FF 0%, #FFE8F0 100%); }
 @media (prefers-color-scheme: dark) {
@@ -1354,11 +1400,18 @@ body.tod-night .hero-weather { color: rgba(242,242,247,.8); }
   letter-spacing: -0.5px;
 }
 
-/* ========== 카드 순서 편집 모드 ========== */
+/* ========== 카드 숨기기 (일반 모드에선 감춤) ========== */
+#app [data-card-id].user-hidden { display: none !important; }
+
+/* ========== 카드 순서·표시 편집 모드 ========== */
 body.reorder-mode #app [data-card-id] {
   outline: 2px dashed rgba(10,132,255,.4);
   outline-offset: -2px;
   position: relative;
+}
+body.reorder-mode #app [data-card-id].dim-hidden {
+  outline-color: rgba(255,59,48,.4);
+  opacity: .5;
 }
 .reorder-actions {
   position: absolute;
@@ -1377,9 +1430,37 @@ body.reorder-mode #app [data-card-id] {
   cursor: pointer;
   box-shadow: 0 2px 6px rgba(0,0,0,.15);
 }
+.reo-btn.reo-toggle { background: var(--good); font-size: 16px; }
+.reo-btn.reo-toggle.off { background: var(--bad); }
 .reo-btn:active { transform: scale(.92); }
 body.reorder-mode #app .card { padding-top: 28px; }
 body.reorder-mode #app #birthdayBanner { padding-top: 28px; }
+
+/* ========== 도움말 시트 ========== */
+.help-content {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 4px 2px;
+  margin-bottom: 10px;
+}
+.help-item {
+  display: flex;
+  gap: 14px;
+  padding: 14px;
+  background: var(--bg);
+  border-radius: var(--r-sm);
+}
+.help-emoji {
+  font-size: 28px;
+  flex-shrink: 0;
+  width: 40px;
+  text-align: center;
+  line-height: 1.2;
+}
+.help-item > div { flex: 1; min-width: 0; }
+.help-item b { font-size: 16px; color: var(--text); display: block; margin-bottom: 4px; }
+.help-item p { margin: 0; font-size: 14px; color: var(--sub); line-height: 1.55; word-break: keep-all; }
 
 /* ========== 프로필 시트 ========== */
 .sheet-backdrop {

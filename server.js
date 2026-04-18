@@ -305,6 +305,60 @@ app.delete('/api/users/:id', requireAdmin, async (req, res) => {
   res.json({ ok: true });
 });
 
+// ---------- 응급 연락처 ----------
+app.get('/api/emergency', requireAuth, async (req, res) => {
+  const [rows] = await getPool().query(
+    `SELECT id, name, phone, icon, sort_order
+       FROM emergency_contacts WHERE family_id = ?
+       ORDER BY sort_order ASC, id ASC`,
+    [req.user.family_id]
+  );
+  res.json(rows);
+});
+
+app.post('/api/emergency', requireAdmin, async (req, res) => {
+  try {
+    const name = (req.body?.name || '').toString().trim();
+    const phone = (req.body?.phone || '').toString().trim();
+    const icon = (req.body?.icon || 'heart').toString().trim();
+    const sortOrder = Number(req.body?.sortOrder) || 0;
+    if (!name || !phone) return res.status(400).json({ error: 'name-phone-required' });
+    const [r] = await getPool().query(
+      `INSERT INTO emergency_contacts (family_id, name, phone, icon, sort_order)
+       VALUES (?, ?, ?, ?, ?)`,
+      [req.user.family_id, name.slice(0, 50), phone.slice(0, 30), icon.slice(0, 30), sortOrder]
+    );
+    res.json({ ok: true, id: r.insertId });
+  } catch (e) { res.status(500).json({ error: 'internal', message: e.message }); }
+});
+
+app.patch('/api/emergency/:id', requireAdmin, async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id)) return res.status(400).json({ error: 'bad-id' });
+    const updates = [], args = [];
+    if (req.body?.name !== undefined)  { updates.push('name = ?');  args.push(String(req.body.name).trim().slice(0, 50)); }
+    if (req.body?.phone !== undefined) { updates.push('phone = ?'); args.push(String(req.body.phone).trim().slice(0, 30)); }
+    if (req.body?.icon !== undefined)  { updates.push('icon = ?');  args.push(String(req.body.icon).trim().slice(0, 30) || 'heart'); }
+    if (req.body?.sortOrder !== undefined) { updates.push('sort_order = ?'); args.push(Number(req.body.sortOrder) || 0); }
+    if (!updates.length) return res.json({ ok: true });
+    args.push(id, req.user.family_id);
+    await getPool().query(
+      `UPDATE emergency_contacts SET ${updates.join(', ')} WHERE id = ? AND family_id = ?`, args);
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: 'internal', message: e.message }); }
+});
+
+app.delete('/api/emergency/:id', requireAdmin, async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'bad-id' });
+  await getPool().query(
+    'DELETE FROM emergency_contacts WHERE id = ? AND family_id = ?',
+    [id, req.user.family_id]
+  );
+  res.json({ ok: true });
+});
+
 // ---------- 가족 정보 (관리자: 별칭 수정) ----------
 app.get('/api/family', requireAuth, async (req, res) => {
   const [rows] = await getPool().query(

@@ -90,6 +90,19 @@ async function ensureSchema() {
   await ensureColumn('families', 'notice_updated_by', 'INT NULL');
 
   await p.query(`
+    CREATE TABLE IF NOT EXISTS emergency_contacts (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      family_id INT NOT NULL,
+      name VARCHAR(50) NOT NULL,
+      phone VARCHAR(30) NOT NULL,
+      icon VARCHAR(30) NOT NULL DEFAULT 'heart',
+      sort_order INT NOT NULL DEFAULT 0,
+      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      INDEX idx_family_sort (family_id, sort_order)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  `);
+
+  await p.query(`
     CREATE TABLE IF NOT EXISTS answer_reactions (
       id INT AUTO_INCREMENT PRIMARY KEY,
       answer_id INT NOT NULL,
