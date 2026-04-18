@@ -101,6 +101,7 @@
       <button class="tts-btn" data-tts="notice" aria-label="읽어주기">🔊</button>
     </div>
     <p class="notice-text" id="noticeText"></p>
+    <div class="notice-reads hidden" id="noticeReads"></div>
     <button type="button" class="notice-history-btn" id="noticeHistoryBtn">지난 공지 보기</button>
   </section>
 
@@ -721,6 +722,14 @@
       <input type="checkbox" id="ttsAutoToggle" />
       <span>🔊 로그인하면 자동으로 오늘의 안내 읽어주기</span>
     </label>
+    <div class="tts-rate-row">
+      <span class="tts-rate-label">읽기 속도</span>
+      <div class="tts-rate-buttons">
+        <button type="button" class="tr-btn" data-rate="0.8">천천히</button>
+        <button type="button" class="tr-btn" data-rate="0.95">보통</button>
+        <button type="button" class="tr-btn" data-rate="1.15">빠르게</button>
+      </div>
+    </div>
     <div class="account-menu">
       <button id="helpBtn" type="button" class="account-menu-btn">❓ 도움말</button>
       <button id="reorderToggleBtn" type="button" class="account-menu-btn">🧩 카드 순서·표시 편집</button>

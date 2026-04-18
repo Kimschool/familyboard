@@ -719,14 +719,72 @@ body.tod-night .hero-weather { color: rgba(242,242,247,.8); }
   align-items: center;
   gap: 10px;
   padding: 12px 2px;
-  border-bottom: 1px solid var(--line);
-  margin-bottom: 10px;
   font-size: 14px;
   color: var(--text);
   font-weight: 600;
   cursor: pointer;
 }
 .tts-auto-row input { width: 22px; height: 22px; accent-color: var(--primary); }
+.tts-rate-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 0 12px;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 10px;
+}
+.tts-rate-label { font-size: 13px; font-weight: 700; color: var(--sub); }
+.tts-rate-buttons { display: flex; gap: 4px; margin-left: auto; }
+.tr-btn {
+  height: 34px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--card);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.tr-btn.active {
+  background: var(--primary);
+  color: #fff;
+  border-color: var(--primary);
+}
+
+/* 공지 읽음 아바타 줄 */
+.notice-reads {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px dashed rgba(0,0,0,.08);
+  flex-wrap: wrap;
+}
+@media (prefers-color-scheme: dark) {
+  .notice-reads { border-top-color: rgba(255,255,255,.1); }
+}
+.nr-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--sub);
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+.nr-dot {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  font-size: 16px;
+  background: var(--card);
+  transition: opacity .15s;
+}
+.nr-dot.read { opacity: 1; box-shadow: 0 0 0 2px var(--good); }
+.nr-dot.unread { opacity: .35; filter: grayscale(1); }
 
 /* 어제 답변 코멘트 */
 .comment-toggle {

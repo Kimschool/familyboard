@@ -129,6 +129,16 @@ async function ensureSchema() {
   `);
 
   await p.query(`
+    CREATE TABLE IF NOT EXISTS notice_reads (
+      notice_id INT NOT NULL,
+      user_id INT NOT NULL,
+      read_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (notice_id, user_id),
+      INDEX idx_notice (notice_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  `);
+
+  await p.query(`
     CREATE TABLE IF NOT EXISTS answer_comments (
       id INT AUTO_INCREMENT PRIMARY KEY,
       answer_id INT NOT NULL,

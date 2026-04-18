@@ -587,13 +587,46 @@ app.get('/api/family', requireAuth, async (req, res) => {
   );
   const r = rows[0];
   if (!r) return res.json({});
+
+  // 현재 공지 ID (가장 최근 notice_history row) + 읽음 상태
+  let noticeId = null;
+  let reads = [];
+  if (r.notice) {
+    const [n] = await getPool().query(
+      `SELECT id FROM notice_history WHERE family_id = ? ORDER BY created_at DESC LIMIT 1`,
+      [req.user.family_id]
+    );
+    if (n.length) {
+      noticeId = n[0].id;
+      const [rr] = await getPool().query(
+        `SELECT nr.user_id, u.display_name, u.icon
+           FROM notice_reads nr JOIN users u ON u.id = nr.user_id
+          WHERE nr.notice_id = ?`,
+        [noticeId]
+      );
+      reads = rr;
+    }
+  }
+
   res.json({
     alias: r.alias,
     displayName: r.display_name,
     notice: r.notice || null,
+    noticeId,
     noticeUpdatedAt: r.notice_updated_at,
     noticeBy: r.notice_by_name ? { name: r.notice_by_name, icon: r.notice_by_icon } : null,
+    noticeReads: reads.map((r) => ({ userId: r.user_id, name: r.display_name, icon: r.icon })),
   });
+});
+
+app.post('/api/notice/:id/read', requireAuth, async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'bad-id' });
+  await getPool().query(
+    `INSERT IGNORE INTO notice_reads (notice_id, user_id) VALUES (?, ?)`,
+    [id, req.user.id]
+  );
+  res.json({ ok: true });
 });
 
 app.patch('/api/family', requireAdmin, async (req, res) => {

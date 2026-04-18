@@ -1,3 +1,25 @@
+// ---------- 가족별 액센트 컬러 (id 해시 기반) ----------
+const ACCENT_PALETTE = [
+  { hue: 210, name: 'blue' },   // 파랑
+  { hue: 340, name: 'pink' },   // 분홍
+  { hue: 150, name: 'green' },  // 초록
+  { hue: 30,  name: 'orange' }, // 주황
+  { hue: 280, name: 'purple' }, // 보라
+  { hue: 50,  name: 'yellow' }, // 노랑
+  { hue: 190, name: 'teal' },   // 청록
+  { hue: 0,   name: 'red' },    // 빨강
+];
+function accentFor(userId) {
+  const idx = ((userId || 0) * 7 + 13) % ACCENT_PALETTE.length;
+  return ACCENT_PALETTE[idx];
+}
+function accentStyle(userId, kind = 'ring') {
+  const p = accentFor(userId);
+  if (kind === 'bg') return `background: hsla(${p.hue}, 70%, 92%, .7);`;
+  if (kind === 'text') return `color: hsl(${p.hue}, 60%, 40%);`;
+  return `box-shadow: 0 0 0 2px hsl(${p.hue}, 70%, 62%); background: hsla(${p.hue}, 70%, 94%, .6);`;
+}
+
 // ---------- 아이콘 세트 (label 은 title 툴팁용) ----------
 const ICONS = [
   { code: 'dad',        emoji: '👨',    label: '아빠' },
@@ -279,6 +301,7 @@ function enterApp() {
   loadAnniversaries();
   renderDailyQuote();
   setupTtsAuto();
+  setupTtsRate();
 
   // 관리자 UI — 설정 화면으로 이동 (계정 카드의 '가족 관리' 버튼으로 열림)
   try {
@@ -1070,6 +1093,7 @@ async function loadFamilySummary() {
       const badge = document.createElement('button');
       badge.type = 'button';
       badge.className = 'family-badge' + (m.id === ME.id ? ' me' : '') + (m.activated ? '' : ' dim');
+      badge.style.cssText += accentStyle(m.id, 'bg');
       badge.innerHTML = `
         <span class="family-badge-emoji">${iconEmoji(m.icon)}</span>
         <span class="family-badge-name"></span>
@@ -2083,6 +2107,9 @@ async function loadZodiac() {
       const dir   = LUCKY_DIR[seed % LUCKY_DIR.length];
       const num   = (seed % 9) + 1;
       const li = document.createElement('li');
+      // 가족별 액센트 (id가 없어서 name 기반 해시)
+      const matchUser = (FAMILY_CACHE || []).find((m) => m.displayName === z.name);
+      if (matchUser) li.style.cssText += accentStyle(matchUser.id, 'bg');
       const activity = TODAY_ACTIVITIES[seed % TODAY_ACTIVITIES.length];
       li.innerHTML = `
         <span class="zodiac-emoji">${iconEmoji(z.icon)}</span>
@@ -2295,11 +2322,35 @@ async function loadFamilyInfo() {
   } catch {}
 }
 
+function renderNoticeReads(noticeId, reads) {
+  const el = $('noticeReads');
+  if (!el || !noticeId) return;
+  const readIds = new Set(reads.map((r) => r.userId));
+  const members = (FAMILY_CACHE || []).filter((m) => m.activated);
+  if (!members.length) { el.classList.add('hidden'); return; }
+  el.innerHTML = '<span class="nr-label">읽음</span>' + members.map((m) => {
+    const read = readIds.has(m.id);
+    return `<span class="nr-dot ${read ? 'read' : 'unread'}" title="${m.displayName}${read ? ' 읽음' : ' 아직'}">
+      ${iconEmoji(m.icon)}
+    </span>`;
+  }).join('');
+  el.classList.remove('hidden');
+  // 내가 아직 안 읽었으면 읽음 처리
+  if (!readIds.has(ME.id)) {
+    setTimeout(() => {
+      api(`/api/notice/${noticeId}/read`, { method: 'POST' })
+        .then(() => loadFamilyNotice()).catch(() => {});
+    }, 3000);
+  }
+}
+
 async function loadFamilyNotice() {
   try {
     const f = await api('/api/family');
     if (f.notice) {
       $('noticeText').textContent = f.notice;
+      // 읽음 상태 렌더
+      renderNoticeReads(f.noticeId, f.noticeReads || []);
       if (f.noticeBy) {
         const date = f.noticeUpdatedAt ? new Date(f.noticeUpdatedAt) : null;
         const when = date ? relativeTime(date) : '';
@@ -2503,16 +2554,32 @@ $('inviteShare').addEventListener('click', async () => {
 $('inviteClose').addEventListener('click', () => $('inviteResult').classList.add('hidden'));
 
 // ---------- TTS (읽어주기) ----------
+function getTtsRate() {
+  const v = parseFloat(localStorage.getItem('fb_tts_rate'));
+  return Number.isFinite(v) && v > 0.3 && v < 2 ? v : 0.95;
+}
 function speakText(text) {
   if (!('speechSynthesis' in window) || !text) return;
   try {
     speechSynthesis.cancel();
     const u = new SpeechSynthesisUtterance(text);
     u.lang = 'ko-KR';
-    u.rate = 0.95;
+    u.rate = getTtsRate();
     u.pitch = 1;
     speechSynthesis.speak(u);
   } catch {}
+}
+// TTS 속도 토글 UI
+function setupTtsRate() {
+  const cur = getTtsRate();
+  document.querySelectorAll('.tr-btn').forEach((b) => {
+    b.classList.toggle('active', Math.abs(parseFloat(b.dataset.rate) - cur) < 0.01);
+    b.addEventListener('click', () => {
+      localStorage.setItem('fb_tts_rate', b.dataset.rate);
+      document.querySelectorAll('.tr-btn').forEach((x) => x.classList.remove('active'));
+      b.classList.add('active');
+    });
+  });
 }
 function buildTtsText(kind) {
   if (kind === 'tips') {
