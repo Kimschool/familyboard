@@ -209,6 +209,7 @@ function enterApp() {
   showOnly('app');
   try { renderHero(); } catch (e) { console.warn('[hero]', e); }
   try { $('tipsTitle').textContent = `${ME.displayName}님을 위한 오늘의 안내`; } catch {}
+  try { renderAccount(); } catch {}
 
   // 가족 공통 데이터 — 하나 실패해도 다른 카드는 로드되게
   loadFamilySummary();
@@ -251,7 +252,14 @@ function renderHero() {
   document.body.classList.add('tod-' + tod);
 }
 
+function renderAccount() {
+  $('accountAvatar').textContent = iconEmoji(ME.icon);
+  $('accountName').textContent = `${ME.displayName}님으로 로그인 중`;
+  $('accountMeta').textContent = `${ME.familyName || ''} · ${ME.role === 'admin' ? '관리자' : '가족'}`;
+}
+
 $('logoutBtn').addEventListener('click', async () => {
+  if (!confirm('로그아웃 하시겠어요?')) return;
   await api('/api/logout', { method: 'POST' }).catch(() => {});
   // 가족별칭은 기억 (다음 로그인 편의)
   location.reload();
@@ -441,7 +449,10 @@ function renderMemos(list) {
   const ul = $('memoList');
   ul.innerHTML = '';
   if (!list.length) {
-    ul.innerHTML = '<li><span class="memo-text" style="color:var(--sub)">적혀 있는 메모가 없어요</span></li>';
+    ul.innerHTML = `<li class="empty-state">
+      <span class="empty-state-emoji">📝</span>
+      <span class="empty-state-text">오늘은 깨끗해요. 아래에 새로 적어보세요</span>
+    </li>`;
     return;
   }
   for (const m of list) {
@@ -489,7 +500,10 @@ async function loadZodiac() {
     const ul = $('zodiacList');
     ul.innerHTML = '';
     if (!list.length) {
-      ul.innerHTML = '<li class="zodiac-empty">가족 정보가 등록되면 운세가 보여요</li>';
+      ul.innerHTML = `<li class="empty-state">
+        <span class="empty-state-emoji">🔮</span>
+        <span class="empty-state-text">가족 생년을 등록하면 띠별 운세를 보여드려요</span>
+      </li>`;
       return;
     }
     for (const z of list) {

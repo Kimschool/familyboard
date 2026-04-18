@@ -173,8 +173,8 @@
     <p class="card-title">오늘의 메모</p>
     <ul class="memo-list" id="memoList"></ul>
     <form id="memoForm" class="memo-form">
-      <input id="memoInput" class="memo-input" type="text" placeholder="할 일을 적어 주세요" maxlength="500" />
-      <button class="memo-add" type="submit">＋</button>
+      <input id="memoInput" class="memo-input" type="text" placeholder="오늘 기억할 일을 적어 주세요" maxlength="500" />
+      <button class="memo-add" type="submit" aria-label="추가">＋</button>
     </form>
   </section>
 
@@ -244,8 +244,18 @@
     </div>
   </section>
 
+  <section class="card account-card">
+    <div class="account-row">
+      <div class="account-avatar" id="accountAvatar">✨</div>
+      <div class="account-info">
+        <div class="account-name" id="accountName">—</div>
+        <div class="account-meta" id="accountMeta">—</div>
+      </div>
+    </div>
+    <button id="logoutBtn" class="account-logout">로그아웃</button>
+  </section>
+
   <footer class="foot">
-    <button id="logoutBtn" class="foot-btn">로그아웃</button>
     <p class="foot-ver">familyboard · 부모님을 위한 하루 안내</p>
   </footer>
 </main>

@@ -488,19 +488,33 @@ body.tod-night .hero-date, body.tod-night .hero-greeting { color: #F2F2F7; }
   background: none; border: none; color: var(--sub);
   font-size: 18px; padding: 6px 4px; cursor: pointer;
 }
-.memo-form { display: flex; gap: 10px; margin-top: 8px; }
+.memo-form { display: flex; gap: 10px; margin-top: 14px; }
 .memo-input {
-  flex: 1; height: 48px; padding: 0 14px; font-size: 16px;
-  border-radius: var(--r-sm); border: 1px solid var(--line);
+  flex: 1; height: 60px; padding: 0 18px; font-size: 18px;
+  border-radius: var(--r-sm); border: 1.5px solid var(--line);
   background: var(--bg); color: var(--text); outline: none;
 }
 .memo-input:focus { border-color: var(--primary); background: var(--card); }
 .memo-add {
-  width: 48px; height: 48px; border: none; border-radius: var(--r-sm);
-  background: var(--primary); color: #fff; font-size: 24px; font-weight: 300;
+  width: 60px; height: 60px; border: none; border-radius: var(--r-sm);
+  background: var(--primary); color: #fff; font-size: 30px; font-weight: 300;
   cursor: pointer; flex-shrink: 0;
+  box-shadow: 0 3px 8px rgba(10, 132, 255, .25);
 }
-.memo-add:active { transform: scale(.96); }
+.memo-add:active { transform: scale(.95); }
+
+/* 빈 상태 일러스트 */
+.empty-state {
+  display: flex !important;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 24px 0 !important;
+  border: none !important;
+  text-align: center;
+}
+.empty-state-emoji { font-size: 42px; line-height: 1; opacity: .6; }
+.empty-state-text  { font-size: 15px; color: var(--sub); }
 
 /* ========== 가족 관리 ========== */
 .admin-card { padding: 0; overflow: hidden; }
@@ -619,10 +633,28 @@ body.tod-night .hero-date, body.tod-night .hero-greeting { color: #F2F2F7; }
 .invite-share-row { display: flex; gap: 8px; }
 .invite-share-row .auth-btn { flex: 1; font-size: 14px; }
 
-/* ========== Footer ========== */
-.foot { text-align: center; padding: 20px 0 10px; }
-.foot-btn {
-  background: transparent; border: 1px solid var(--line); color: var(--sub);
-  border-radius: 999px; padding: 10px 22px; font-size: 14px; cursor: pointer;
+/* ========== 계정 카드 ========== */
+.account-card { padding: 16px 18px; }
+.account-row { display: flex; align-items: center; gap: 14px; margin-bottom: 14px; }
+.account-avatar {
+  width: 54px; height: 54px;
+  border-radius: 50%;
+  background: var(--bg);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 32px;
+  flex-shrink: 0;
 }
-.foot-ver { margin: 14px 0 0; color: var(--sub); font-size: 12px; }
+.account-info { flex: 1; min-width: 0; }
+.account-name { font-size: 16px; font-weight: 700; color: var(--text); }
+.account-meta { font-size: 13px; color: var(--sub); margin-top: 2px; }
+.account-logout {
+  width: 100%; height: 48px;
+  border: 1.5px solid var(--line); border-radius: var(--r-sm);
+  background: var(--card); color: var(--text);
+  font-size: 15px; font-weight: 600; cursor: pointer;
+}
+.account-logout:active { background: var(--bg); transform: scale(.99); }
+
+/* ========== Footer ========== */
+.foot { text-align: center; padding: 12px 0 10px; }
+.foot-ver { margin: 0; color: var(--sub); font-size: 12px; }
