@@ -2362,16 +2362,24 @@ body.tod-night .hero-weather { color: rgba(242,242,247,.8); }
   .streak-badge { color: #FFB08A; background: rgba(255,140,80,.15); }
 }
 .streak-family-btn {
-  background: var(--card);
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  padding: 6px 12px;
-  font-size: 13px;
+  background: transparent;
+  border: none;
+  padding: 4px 4px;
+  font-size: 12.5px;
   font-weight: 600;
   font-family: inherit;
   cursor: pointer;
-  color: var(--text);
+  color: var(--sub);
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  -webkit-tap-highlight-color: transparent;
+  border-radius: 6px;
 }
+.streak-family-btn:hover,
+.streak-family-btn:focus-visible { color: var(--text); text-decoration-color: currentColor; }
+.streak-family-btn:active { transform: scale(.96); }
 
 .streak-list { list-style: none; margin: 0; padding: 0; }
 .streak-list li {
