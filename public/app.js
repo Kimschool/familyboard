@@ -90,6 +90,13 @@ const iconLabel = (code) => (ICON_MAP[code] || ICON_MAP.star).label;
 // ---------- 유틸 ----------
 const $ = (id) => document.getElementById(id);
 const fmt = new Intl.NumberFormat('ko-KR');
+/** 전화번호 표시용 — 빈 값·문자열 "null" 제거 */
+function displayPhone(p) {
+  if (p == null) return '';
+  const s = String(p).trim();
+  if (!s || s.toLowerCase() === 'null' || s === 'undefined') return '';
+  return s;
+}
 
 function api(path, opts = {}) {
   return fetch(path, {
@@ -304,6 +311,9 @@ function enterApp() {
   setupTtsRate();
   loadPoll();
   loadEvents();
+  loadGallery();
+  loadChatPeek();
+  refreshChatUnread();
 
   // 관리자 UI — 설정 화면으로 이동 (계정 카드의 '가족 관리' 버튼으로 열림)
   try {
@@ -412,6 +422,25 @@ function avatarHtml(member, sizeClass = '') {
   return `<span class="ava-emoji ${sizeClass}">${iconEmoji(member?.icon)}</span>`;
 }
 
+/** FAMILY_CACHE 에서 매칭되는 멤버의 photoUrl 리턴. 못 찾으면 null. */
+function photoUrlFor({ id, name } = {}) {
+  const m = (FAMILY_CACHE || []).find((x) =>
+    (id != null && x.id === id) || (name && x.displayName === name)
+  );
+  return m?.photoUrl || null;
+}
+
+/** 인라인 아바타 HTML 문자열 — 사진 있으면 원형 <img>, 없으면 이모지 텍스트.
+ *  px: 이미지 지름(px). emoji fallback 은 부모의 font-size 를 그대로 따름. */
+function inlineAvatarHtml({ id, name, icon } = {}, px = 22) {
+  const url = photoUrlFor({ id, name });
+  if (url) {
+    const safe = url.replace(/"/g, '');
+    return `<img src="${safe}" alt="" class="avatar-inline" style="width:${px}px;height:${px}px;border-radius:50%;object-fit:cover;display:inline-block;vertical-align:middle" />`;
+  }
+  return iconEmoji(icon);
+}
+
 function renderHero() {
   const now = new Date();
   const weekday = ['일','월','화','수','목','금','토'][now.getDay()];
@@ -423,14 +452,9 @@ function renderHero() {
     : h < 18 ? '좋은 오후에요'
     : h < 22 ? '편안한 저녁이에요' : '푹 주무세요';
   $('greeting').textContent = `${ME.displayName}님, ${phase}`;
-  // hero avatar: 내 photoUrl 있으면 사진
+  // hero avatar: 내 photoUrl 있으면 사진 (실패 시 이모지로 폴백)
   const meInCache = (FAMILY_CACHE || []).find((x) => x.id === ME.id);
-  const photoUrl = meInCache?.photoUrl;
-  if (photoUrl) {
-    $('heroAvatar').innerHTML = `<img src="${photoUrl.replace(/"/g, '')}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:inherit" />`;
-  } else {
-    $('heroAvatar').textContent = iconEmoji(ME.icon);
-  }
+  setAvatarEl($('heroAvatar'), meInCache?.photoUrl, ME.icon);
 
   // 시간대별 배경 톤
   const tod = h < 5 ? 'night' : h < 11 ? 'morning' : h < 17 ? 'noon' : h < 20 ? 'evening' : 'night';
@@ -440,9 +464,30 @@ function renderHero() {
 
 
 function renderAccount() {
-  $('accountAvatar').textContent = iconEmoji(ME.icon);
+  const self = (FAMILY_CACHE || []).find((x) => x.id === ME.id);
+  setAvatarEl($('accountAvatar'), self?.photoUrl, ME.icon);
   $('accountName').textContent = `${ME.displayName}님으로 로그인 중`;
   $('accountMeta').textContent = `${ME.familyName || ''} (${ME.role === 'admin' ? '관리자' : '가족'})`;
+}
+
+/** photoUrl 있으면 <img> 삽입. 로드 실패 시 이모지로 폴백. */
+function setAvatarEl(el, photoUrl, iconCode) {
+  if (!el) return;
+  const url = (photoUrl || '').trim();
+  if (!url) {
+    el.textContent = iconEmoji(iconCode);
+    return;
+  }
+  el.textContent = '';
+  const img = document.createElement('img');
+  img.alt = '';
+  img.style.cssText = 'width:100%;height:100%;object-fit:cover;border-radius:inherit;display:block';
+  img.onerror = () => {
+    console.warn('[avatar] img load failed:', url);
+    el.textContent = iconEmoji(iconCode);
+  };
+  img.src = url;
+  el.appendChild(img);
 }
 
 $('logoutBtn').addEventListener('click', async () => {
@@ -783,8 +828,9 @@ $('suggestSheet').addEventListener('click', (e) => {
   if (e.target.id === 'suggestSheet') $('suggestSheet').classList.add('hidden');
 });
 
-// ---------- 개인 일기 ----------
+// ---------- 개인 일기 (index에 카드가 있을 때만) ----------
 async function loadDiary() {
+  if (!$('diaryInput')) return;
   try {
     const r = await api('/api/diary/today');
     $('diaryInput').value = r.text || '';
@@ -809,7 +855,7 @@ async function loadDiary() {
     } catch {}
   } catch {}
 }
-$('diarySave').addEventListener('click', async () => {
+$('diarySave')?.addEventListener('click', async () => {
   const text = $('diaryInput').value.trim();
   try {
     await api('/api/diary/today', { method: 'POST', body: JSON.stringify({ text }) });
@@ -818,7 +864,7 @@ $('diarySave').addEventListener('click', async () => {
     loadDiary();
   } catch { alert('저장 실패'); }
 });
-$('diaryHistBtn').addEventListener('click', async () => {
+$('diaryHistBtn')?.addEventListener('click', async () => {
   try {
     const list = await api('/api/diary/recent?limit=30');
     const ul = $('diaryHistList');
@@ -839,8 +885,8 @@ $('diaryHistBtn').addEventListener('click', async () => {
     $('diaryHistSheet').classList.remove('hidden');
   } catch { alert('불러오기 실패'); }
 });
-$('diaryHistClose').addEventListener('click', () => $('diaryHistSheet').classList.add('hidden'));
-$('diaryHistSheet').addEventListener('click', (e) => {
+$('diaryHistClose')?.addEventListener('click', () => $('diaryHistSheet').classList.add('hidden'));
+$('diaryHistSheet')?.addEventListener('click', (e) => {
   if (e.target.id === 'diaryHistSheet') $('diaryHistSheet').classList.add('hidden');
 });
 
@@ -1053,9 +1099,11 @@ async function loadEmergencyContacts() {
     box.innerHTML = '';
     if (!list.length) { $('sosCard').classList.add('hidden'); return; }
     for (const c of list) {
+      const tel = displayPhone(c.phone);
+      if (!tel) continue;
       const a = document.createElement('a');
       a.className = 'sos-btn';
-      a.href = `tel:${c.phone.replace(/[^0-9+*#]/g, '')}`;
+      a.href = `tel:${tel.replace(/[^0-9+*#]/g, '')}`;
       a.innerHTML = `
         <span class="sos-emoji">${iconEmoji(c.icon)}</span>
         <span class="sos-info">
@@ -1064,7 +1112,7 @@ async function loadEmergencyContacts() {
         </span>
         <span class="sos-arrow">📞</span>`;
       a.querySelector('.sos-name').textContent = c.name;
-      a.querySelector('.sos-phone').textContent = c.phone;
+      a.querySelector('.sos-phone').textContent = tel;
       box.appendChild(a);
     }
     $('sosCard').classList.remove('hidden');
@@ -1092,7 +1140,7 @@ async function loadSosAdmin() {
           <button class="user-del" title="삭제">✕</button>
         </div>`;
       li.querySelector('.user-name').textContent = c.name;
-      li.querySelector('.user-sub').textContent = c.phone;
+      li.querySelector('.user-sub').textContent = displayPhone(c.phone) || '—';
       li.querySelector('.user-del').onclick = async () => {
         if (!confirm(`"${c.name}" 연락처를 삭제할까요?`)) return;
         await api(`/api/emergency/${c.id}`, { method: 'DELETE' });
@@ -1375,19 +1423,287 @@ async function loadMissions() {
 let MY_PICKED_ICON = 'star';
 $('myProfileBtn').addEventListener('click', () => openMyProfileSheet());
 function openMyProfileSheet() {
-  MY_PICKED_ICON = ME.icon || 'star';
+  const self = (FAMILY_CACHE || []).find((x) => x.id === ME.id);
+  // 사진이 등록되어 있으면 아이콘 선택 해제 상태로 시작 (사진이 우선)
+  MY_PICKED_ICON = self?.photoUrl ? null : (ME.icon || 'star');
   $('myDisplay').value = ME.displayName || '';
   $('myYear').value  = ME.birthYear  || '';
   $('myMonth').value = ME.birthMonth || '';
   $('myDay').value   = ME.birthDay   || '';
   $('myLunar').checked = !!ME.isLunar;
-  const self = (FAMILY_CACHE || []).find((x) => x.id === ME.id);
-  $('myPhone').value = self?.phone || '';
-  $('myPhoto').value = self?.photoUrl || '';
+  $('myPhone').value = displayPhone(self?.phone);
   $('myCurrentPw').value = ''; $('myNewPw').value = '';
   renderMyIconPicker();
+  renderMyPhotoPreview();
   $('myProfileSheet').classList.remove('hidden');
 }
+
+$('heroAvatar').addEventListener('click', () => {
+  if (!ME) return;
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+  openMyProfileSheet();
+});
+$('heroAvatar').addEventListener('keydown', (e) => {
+  if (!ME) return;
+  if (e.key === 'Enter' || e.key === ' ') {
+    e.preventDefault();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    openMyProfileSheet();
+  }
+});
+
+function renderMyPhotoPreview() {
+  const el = $('myPhotoPreview');
+  const self = (FAMILY_CACHE || []).find((x) => x.id === ME.id);
+  const url = (self?.photoUrl || '').trim();
+  const clearBtn = $('myPhotoClearBtn');
+  if (url) {
+    el.innerHTML = `<img src="${url.replace(/"/g, '')}" alt="" />`;
+    clearBtn.classList.remove('hidden');
+  } else {
+    el.innerHTML = `<span class="my-photo-placeholder">${iconEmoji(ME.icon)}</span>`;
+    clearBtn.classList.add('hidden');
+  }
+}
+
+// ---------- 프로필 사진: 원형 크롭 + 업로드 ----------
+const CROP_PREVIEW_SZ = 320;
+const CROP_R = CROP_PREVIEW_SZ / 2;
+const CROP_EXPORT_SZ = 640;
+const profileCropState = { img: null, zoom: 1, panX: 0, panY: 0, objectUrl: null, dragging: false, last: null };
+
+function drawProfileCropCanvas() {
+  const canvas = $('profileCropCanvas');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  const S = CROP_PREVIEW_SZ;
+  const R = CROP_R;
+  canvas.width = S * dpr;
+  canvas.height = S * dpr;
+  canvas.style.width = `${S}px`;
+  canvas.style.height = `${S}px`;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, S, S);
+  const img = profileCropState.img;
+  if (!img || !img.complete || !img.naturalWidth) return;
+  const iw = img.naturalWidth;
+  const ih = img.naturalHeight;
+  const base = Math.max((2 * R) / iw, (2 * R) / ih);
+  const dw = iw * base * profileCropState.zoom;
+  const dh = ih * base * profileCropState.zoom;
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(S / 2, S / 2, R - 1, 0, Math.PI * 2);
+  ctx.clip();
+  ctx.drawImage(
+    img,
+    S / 2 - dw / 2 + profileCropState.panX,
+    S / 2 - dh / 2 + profileCropState.panY,
+    dw,
+    dh
+  );
+  ctx.restore();
+  ctx.strokeStyle = 'rgba(255,255,255,.9)';
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.arc(S / 2, S / 2, R - 2, 0, Math.PI * 2);
+  ctx.stroke();
+}
+
+function exportProfileCropCanvas() {
+  const img = profileCropState.img;
+  if (!img || !img.naturalWidth) return null;
+  const S = CROP_EXPORT_SZ;
+  const R = S / 2;
+  const canvas = document.createElement('canvas');
+  canvas.width = S;
+  canvas.height = S;
+  const ctx = canvas.getContext('2d');
+  const iw = img.naturalWidth;
+  const ih = img.naturalHeight;
+  // base 는 이미 640 기준으로 계산되므로 그대로 쓰면 export 좌표계에 맞음.
+  // 팬 오프셋만 preview(320) → export(640) 비율로 보정.
+  const base = Math.max((2 * R) / iw, (2 * R) / ih);
+  const ratio = S / CROP_PREVIEW_SZ;
+  const dw = iw * base * profileCropState.zoom;
+  const dh = ih * base * profileCropState.zoom;
+  const panX = profileCropState.panX * ratio;
+  const panY = profileCropState.panY * ratio;
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(S / 2, S / 2, R - 1, 0, Math.PI * 2);
+  ctx.clip();
+  ctx.drawImage(img, S / 2 - dw / 2 + panX, S / 2 - dh / 2 + panY, dw, dh);
+  ctx.restore();
+  return canvas;
+}
+
+function canvasToJpegUnderMax(canvas, maxBytes = 1024 * 1024 - 1) {
+  let q = 0.9;
+  let c = canvas;
+  return (async function loop() {
+    for (let i = 0; i < 42; i++) {
+      const blob = await new Promise((res) => c.toBlob(res, 'image/jpeg', q));
+      if (blob && blob.size <= maxBytes) return blob;
+      if (q > 0.52) {
+        q -= 0.06;
+      } else {
+        const w = Math.max(240, Math.floor(c.width * 0.87));
+        const h = Math.max(240, Math.floor(c.height * 0.87));
+        const c2 = document.createElement('canvas');
+        c2.width = w;
+        c2.height = h;
+        c2.getContext('2d').drawImage(c, 0, 0, w, h);
+        c = c2;
+        q = 0.88;
+      }
+    }
+    return new Promise((res) => c.toBlob(res, 'image/jpeg', 0.45));
+  })();
+}
+
+async function uploadProfilePhotoBlob(blob) {
+  const fd = new FormData();
+  fd.append('photo', blob, 'profile.jpg');
+  const r = await fetch('/api/me/photo', { method: 'POST', body: fd, credentials: 'same-origin' });
+  if (!r.ok) {
+    let msg = '업로드 실패';
+    try {
+      const j = await r.json();
+      if (j.message) msg = j.message;
+    } catch {}
+    throw Object.assign(new Error(msg), { status: r.status });
+  }
+  return r.json();
+}
+
+function openProfilePhotoCrop(objectUrl) {
+  const img = new Image();
+  img.onload = () => {
+    profileCropState.objectUrl = objectUrl;
+    profileCropState.img = img;
+    profileCropState.zoom = 1;
+    profileCropState.panX = 0;
+    profileCropState.panY = 0;
+    drawProfileCropCanvas();
+    $('profilePhotoCropSheet').classList.remove('hidden');
+  };
+  img.onerror = () => {
+    URL.revokeObjectURL(objectUrl);
+    alert('이미지를 열 수 없어요');
+  };
+  img.src = objectUrl;
+}
+
+function closeProfilePhotoCropSheet() {
+  $('profilePhotoCropSheet').classList.add('hidden');
+  if (profileCropState.objectUrl) {
+    URL.revokeObjectURL(profileCropState.objectUrl);
+    profileCropState.objectUrl = null;
+  }
+  profileCropState.img = null;
+}
+
+$('myPhotoPickBtn').addEventListener('click', () => $('myPhotoFile').click());
+$('myPhotoFile').addEventListener('change', (e) => {
+  const f = e.target.files?.[0];
+  e.target.value = '';
+  if (!f || !f.type.startsWith('image/')) {
+    if (f) alert('이미지 파일을 선택해 주세요');
+    return;
+  }
+  openProfilePhotoCrop(URL.createObjectURL(f));
+});
+$('myPhotoClearBtn').addEventListener('click', async () => {
+  if (!confirm('프로필 사진을 지울까요?')) return;
+  try {
+    await api('/api/me', { method: 'PATCH', body: JSON.stringify({ photoUrl: null }) });
+    const self = (FAMILY_CACHE || []).find((x) => x.id === ME.id);
+    if (self) self.photoUrl = null;
+    // 사진을 지웠으니 기존 아이콘을 다시 선택 상태로
+    MY_PICKED_ICON = ME.icon || 'star';
+    renderMyIconPicker();
+    renderMyPhotoPreview();
+    renderHero();
+    renderAccount();
+    loadFamilySummary();
+  } catch {
+    alert('삭제 실패');
+  }
+});
+
+const profileCropCanvas = $('profileCropCanvas');
+if (profileCropCanvas) {
+  profileCropCanvas.addEventListener('pointerdown', (e) => {
+    if (!profileCropState.img) return;
+    e.preventDefault();
+    profileCropState.dragging = true;
+    profileCropState.last = { x: e.clientX, y: e.clientY };
+    try { profileCropCanvas.setPointerCapture(e.pointerId); } catch {}
+  });
+  profileCropCanvas.addEventListener('pointermove', (e) => {
+    if (!profileCropState.dragging || !profileCropState.last) return;
+    e.preventDefault();
+    profileCropState.panX += e.clientX - profileCropState.last.x;
+    profileCropState.panY += e.clientY - profileCropState.last.y;
+    profileCropState.last = { x: e.clientX, y: e.clientY };
+    drawProfileCropCanvas();
+  });
+  profileCropCanvas.addEventListener('pointerup', () => {
+    profileCropState.dragging = false;
+    profileCropState.last = null;
+  });
+  profileCropCanvas.addEventListener('pointercancel', () => {
+    profileCropState.dragging = false;
+    profileCropState.last = null;
+  });
+  profileCropCanvas.addEventListener(
+    'wheel',
+    (e) => {
+      if (!profileCropState.img) return;
+      e.preventDefault();
+      const d = e.deltaY > 0 ? -0.08 : 0.08;
+      profileCropState.zoom = Math.min(4, Math.max(1, profileCropState.zoom + d));
+      drawProfileCropCanvas();
+    },
+    { passive: false }
+  );
+}
+$('profileCropZoomIn').addEventListener('click', () => {
+  if (!profileCropState.img) return;
+  profileCropState.zoom = Math.min(4, profileCropState.zoom + 0.12);
+  drawProfileCropCanvas();
+});
+$('profileCropZoomOut').addEventListener('click', () => {
+  if (!profileCropState.img) return;
+  profileCropState.zoom = Math.max(1, profileCropState.zoom - 0.12);
+  drawProfileCropCanvas();
+});
+$('profileCropCancel').addEventListener('click', closeProfilePhotoCropSheet);
+$('profilePhotoCropSheet').addEventListener('click', (e) => {
+  if (e.target.id === 'profilePhotoCropSheet') closeProfilePhotoCropSheet();
+});
+$('profileCropApply').addEventListener('click', async () => {
+  const src = exportProfileCropCanvas();
+  if (!src) return;
+  try {
+    const blob = await canvasToJpegUnderMax(src);
+    const data = await uploadProfilePhotoBlob(blob);
+    const self = (FAMILY_CACHE || []).find((x) => x.id === ME.id);
+    if (self) self.photoUrl = data.photoUrl;
+    // 사진이 등록됐으니 아이콘 선택 해제
+    MY_PICKED_ICON = null;
+    renderMyIconPicker();
+    renderMyPhotoPreview();
+    closeProfilePhotoCropSheet();
+    renderHero();
+    renderAccount();
+    loadFamilySummary();
+  } catch (err) {
+    alert(err.message || '업로드 실패');
+  }
+});
 function renderMyIconPicker() {
   const grid = $('myIconPicker');
   grid.innerHTML = '';
@@ -1412,14 +1728,14 @@ $('myProfileSheet').addEventListener('click', (e) => {
 $('mySave').addEventListener('click', async () => {
   const body = {
     displayName: $('myDisplay').value.trim(),
-    icon: MY_PICKED_ICON,
     birthYear:  $('myYear').value  || null,
     birthMonth: $('myMonth').value || null,
     birthDay:   $('myDay').value   || null,
     isLunar: $('myLunar').checked,
     phone: $('myPhone').value.trim() || null,
-    photoUrl: $('myPhoto').value.trim() || null,
   };
+  // 아이콘 선택이 해제된 상태(사진이 우선)면 icon 필드는 PATCH 에서 제외해 기존 DB 값 유지
+  if (MY_PICKED_ICON) body.icon = MY_PICKED_ICON;
   const newPw = $('myNewPw').value;
   const curPw = $('myCurrentPw').value;
   if (newPw) {
@@ -1431,7 +1747,8 @@ $('mySave').addEventListener('click', async () => {
   try {
     await api('/api/me', { method: 'PATCH', body: JSON.stringify(body) });
     // ME 캐시 업데이트
-    ME = { ...ME, ...body, displayName: body.displayName, icon: MY_PICKED_ICON };
+    ME = { ...ME, ...body, displayName: body.displayName };
+    if (body.icon) ME.icon = body.icon;
     $('myProfileSheet').classList.add('hidden');
     // 새로고침으로 모든 UI 반영
     location.reload();
@@ -1626,6 +1943,9 @@ async function loadFamilySummary() {
     if (!alias) return;
     const r = await fetch(`/api/family/${encodeURIComponent(alias)}`).then(r => r.json());
     FAMILY_CACHE = r.members;
+    // FAMILY_CACHE 가 비어있을 때 먼저 렌더된 hero/account 를 내 photoUrl 로 갱신
+    try { renderHero(); } catch {}
+    try { renderAccount(); } catch {}
     renderCalendar(); // 가족 데이터 로드 후 달력 생일 표시
     $('familyCardTitle').textContent = r.family.displayName || '우리 가족';
     const row = $('familyRow');
@@ -1655,12 +1975,8 @@ let CURRENT_PROFILE_USER = null;
 function openProfileSheet(m) {
   CURRENT_PROFILE_USER = m;
   const age = koreanAge(m.birthYear, m.birthMonth, m.birthDay);
-  // 프로필 큰 아바타: 사진 있으면 이미지
-  if (m.photoUrl) {
-    $('profAvatar').innerHTML = `<img src="${m.photoUrl.replace(/"/g, '')}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:inherit" />`;
-  } else {
-    $('profAvatar').textContent = iconEmoji(m.icon);
-  }
+  // 프로필 큰 아바타: 사진 있으면 이미지, 없거나 로드 실패면 이모지
+  setAvatarEl($('profAvatar'), m.photoUrl, m.icon);
   $('profName').textContent = m.displayName + (m.id === ME.id ? ' (나)' : '');
   $('profMeta').textContent = m.role === 'admin' ? '관리자' : '가족';
   if (age) { $('profAge').textContent = `${age}세 (${m.birthYear}년생)`; $('profAgeRow').classList.remove('hidden'); }
@@ -1718,8 +2034,9 @@ function openProfileSheet(m) {
 
   // 전화걸기 버튼
   const callBtn = $('profCallBtn');
-  if (m.phone && m.id !== ME.id) {
-    callBtn.href = `tel:${m.phone.replace(/[^0-9+]/g, '')}`;
+  const profTel = displayPhone(m.phone);
+  if (profTel && m.id !== ME.id) {
+    callBtn.href = `tel:${profTel.replace(/[^0-9+]/g, '')}`;
     callBtn.textContent = `📞 ${m.displayName}님에게 전화`;
     callBtn.classList.remove('hidden');
   } else {
@@ -1873,7 +2190,7 @@ async function openBirthdaySheet(target) {
         const li = document.createElement('li');
         li.className = 'bday-msg';
         li.innerHTML = `
-          <span class="reveal-emoji">${iconEmoji(m.author_icon)}</span>
+          <span class="reveal-emoji">${inlineAvatarHtml({ name: m.author_name, icon: m.author_icon }, 36)}</span>
           <div class="reveal-body">
             <div class="reveal-name"></div>
             <div class="reveal-answer"></div>
@@ -2443,7 +2760,7 @@ function renderMemos(list) {
       li.querySelector('.memo-author').prepend(badge);
     }
     if (m.created_by_name) {
-      li.querySelector('.memo-author-avatar').textContent = iconEmoji(m.created_by_icon);
+      li.querySelector('.memo-author-avatar').innerHTML = inlineAvatarHtml({ id: m.created_by, name: m.created_by_name, icon: m.created_by_icon }, 20);
       li.querySelector('.memo-author-name').textContent = m.created_by_name;
     } else {
       li.querySelector('.memo-author-avatar').style.display = 'none';
@@ -2791,12 +3108,9 @@ async function loadZodiac() {
       const dir   = LUCKY_DIR[seed % LUCKY_DIR.length];
       const num   = (seed % 9) + 1;
       const li = document.createElement('li');
-      // 가족별 액센트 (id가 없어서 name 기반 해시)
-      const matchUser = (FAMILY_CACHE || []).find((m) => m.displayName === z.name);
-      if (matchUser) li.style.cssText += accentStyle(matchUser.id, 'bg');
       const activity = TODAY_ACTIVITIES[seed % TODAY_ACTIVITIES.length];
       li.innerHTML = `
-        <span class="zodiac-emoji">${iconEmoji(z.icon)}</span>
+        <span class="zodiac-emoji">${inlineAvatarHtml({ name: z.name, icon: z.icon }, 44)}</span>
         <div class="zodiac-body">
           <div class="zodiac-top">
             <span class="zodiac-name"></span>
@@ -3082,8 +3396,66 @@ async function loadFamilyInfo() {
     $('famAlias').value = f.alias || '';
     $('famName').value = f.displayName || '';
     $('famNotice').value = f.notice || '';
-    if ($('famPhoto')) $('famPhoto').value = f.photoUrl || '';
+    renderFamPhotoPreview(f.photoUrl || '');
   } catch {}
+}
+
+function renderFamPhotoPreview(photoUrl) {
+  const box = $('famPhotoPreview');
+  const clearBtn = $('famPhotoClearBtn');
+  if (!box) return;
+  const url = (photoUrl || '').trim();
+  box.innerHTML = '';
+  if (url) {
+    const img = document.createElement('img');
+    img.alt = '';
+    img.src = url;
+    img.onerror = () => {
+      console.warn('[fam-photo] img load failed:', url);
+      box.innerHTML = '<span class="fam-photo-empty">(불러오기 실패)</span>';
+    };
+    box.appendChild(img);
+    clearBtn?.classList.remove('hidden');
+  } else {
+    box.innerHTML = '<span class="fam-photo-empty">사진 없음</span>';
+    clearBtn?.classList.add('hidden');
+  }
+}
+
+/** 가족 사진: 원본 이미지를 긴 변 기준 maxSide 로 축소 + JPEG 품질 조절해서 targetBytes 이하로. */
+async function resizeImageToJpegBlob(file, { maxSide = 1600, targetBytes = 2 * 1024 * 1024 - 1 } = {}) {
+  const dataUrl = await new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = () => res(r.result);
+    r.onerror = () => rej(r.error || new Error('read-failed'));
+    r.readAsDataURL(file);
+  });
+  const img = await new Promise((res, rej) => {
+    const i = new Image();
+    i.onload = () => res(i);
+    i.onerror = () => rej(new Error('decode-failed'));
+    i.src = dataUrl;
+  });
+  const ratio = Math.min(1, maxSide / Math.max(img.naturalWidth, img.naturalHeight));
+  let w = Math.round(img.naturalWidth * ratio);
+  let h = Math.round(img.naturalHeight * ratio);
+  let canvas = document.createElement('canvas');
+  canvas.width = w; canvas.height = h;
+  canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+  let q = 0.9;
+  for (let i = 0; i < 12; i++) {
+    const blob = await new Promise((r) => canvas.toBlob(r, 'image/jpeg', q));
+    if (blob && blob.size <= targetBytes) return blob;
+    if (q > 0.55) { q -= 0.08; continue; }
+    w = Math.max(480, Math.floor(w * 0.85));
+    h = Math.max(320, Math.floor(h * 0.85));
+    const c2 = document.createElement('canvas');
+    c2.width = w; c2.height = h;
+    c2.getContext('2d').drawImage(canvas, 0, 0, w, h);
+    canvas = c2;
+    q = 0.82;
+  }
+  return new Promise((r) => canvas.toBlob(r, 'image/jpeg', 0.5));
 }
 
 const NOTICE_REACTION_EMOJIS = ['👍','❤️','🙏','😊'];
@@ -3122,7 +3494,7 @@ function renderNoticeReads(noticeId, reads) {
   el.innerHTML = '<span class="nr-label">읽음</span>' + members.map((m) => {
     const read = readIds.has(m.id);
     return `<span class="nr-dot ${read ? 'read' : 'unread'}" title="${m.displayName}${read ? ' 읽음' : ' 아직'}">
-      ${iconEmoji(m.icon)}
+      ${inlineAvatarHtml({ id: m.id, icon: m.icon }, 22)}
     </span>`;
   }).join('');
   el.classList.remove('hidden');
@@ -3139,14 +3511,15 @@ async function loadFamilyNotice() {
   try {
     const f = await api('/api/family');
     // 가족 사진 헤더 배경
-    const overlay = $('heroPhotoOverlay');
-    if (overlay) {
+    const banner = $('heroPhotoBanner');
+    const bannerImg = $('heroPhotoImg');
+    if (banner && bannerImg) {
       if (f.photoUrl) {
-        overlay.style.backgroundImage = `url("${f.photoUrl.replace(/"/g, '')}")`;
-        overlay.classList.add('active');
+        bannerImg.src = f.photoUrl;
+        banner.classList.remove('hidden');
       } else {
-        overlay.style.backgroundImage = '';
-        overlay.classList.remove('active');
+        bannerImg.removeAttribute('src');
+        banner.classList.add('hidden');
       }
     }
     if (f.notice) {
@@ -3191,14 +3564,176 @@ $('famAliasSave').addEventListener('click', async () => {
     alert(e.status === 409 ? '이미 쓰이는 별칭이에요' : '변경 실패');
   }
 });
-document.addEventListener('click', async (e) => {
-  if (e.target && e.target.id === 'famPhotoSave') {
-    const photoUrl = $('famPhoto').value.trim();
-    try {
-      await api('/api/family', { method: 'PATCH', body: JSON.stringify({ photoUrl }) });
-      loadFamilyNotice();
-      alert(photoUrl ? '가족 사진이 설정됐어요' : '가족 사진이 제거됐어요');
-    } catch { alert('저장 실패'); }
+// ---------- 가족 사진 영역 크롭 ----------
+// 배너 비율과 동일하게 2.5:1. 프리뷰 400x160, 내보내기 1200x480.
+const FAM_CROP_W = 400;
+const FAM_CROP_H = 160;
+const FAM_EXPORT_W = 1200;
+const FAM_EXPORT_H = 480;
+const famCropState = { img: null, zoom: 1, panX: 0, panY: 0, objectUrl: null, dragging: false, last: null };
+
+function drawFamCropCanvas() {
+  const canvas = $('famCropCanvas');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  const W = FAM_CROP_W, H = FAM_CROP_H;
+  canvas.width = W * dpr;
+  canvas.height = H * dpr;
+  canvas.style.width = `${W}px`;
+  canvas.style.height = `${H}px`;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, W, H);
+  const img = famCropState.img;
+  if (!img || !img.complete || !img.naturalWidth) return;
+  const iw = img.naturalWidth, ih = img.naturalHeight;
+  // cover: 이미지가 W×H 프레임을 꽉 채우도록
+  const base = Math.max(W / iw, H / ih);
+  const dw = iw * base * famCropState.zoom;
+  const dh = ih * base * famCropState.zoom;
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(0, 0, W, H);
+  ctx.clip();
+  ctx.drawImage(img, W / 2 - dw / 2 + famCropState.panX, H / 2 - dh / 2 + famCropState.panY, dw, dh);
+  ctx.restore();
+  ctx.strokeStyle = 'rgba(255,255,255,.9)';
+  ctx.lineWidth = 3;
+  ctx.strokeRect(1.5, 1.5, W - 3, H - 3);
+}
+
+function exportFamCropCanvas() {
+  const img = famCropState.img;
+  if (!img || !img.naturalWidth) return null;
+  const W = FAM_EXPORT_W, H = FAM_EXPORT_H;
+  const canvas = document.createElement('canvas');
+  canvas.width = W;
+  canvas.height = H;
+  const ctx = canvas.getContext('2d');
+  const iw = img.naturalWidth, ih = img.naturalHeight;
+  const base = Math.max(W / iw, H / ih);
+  const ratio = W / FAM_CROP_W; // = 1200/400 = 3
+  const dw = iw * base * famCropState.zoom;
+  const dh = ih * base * famCropState.zoom;
+  const panX = famCropState.panX * ratio;
+  const panY = famCropState.panY * ratio;
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(0, 0, W, H);
+  ctx.clip();
+  ctx.drawImage(img, W / 2 - dw / 2 + panX, H / 2 - dh / 2 + panY, dw, dh);
+  ctx.restore();
+  return canvas;
+}
+
+function openFamPhotoCrop(objectUrl) {
+  const img = new Image();
+  img.onload = () => {
+    famCropState.objectUrl = objectUrl;
+    famCropState.img = img;
+    famCropState.zoom = 1;
+    famCropState.panX = 0;
+    famCropState.panY = 0;
+    drawFamCropCanvas();
+    $('famPhotoCropSheet').classList.remove('hidden');
+  };
+  img.onerror = () => {
+    URL.revokeObjectURL(objectUrl);
+    alert('이미지를 열 수 없어요');
+  };
+  img.src = objectUrl;
+}
+function closeFamPhotoCrop() {
+  $('famPhotoCropSheet').classList.add('hidden');
+  if (famCropState.objectUrl) {
+    URL.revokeObjectURL(famCropState.objectUrl);
+    famCropState.objectUrl = null;
+  }
+  famCropState.img = null;
+}
+
+$('famPhotoPickBtn')?.addEventListener('click', () => $('famPhotoFile')?.click());
+$('famPhotoFile')?.addEventListener('change', (e) => {
+  const f = e.target.files?.[0];
+  e.target.value = '';
+  if (!f) return;
+  if (!f.type.startsWith('image/')) { alert('이미지 파일을 선택해 주세요'); return; }
+  openFamPhotoCrop(URL.createObjectURL(f));
+});
+$('famPhotoClearBtn')?.addEventListener('click', async () => {
+  if (!confirm('가족 사진을 제거할까요?')) return;
+  try {
+    await api('/api/family', { method: 'PATCH', body: JSON.stringify({ photoUrl: null }) });
+    renderFamPhotoPreview('');
+    loadFamilyNotice();
+  } catch { alert('삭제 실패'); }
+});
+
+const famCropCanvasEl = $('famCropCanvas');
+if (famCropCanvasEl) {
+  famCropCanvasEl.addEventListener('pointerdown', (e) => {
+    if (!famCropState.img) return;
+    e.preventDefault();
+    famCropState.dragging = true;
+    famCropState.last = { x: e.clientX, y: e.clientY };
+    try { famCropCanvasEl.setPointerCapture(e.pointerId); } catch {}
+  });
+  famCropCanvasEl.addEventListener('pointermove', (e) => {
+    if (!famCropState.dragging || !famCropState.last) return;
+    e.preventDefault();
+    famCropState.panX += e.clientX - famCropState.last.x;
+    famCropState.panY += e.clientY - famCropState.last.y;
+    famCropState.last = { x: e.clientX, y: e.clientY };
+    drawFamCropCanvas();
+  });
+  famCropCanvasEl.addEventListener('pointerup', () => { famCropState.dragging = false; famCropState.last = null; });
+  famCropCanvasEl.addEventListener('pointercancel', () => { famCropState.dragging = false; famCropState.last = null; });
+  famCropCanvasEl.addEventListener('wheel', (e) => {
+    if (!famCropState.img) return;
+    e.preventDefault();
+    const d = e.deltaY > 0 ? -0.08 : 0.08;
+    famCropState.zoom = Math.min(4, Math.max(1, famCropState.zoom + d));
+    drawFamCropCanvas();
+  }, { passive: false });
+}
+$('famCropZoomIn')?.addEventListener('click', () => {
+  if (!famCropState.img) return;
+  famCropState.zoom = Math.min(4, famCropState.zoom + 0.12);
+  drawFamCropCanvas();
+});
+$('famCropZoomOut')?.addEventListener('click', () => {
+  if (!famCropState.img) return;
+  famCropState.zoom = Math.max(1, famCropState.zoom - 0.12);
+  drawFamCropCanvas();
+});
+$('famCropCancel')?.addEventListener('click', closeFamPhotoCrop);
+$('famPhotoCropSheet')?.addEventListener('click', (e) => {
+  if (e.target.id === 'famPhotoCropSheet') closeFamPhotoCrop();
+});
+$('famCropApply')?.addEventListener('click', async () => {
+  const canvas = exportFamCropCanvas();
+  if (!canvas) return;
+  const applyBtn = $('famCropApply');
+  if (applyBtn) { applyBtn.disabled = true; applyBtn.textContent = '올리는 중...'; }
+  try {
+    const blob = await new Promise((r) => canvas.toBlob(r, 'image/jpeg', 0.88));
+    if (!blob) throw new Error('이미지 변환 실패');
+    const fd = new FormData();
+    fd.append('photo', blob, 'family.jpg');
+    const r = await fetch('/api/family/photo', { method: 'POST', body: fd, credentials: 'same-origin' });
+    if (!r.ok) {
+      let msg = '업로드 실패';
+      try { const j = await r.json(); if (j.message) msg = j.message; } catch {}
+      throw new Error(msg);
+    }
+    const data = await r.json();
+    renderFamPhotoPreview(data.photoUrl);
+    loadFamilyNotice();
+    closeFamPhotoCrop();
+  } catch (err) {
+    alert(err.message || '저장 실패');
+  } finally {
+    if (applyBtn) { applyBtn.disabled = false; applyBtn.textContent = '이 사진으로 저장'; }
   }
 });
 
@@ -3250,7 +3785,7 @@ async function loadUsers() {
       const dob = u.birthYear ? `${u.birthYear}.${u.birthMonth || '-'}.${u.birthDay || '-'}${u.isLunar ? ' 음' : ''}` : '생일 미등록';
       const status = u.activated ? '' : ' <span class="pending-dot">· 초대 대기</span>';
       li.innerHTML = `
-        <span class="user-emoji">${iconEmoji(u.icon)}</span>
+        <span class="user-emoji">${inlineAvatarHtml({ id: u.id, name: u.displayName, icon: u.icon }, 36)}</span>
         <div class="user-main">
           <div class="user-name"></div>
           <div class="user-sub">${u.role === 'admin' ? '관리자' : '가족'} · ${dob}${status}</div>
@@ -3558,7 +4093,7 @@ async function loadTodayQuestion() {
         if (!m.activated) continue;
         const div = document.createElement('div');
         div.className = 'q-chip' + (ids.has(m.id) ? ' done' : '');
-        div.innerHTML = `<span class="q-chip-emoji">${iconEmoji(m.icon)}</span><span class="q-chip-name"></span>`;
+        div.innerHTML = `<span class="q-chip-emoji">${inlineAvatarHtml({ id: m.id, icon: m.icon }, 18)}</span><span class="q-chip-name"></span>`;
         div.querySelector('.q-chip-name').textContent = m.displayName;
         div.title = ids.has(m.id) ? `${m.displayName}님 답변 완료` : `${m.displayName}님 아직`;
         pEl.appendChild(div);
@@ -3759,7 +4294,7 @@ async function loadYesterdayReveal() {
       }
       const imgHtml = (!skipped && a.image_url) ? `<img class="reveal-image" src="${a.image_url.replace(/"/g, '')}" alt="답변 이미지" loading="lazy" />` : '';
       li.innerHTML = `
-        <span class="reveal-emoji">${iconEmoji(a.icon)}</span>
+        <span class="reveal-emoji">${inlineAvatarHtml({ id: a.user_id, name: a.display_name, icon: a.icon }, 36)}</span>
         <div class="reveal-body">
           <div class="reveal-head">
             <span class="reveal-name"></span>
@@ -3813,7 +4348,7 @@ async function toggleCommentSection(answerId, section, btn) {
     for (const c of list) {
       const li = document.createElement('li');
       li.innerHTML = `
-        <span class="cm-icon">${iconEmoji(c.author_icon)}</span>
+        <span class="cm-icon">${inlineAvatarHtml({ id: c.author_id, name: c.author_name, icon: c.author_icon }, 22)}</span>
         <div class="cm-body">
           <div class="cm-head"><span class="cm-name"></span></div>
           <div class="cm-text"></div>
@@ -3923,7 +4458,7 @@ function renderHistoryItem(el, item, answers) {
     for (const a of answers) {
       const li = document.createElement('li');
       li.innerHTML = `
-        <span class="reveal-emoji">${iconEmoji(a.icon)}</span>
+        <span class="reveal-emoji">${inlineAvatarHtml({ id: a.user_id, name: a.display_name, icon: a.icon }, 36)}</span>
         <div class="reveal-body">
           <div class="reveal-name"></div>
           <div class="reveal-answer"></div>
@@ -4005,7 +4540,7 @@ function openEditSheet(u) {
   $('edMonth').value = u.birthMonth || '';
   $('edDay').value   = u.birthDay || '';
   $('edLunar').checked = !!u.isLunar;
-  $('edPhone').value = u.phone || '';
+  $('edPhone').value = displayPhone(u.phone);
   $('edAdmin').checked = u.role === 'admin';
   $('edPassword').value = '';
   // 아이콘 픽커 (미니)
@@ -4062,25 +4597,127 @@ document.getElementById('profileSheet').addEventListener('click', (e) => {
   if (e.target.id === 'profileSheet') closeProfileSheet();
 });
 
-// 화면 톤 (색 테마)
+// 화면 톤 (색 테마) — 모바일에서 prefers-color-scheme 이 덮어쓰지 않도록 루트에 변수를 직접 심음
+const THEME_SEMANTIC_DEFAULT = {
+  '--primary': '#0A84FF',
+  '--good': '#34C759',
+  '--normal': '#FF9F0A',
+  '--bad': '#FF3B30',
+  '--worst': '#AF52DE',
+};
+const SCHEME_INLINE = {
+  light: {
+    ...THEME_SEMANTIC_DEFAULT,
+    '--bg': '#F2F2F7',
+    '--card': '#FFFFFF',
+    '--text': '#1C1C1E',
+    '--sub': '#6E6E73',
+    '--line': '#E5E5EA',
+    '--shadow-sm': '0 1px 2px rgba(0,0,0,.03), 0 2px 8px rgba(0,0,0,.04)',
+    '--shadow-md': '0 2px 4px rgba(0,0,0,.04), 0 8px 24px rgba(0,0,0,.05)',
+    'color-scheme': 'light',
+  },
+  dark: {
+    ...THEME_SEMANTIC_DEFAULT,
+    '--bg': '#000000',
+    '--card': '#1C1C1E',
+    '--text': '#F2F2F7',
+    '--sub': '#8E8E93',
+    '--line': '#2C2C2E',
+    '--shadow-sm': '0 0 0 1px rgba(255,255,255,.04)',
+    '--shadow-md': '0 0 0 1px rgba(255,255,255,.05)',
+    'color-scheme': 'dark',
+  },
+  darkgray: {
+    ...THEME_SEMANTIC_DEFAULT,
+    '--bg': '#1A1A1D',
+    '--card': '#2C2C2E',
+    '--text': '#E5E5EA',
+    '--sub': '#98989A',
+    '--line': '#3A3A3C',
+    '--shadow-sm': '0 0 0 1px rgba(255,255,255,.05)',
+    '--shadow-md': '0 0 0 1px rgba(255,255,255,.06)',
+    'color-scheme': 'dark',
+  },
+  sepia: {
+    ...THEME_SEMANTIC_DEFAULT,
+    '--bg': '#F4EFE3',
+    '--card': '#FBF6EA',
+    '--text': '#3A2E22',
+    '--sub': '#7A6B56',
+    '--line': '#E3D9C3',
+    '--shadow-sm': '0 1px 2px rgba(60, 40, 20, .04), 0 2px 8px rgba(60, 40, 20, .05)',
+    '--shadow-md': '0 2px 4px rgba(60, 40, 20, .05), 0 8px 24px rgba(60, 40, 20, .06)',
+    'color-scheme': 'light',
+  },
+  kid: {
+    '--bg': '#FFFEF5',
+    '--card': '#FFFFFF',
+    '--text': '#2A2A2A',
+    '--sub': '#7A7A7A',
+    '--line': '#FFE4B5',
+    '--primary': '#FF6B9D',
+    '--good': '#00C896',
+    '--normal': '#FFB84D',
+    '--bad': '#FF4D6D',
+    '--worst': '#B94DFF',
+    '--shadow-sm': '0 1px 2px rgba(0,0,0,.03), 0 2px 8px rgba(0,0,0,.04)',
+    '--shadow-md': '0 2px 4px rgba(0,0,0,.04), 0 8px 24px rgba(0,0,0,.05)',
+    'color-scheme': 'light',
+  },
+  hc: {
+    '--bg': '#000000',
+    '--card': '#111111',
+    '--text': '#FFF200',
+    '--sub': '#FFD000',
+    '--line': '#FFF200',
+    '--primary': '#00E5FF',
+    '--good': '#00FF88',
+    '--bad': '#FF3333',
+    '--shadow-sm': '0 0 0 2px rgba(255,242,0,.2)',
+    '--shadow-md': '0 0 0 2px rgba(255,242,0,.3)',
+    'color-scheme': 'dark',
+  },
+};
+const THEME_VAR_KEYS = [...new Set(Object.values(SCHEME_INLINE).flatMap((o) => Object.keys(o)))];
+function clearInlineTheme(root) {
+  for (const k of THEME_VAR_KEYS) root.style.removeProperty(k);
+}
 function applyScheme(scheme) {
   const s = ['light','dark','darkgray','sepia','hc','kid'].includes(scheme) ? scheme : 'auto';
   const root = document.documentElement;
-  if (s === 'auto') root.removeAttribute('data-scheme');
-  else root.setAttribute('data-scheme', s);
+  clearInlineTheme(root);
+  if (s === 'auto') {
+    root.removeAttribute('data-scheme');
+  } else {
+    root.setAttribute('data-scheme', s);
+    const vars = SCHEME_INLINE[s];
+    for (const [key, val] of Object.entries(vars)) {
+      root.style.setProperty(key, String(val));
+    }
+  }
   document.querySelectorAll('.th-btn').forEach((b) => {
     b.classList.toggle('active', (b.dataset.scheme || 'auto') === s);
   });
-  localStorage.setItem('fb_scheme', s);
+  try {
+    localStorage.setItem('fb_scheme', s);
+  } catch (_) { /* 사파리 비공개 탭 등 */ }
 }
 document.querySelectorAll('.th-btn').forEach((b) => {
   b.addEventListener('click', () => applyScheme(b.dataset.scheme));
 });
 // 부팅 시 적용
 (function initScheme() {
-  const saved = localStorage.getItem('fb_scheme') || 'auto';
+  let saved = 'auto';
+  try { saved = localStorage.getItem('fb_scheme') || 'auto'; } catch (_) {}
   applyScheme(saved);
 })();
+window.addEventListener('pageshow', (ev) => {
+  if (!ev.persisted) return;
+  let saved = 'auto';
+  try { saved = localStorage.getItem('fb_scheme') || 'auto'; } catch (_) {}
+  applyScheme(saved);
+});
 
 // 글자 크기 조절
 function applyFontScale(scale) {
@@ -4204,24 +4841,31 @@ function showUndoToast(memo) {
   const btn = document.getElementById('installBtn');
   const closeBtn = document.getElementById('installClose');
   const sub = document.getElementById('installSub');
-  if (!banner || !btn) return;
+  if (!banner || !btn || !sub) return;
+
+  function isLikelyIOS() {
+    if (/iPad|iPhone|iPod/i.test(navigator.userAgent)) return true;
+    if (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1) return true;
+    return false;
+  }
 
   let deferredPrompt = null;
   const DISMISS_KEY = 'fb_install_dismissed';
-  const dismissed = localStorage.getItem(DISMISS_KEY);
-  if (dismissed) return;
+  try {
+    if (localStorage.getItem(DISMISS_KEY)) return;
+  } catch (_) { /* 비공개 모드 등: 배너는 계속 시도 */ }
 
-  closeBtn.addEventListener('click', () => {
-    banner.classList.add('hidden');
-    localStorage.setItem(DISMISS_KEY, '1');
-  });
+  if (closeBtn) {
+    closeBtn.addEventListener('click', () => {
+      banner.classList.add('hidden');
+      try { localStorage.setItem(DISMISS_KEY, '1'); } catch (_) {}
+    });
+  }
 
-  // 이미 홈화면에 추가된 경우 감지
   if (window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone) {
     return;
   }
 
-  // Chrome / Edge / Android
   window.addEventListener('beforeinstallprompt', (e) => {
     e.preventDefault();
     deferredPrompt = e;
@@ -4236,22 +4880,28 @@ function showUndoToast(memo) {
       const res = await deferredPrompt.userChoice;
       deferredPrompt = null;
       if (res.outcome === 'accepted') banner.classList.add('hidden');
-      localStorage.setItem(DISMISS_KEY, '1');
+      try { localStorage.setItem(DISMISS_KEY, '1'); } catch (_) {}
     } else {
-      // iOS 안내
-      alert('사파리 하단의 "공유" → "홈 화면에 추가" 를 눌러 주세요.');
-      localStorage.setItem(DISMISS_KEY, '1');
+      const chromeIos = /CriOS/i.test(navigator.userAgent);
+      alert(
+        chromeIos
+          ? '아이폰의 크롬에서는 「홈 화면에 추가」가 제공되지 않습니다. 사파리로 같은 주소를 연 뒤, 하단 공유(□↑) → 「홈 화면에 추가」를 눌러 주세요.'
+          : '「공유」→「홈 화면에 추가」를 눌러 주세요. (아이폰은 사파리가 가장 확실합니다.)'
+      );
+      try { localStorage.setItem(DISMISS_KEY, '1'); } catch (_) {}
       banner.classList.add('hidden');
     }
   });
 
-  // iOS Safari (no beforeinstallprompt)
-  const isIos = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
-  const isStandalone = window.navigator.standalone;
-  if (isIos && !isStandalone) {
+  const isIos = isLikelyIOS();
+  const isStandaloneSafari = !!window.navigator.standalone;
+  if (isIos && !isStandaloneSafari) {
     btn.textContent = '안내 보기';
-    sub.textContent = 'iPhone은 공유 버튼에서 추가할 수 있어요';
-    setTimeout(() => banner.classList.remove('hidden'), 4000);
+    const chromeIos = /CriOS/i.test(navigator.userAgent);
+    sub.textContent = chromeIos
+      ? '크롬 제한 → 사파리에서 열면 홈 화면 추가 가능'
+      : '공유(□↑) → 홈 화면에 추가';
+    setTimeout(() => banner.classList.remove('hidden'), 2500);
   }
 })();
 
@@ -4284,12 +4934,444 @@ document.addEventListener('click', (e) => {
     openLightbox(img.src);
   }
 });
-const heroOverlay = $('heroPhotoOverlay');
-if (heroOverlay) {
-  heroOverlay.addEventListener('click', () => {
-    const url = heroOverlay.style.backgroundImage.match(/url\("?([^")]+)"?\)/)?.[1];
-    if (url) openLightbox(url);
+const heroBanner = $('heroPhotoBanner');
+if (heroBanner) {
+  heroBanner.addEventListener('click', () => {
+    const src = $('heroPhotoImg')?.getAttribute('src');
+    if (src) openLightbox(src);
   });
 }
+
+// ---------- 시트를 document.body 직하로 재배치 (설정화면·다른 screen 에서도 열리도록) ----------
+// .sheet-backdrop / .lightbox 가 <main id="app"> 안에 있으면 #app.hidden 일 때 display:none 상속받아 안 보임
+for (const el of document.querySelectorAll('.sheet-backdrop, .lightbox')) {
+  if (el.parentElement && el.parentElement !== document.body) {
+    document.body.appendChild(el);
+  }
+}
+
+// ---------- 모달 열릴 때 배경 스크롤 고정 (iOS Safari 대응: position fixed + top) ----------
+let _scrollLockY = 0;
+function updateScrollLock() {
+  const open = document.querySelector('.sheet-backdrop:not(.hidden), .lightbox:not(.hidden)');
+  const locked = document.body.classList.contains('scroll-locked');
+  if (open && !locked) {
+    _scrollLockY = window.scrollY || window.pageYOffset || 0;
+    document.body.style.top = `-${_scrollLockY}px`;
+    document.body.classList.add('scroll-locked');
+  } else if (!open && locked) {
+    document.body.classList.remove('scroll-locked');
+    document.body.style.top = '';
+    window.scrollTo(0, _scrollLockY);
+  }
+}
+const _scrollLockObs = new MutationObserver(updateScrollLock);
+document.querySelectorAll('.sheet-backdrop, .lightbox').forEach((el) => {
+  _scrollLockObs.observe(el, { attributes: true, attributeFilter: ['class'] });
+});
+
+// ==========================================================================
+// 가족 갤러리
+// ==========================================================================
+let GALLERY_CACHE = [];
+let GALLERY_LOADING = false;
+let GALLERY_DETAIL_ID = null;
+
+async function loadGallery() {
+  try {
+    const list = await api('/api/gallery?limit=12');
+    GALLERY_CACHE = list || [];
+    renderGalleryCard();
+  } catch {}
+}
+
+function renderGalleryCard() {
+  const grid = $('galleryGrid');
+  const empty = $('galleryEmpty');
+  if (!grid) return;
+  grid.innerHTML = '';
+  if (!GALLERY_CACHE.length) {
+    empty?.classList.remove('hidden');
+    return;
+  }
+  empty?.classList.add('hidden');
+  // 최근 9장만 카드에
+  const shown = GALLERY_CACHE.slice(0, 9);
+  for (const p of shown) {
+    const div = document.createElement('div');
+    div.className = 'gallery-thumb';
+    div.innerHTML = `<img src="${p.url.replace(/"/g, '')}" alt="" loading="lazy" />`;
+    div.onclick = () => openGalleryDetail(p);
+    grid.appendChild(div);
+  }
+}
+
+function renderGallerySheet(append = false) {
+  const grid = $('gallerySheetGrid');
+  if (!grid) return;
+  if (!append) grid.innerHTML = '';
+  for (const p of GALLERY_CACHE) {
+    if (append && grid.querySelector(`[data-gid="${p.id}"]`)) continue;
+    const div = document.createElement('div');
+    div.className = 'gallery-thumb';
+    div.dataset.gid = String(p.id);
+    div.innerHTML = `<img src="${p.url.replace(/"/g, '')}" alt="" loading="lazy" />`;
+    div.onclick = () => openGalleryDetail(p);
+    grid.appendChild(div);
+  }
+  const more = $('galleryLoadMoreBtn');
+  if (more) more.classList.toggle('hidden', GALLERY_CACHE.length < 12);
+}
+
+async function openGallerySheet() {
+  $('gallerySheet').classList.remove('hidden');
+  if (!GALLERY_CACHE.length) await loadGallery();
+  renderGallerySheet(false);
+}
+
+async function loadMoreGallery() {
+  if (GALLERY_LOADING || !GALLERY_CACHE.length) return;
+  GALLERY_LOADING = true;
+  const btn = $('galleryLoadMoreBtn');
+  if (btn) { btn.disabled = true; btn.textContent = '불러오는 중...'; }
+  try {
+    const last = GALLERY_CACHE[GALLERY_CACHE.length - 1];
+    const more = await api(`/api/gallery?before=${last.id}&limit=24`);
+    if (more && more.length) {
+      GALLERY_CACHE = GALLERY_CACHE.concat(more);
+      renderGallerySheet(true);
+    }
+    if (!more || more.length < 24) {
+      if (btn) btn.classList.add('hidden');
+    }
+  } catch {} finally {
+    GALLERY_LOADING = false;
+    if (btn) { btn.disabled = false; btn.textContent = '더 보기'; }
+  }
+}
+
+function openGalleryDetail(p) {
+  GALLERY_DETAIL_ID = p.id;
+  $('galleryDetailImg').src = p.url;
+  const author = `${iconEmoji(p.uploaderIcon)} ${p.uploaderName || '알 수 없음'}`;
+  $('galleryDetailAuthor').textContent = author;
+  $('galleryDetailCaption').textContent = p.caption || '';
+  $('galleryDetailTime').textContent = p.createdAt ? relativeTime(p.createdAt) : '';
+  $('galleryDetailDeleteBtn').classList.toggle('hidden', !p.canDelete);
+  $('galleryDetailSheet').classList.remove('hidden');
+}
+
+async function deleteGalleryPhoto(id) {
+  if (!confirm('이 사진을 삭제할까요? 되돌릴 수 없어요.')) return;
+  try {
+    await api(`/api/gallery/${id}`, { method: 'DELETE' });
+    GALLERY_CACHE = GALLERY_CACHE.filter((p) => p.id !== id);
+    renderGalleryCard();
+    renderGallerySheet(false);
+    $('galleryDetailSheet').classList.add('hidden');
+  } catch (e) {
+    alert(e.status === 403 ? '삭제 권한이 없어요' : '삭제 실패');
+  }
+}
+
+async function uploadGalleryPhoto(file) {
+  if (!file) return;
+  if (!file.type.startsWith('image/')) { alert('이미지 파일을 선택해 주세요'); return; }
+  const addBtn = $('galleryAddBtn');
+  if (addBtn) { addBtn.disabled = true; addBtn.textContent = '올리는 중...'; }
+  try {
+    // 클라이언트 리사이즈 — 3MB 이하
+    const blob = await resizeImageToJpegBlob(file, { maxSide: 2000, targetBytes: 3 * 1024 * 1024 - 1 });
+    const caption = prompt('사진에 짧은 설명을 붙일까요? (취소: 없이)', '') || '';
+    const fd = new FormData();
+    fd.append('photo', blob, 'photo.jpg');
+    if (caption.trim()) fd.append('caption', caption.trim());
+    const r = await fetch('/api/gallery', { method: 'POST', body: fd, credentials: 'same-origin' });
+    if (!r.ok) {
+      let msg = '업로드 실패';
+      try { const j = await r.json(); if (j.message) msg = j.message; } catch {}
+      throw new Error(msg);
+    }
+    await loadGallery();
+    // 열려 있던 시트도 갱신
+    if (!$('gallerySheet').classList.contains('hidden')) renderGallerySheet(false);
+  } catch (err) {
+    alert(err.message || '업로드 실패');
+  } finally {
+    if (addBtn) { addBtn.disabled = false; addBtn.textContent = '＋ 사진'; }
+  }
+}
+
+$('galleryAddBtn')?.addEventListener('click', () => $('galleryFile')?.click());
+$('galleryFile')?.addEventListener('change', (e) => {
+  const f = e.target.files?.[0];
+  e.target.value = '';
+  if (f) uploadGalleryPhoto(f);
+});
+$('galleryOpenAllBtn')?.addEventListener('click', openGallerySheet);
+$('gallerySheetClose')?.addEventListener('click', () => $('gallerySheet').classList.add('hidden'));
+$('gallerySheet')?.addEventListener('click', (e) => {
+  if (e.target.id === 'gallerySheet') $('gallerySheet').classList.add('hidden');
+});
+$('galleryLoadMoreBtn')?.addEventListener('click', loadMoreGallery);
+$('galleryDetailClose')?.addEventListener('click', () => $('galleryDetailSheet').classList.add('hidden'));
+$('galleryDetailSheet')?.addEventListener('click', (e) => {
+  if (e.target.id === 'galleryDetailSheet') $('galleryDetailSheet').classList.add('hidden');
+});
+$('galleryDetailDeleteBtn')?.addEventListener('click', () => {
+  if (GALLERY_DETAIL_ID != null) deleteGalleryPhoto(GALLERY_DETAIL_ID);
+});
+$('galleryDetailImg')?.addEventListener('click', () => {
+  const src = $('galleryDetailImg').getAttribute('src');
+  if (src) openLightbox(src);
+});
+
+// ==========================================================================
+// 가족 채팅
+// ==========================================================================
+let CHAT_MESSAGES = [];      // 오래된 것 → 최신 순
+let CHAT_LAST_ID = 0;        // 가장 최신 받은 메시지 id
+let CHAT_OLDEST_ID = 0;      // 가장 오래된 받은 메시지 id (페이지네이션 용)
+let CHAT_POLL_TIMER = null;
+let CHAT_SHEET_OPEN = false;
+
+async function loadChatPeek() {
+  try {
+    const list = await api('/api/chat?limit=5');
+    const peek = $('chatPeek');
+    if (!peek) return;
+    peek.innerHTML = '';
+    if (!list.length) {
+      peek.innerHTML = '<li class="chat-peek-empty">아직 대화가 없어요. 가족에게 첫 메시지를 보내 보세요.</li>';
+      return;
+    }
+    // 최근 3개만 미리보기
+    const recent = list.slice(-3);
+    for (const m of recent) {
+      const li = document.createElement('li');
+      const name = document.createElement('span');
+      name.className = 'cp-name';
+      name.textContent = (m.userName || '가족') + ':';
+      const text = document.createElement('span');
+      text.className = 'cp-text';
+      text.textContent = m.text;
+      li.appendChild(name); li.appendChild(text);
+      peek.appendChild(li);
+    }
+  } catch {}
+}
+
+async function refreshChatUnread() {
+  try {
+    const r = await api('/api/chat/unread');
+    const badge = $('chatUnreadBadge');
+    if (!badge) return;
+    if (r.unread > 0) {
+      badge.textContent = r.unread > 99 ? '99+' : String(r.unread);
+      badge.classList.remove('hidden');
+    } else {
+      badge.classList.add('hidden');
+    }
+  } catch {}
+}
+
+function renderChatMessages() {
+  const ul = $('chatMessages');
+  if (!ul) return;
+  ul.innerHTML = '';
+  let lastDate = '';
+  for (const m of CHAT_MESSAGES) {
+    const d = m.createdAt ? new Date(m.createdAt) : new Date();
+    const dateKey = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+    if (dateKey !== lastDate) {
+      lastDate = dateKey;
+      const sep = document.createElement('li');
+      sep.className = 'chat-divider';
+      sep.textContent = `${d.getFullYear()}년 ${d.getMonth() + 1}월 ${d.getDate()}일`;
+      ul.appendChild(sep);
+    }
+    const li = document.createElement('li');
+    li.className = 'chat-msg' + (m.userId === ME.id ? ' mine' : '');
+    li.dataset.mid = String(m.id);
+    const avatarInner = m.userPhoto
+      ? `<img src="${m.userPhoto.replace(/"/g, '')}" alt="" />`
+      : iconEmoji(m.userIcon);
+    const hour = d.getHours();
+    const mm = String(d.getMinutes()).padStart(2, '0');
+    const ampm = hour < 12 ? '오전' : '오후';
+    const h12 = hour === 0 ? 12 : (hour > 12 ? hour - 12 : hour);
+    const timeStr = `${ampm} ${h12}:${mm}`;
+    li.innerHTML = `
+      <div class="chat-msg-avatar">${avatarInner}</div>
+      <div class="chat-msg-body">
+        <div class="chat-msg-name"></div>
+        <div class="chat-bubble"></div>
+        <div class="chat-msg-time">${timeStr}</div>
+      </div>
+      <button class="chat-msg-del hidden" aria-label="삭제" title="삭제">✕</button>`;
+    li.querySelector('.chat-msg-name').textContent = m.userName || '';
+    li.querySelector('.chat-bubble').textContent = m.text;
+    // 본인 또는 admin 이면 삭제 가능
+    if (m.userId === ME.id || ME.role === 'admin') {
+      const del = li.querySelector('.chat-msg-del');
+      del.classList.remove('hidden');
+      del.onclick = () => deleteChatMessage(m.id);
+    }
+    ul.appendChild(li);
+  }
+}
+
+function scrollChatToBottom(smooth = false) {
+  const ul = $('chatMessages');
+  if (!ul) return;
+  ul.scrollTo({ top: ul.scrollHeight, behavior: smooth ? 'smooth' : 'auto' });
+}
+
+async function openChatSheet() {
+  CHAT_SHEET_OPEN = true;
+  $('chatSheet').classList.remove('hidden');
+  // 초기 로드
+  try {
+    const list = await api('/api/chat?limit=50');
+    CHAT_MESSAGES = list || [];
+    if (CHAT_MESSAGES.length) {
+      CHAT_OLDEST_ID = CHAT_MESSAGES[0].id;
+      CHAT_LAST_ID = CHAT_MESSAGES[CHAT_MESSAGES.length - 1].id;
+    }
+    renderChatMessages();
+    $('chatLoadOlderBtn').classList.toggle('hidden', CHAT_MESSAGES.length < 50);
+    setTimeout(() => scrollChatToBottom(false), 50);
+    markChatRead();
+  } catch {}
+  startChatPolling(4000);
+}
+
+function closeChatSheet() {
+  CHAT_SHEET_OPEN = false;
+  $('chatSheet').classList.add('hidden');
+  stopChatPolling();
+  loadChatPeek();       // 홈 미리보기 갱신
+  refreshChatUnread();
+}
+
+function startChatPolling(intervalMs) {
+  stopChatPolling();
+  CHAT_POLL_TIMER = setInterval(pollChatNew, intervalMs);
+}
+function stopChatPolling() {
+  if (CHAT_POLL_TIMER) { clearInterval(CHAT_POLL_TIMER); CHAT_POLL_TIMER = null; }
+}
+
+async function pollChatNew() {
+  if (!CHAT_SHEET_OPEN) return;
+  try {
+    const after = CHAT_LAST_ID || 0;
+    const list = await api(`/api/chat?after=${after}&limit=50`);
+    if (list && list.length) {
+      // 스크롤 위치 확인 (거의 바닥이면 자동 스크롤)
+      const ul = $('chatMessages');
+      const nearBottom = ul && (ul.scrollHeight - ul.scrollTop - ul.clientHeight < 80);
+      CHAT_MESSAGES = CHAT_MESSAGES.concat(list);
+      CHAT_LAST_ID = list[list.length - 1].id;
+      renderChatMessages();
+      if (nearBottom) setTimeout(() => scrollChatToBottom(true), 20);
+      markChatRead();
+    }
+  } catch {}
+}
+
+async function loadOlderChat() {
+  if (!CHAT_OLDEST_ID) return;
+  const btn = $('chatLoadOlderBtn');
+  if (btn) { btn.disabled = true; btn.textContent = '불러오는 중...'; }
+  try {
+    const list = await api(`/api/chat?before=${CHAT_OLDEST_ID}&limit=50`);
+    if (list && list.length) {
+      const ul = $('chatMessages');
+      const prevHeight = ul.scrollHeight;
+      CHAT_MESSAGES = list.concat(CHAT_MESSAGES);
+      CHAT_OLDEST_ID = CHAT_MESSAGES[0].id;
+      renderChatMessages();
+      // 스크롤 위치 유지
+      ul.scrollTop = ul.scrollHeight - prevHeight;
+      if (list.length < 50) btn?.classList.add('hidden');
+    } else {
+      btn?.classList.add('hidden');
+    }
+  } catch {} finally {
+    if (btn) { btn.disabled = false; btn.textContent = '이전 메시지 보기'; }
+  }
+}
+
+async function sendChatMessage() {
+  const input = $('chatInput');
+  const text = input.value.trim();
+  if (!text) return;
+  const sendBtn = $('chatSendBtn');
+  if (sendBtn) sendBtn.disabled = true;
+  try {
+    await api('/api/chat', { method: 'POST', body: JSON.stringify({ text }) });
+    input.value = '';
+    input.style.height = '';
+    // 즉시 폴링 당겨 보기
+    pollChatNew();
+  } catch (e) {
+    alert(e.status === 400 ? '메시지를 확인해 주세요' : '전송 실패');
+  } finally {
+    if (sendBtn) sendBtn.disabled = false;
+  }
+}
+
+async function deleteChatMessage(id) {
+  if (!confirm('메시지를 삭제할까요?')) return;
+  try {
+    await api(`/api/chat/${id}`, { method: 'DELETE' });
+    CHAT_MESSAGES = CHAT_MESSAGES.filter((m) => m.id !== id);
+    renderChatMessages();
+  } catch (e) {
+    alert(e.status === 403 ? '삭제 권한이 없어요' : '삭제 실패');
+  }
+}
+
+async function markChatRead() {
+  if (!CHAT_LAST_ID) return;
+  try {
+    await api('/api/chat/read', { method: 'POST', body: JSON.stringify({ lastId: CHAT_LAST_ID }) });
+    refreshChatUnread();
+  } catch {}
+}
+
+$('chatOpenBtn')?.addEventListener('click', openChatSheet);
+$('chatCard')?.addEventListener('click', (e) => {
+  // 카드 본문 클릭도 열림 (헤더 버튼 제외)
+  if (e.target.closest('.ufi-btn')) return;
+  if (e.target === $('chatCard') || e.target.closest('.chat-peek')) openChatSheet();
+});
+$('chatSheetClose')?.addEventListener('click', closeChatSheet);
+$('chatSheet')?.addEventListener('click', (e) => {
+  if (e.target.id === 'chatSheet') closeChatSheet();
+});
+$('chatLoadOlderBtn')?.addEventListener('click', loadOlderChat);
+$('chatForm')?.addEventListener('submit', (e) => { e.preventDefault(); sendChatMessage(); });
+$('chatInput')?.addEventListener('input', (e) => {
+  // 자동 높이
+  e.target.style.height = 'auto';
+  e.target.style.height = Math.min(120, e.target.scrollHeight) + 'px';
+});
+$('chatInput')?.addEventListener('keydown', (e) => {
+  // Enter 로 전송 (Shift+Enter 는 줄바꿈). 모바일에선 키보드의 엔터라 신중히.
+  if (e.key === 'Enter' && !e.shiftKey && !e.isComposing && !/Mobi|Android/i.test(navigator.userAgent)) {
+    e.preventDefault();
+    sendChatMessage();
+  }
+});
+
+// 홈 화면용 백그라운드 폴링 (30초)
+setInterval(() => {
+  if (!ME) return;
+  if (CHAT_SHEET_OPEN) return;  // 시트 열렸을 땐 전용 폴링이 이미 빠르게 돌고 있음
+  refreshChatUnread();
+  loadChatPeek();
+}, 30000);
 
 boot();

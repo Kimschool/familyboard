@@ -91,7 +91,7 @@ async function verify(token) {
 
   const [rows] = await getPool().query(
     `SELECT u.id, u.family_id, u.username, u.display_name, u.role, u.icon,
-            u.birth_year, u.birth_month, u.birth_day, u.is_lunar,
+            u.birth_year, u.birth_month, u.birth_day, u.is_lunar, u.photo_url,
             f.alias AS family_alias, f.display_name AS family_name
        FROM sessions s
        JOIN users    u ON u.id = s.user_id
@@ -116,6 +116,7 @@ function publicUser(u) {
     birthMonth: u.birth_month ?? u.birthMonth ?? null,
     birthDay:   u.birth_day   ?? u.birthDay   ?? null,
     isLunar: !!(u.is_lunar ?? u.isLunar),
+    photoUrl:  u.photo_url   ?? u.photoUrl   ?? null,
   };
 }
 

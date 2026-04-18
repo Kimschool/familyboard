@@ -9,4 +9,5 @@ services:
     env_file:
       - .env
     volumes:
-      - ${NAS_DATA_DIR:-/volume2/familyboard데이터}:/app/data
+      # NAS .env 에 NAS_DATA_DIR=/volume2/가족보드 권장 (deploy.ps1 -PushEnv 로 .env 동기화)
+      - ${NAS_DATA_DIR:-/volume2/가족보드}:/app/data

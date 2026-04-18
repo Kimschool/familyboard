@@ -160,6 +160,26 @@ img, video, iframe, svg { max-width: 100%; }
 @media (prefers-color-scheme: dark) {
   .family-welcome-label { color: #C9A77A; }
 }
+html[data-scheme="light"] .family-welcome,
+html[data-scheme="sepia"] .family-welcome,
+html[data-scheme="kid"] .family-welcome {
+  background: linear-gradient(135deg, #FFF3E6 0%, #FFE5EC 100%);
+}
+html[data-scheme="light"] .family-welcome-label,
+html[data-scheme="sepia"] .family-welcome-label,
+html[data-scheme="kid"] .family-welcome-label {
+  color: #8A6B42;
+}
+html[data-scheme="dark"] .family-welcome,
+html[data-scheme="darkgray"] .family-welcome,
+html[data-scheme="hc"] .family-welcome {
+  background: linear-gradient(135deg, #2A2419 0%, #2A1E22 100%);
+}
+html[data-scheme="dark"] .family-welcome-label,
+html[data-scheme="darkgray"] .family-welcome-label,
+html[data-scheme="hc"] .family-welcome-label {
+  color: #C9A77A;
+}
 .family-welcome-name {
   margin: 0;
   font-size: 26px;
@@ -216,24 +236,30 @@ img, video, iframe, svg { max-width: 100%; }
   position: relative;
   overflow: hidden;
 }
-.hero-photo-overlay {
-  position: absolute;
-  inset: 0;
-  background-size: cover;
-  background-position: center;
-  opacity: 0;
-  transition: opacity .3s;
-  pointer-events: none;
-  border-radius: inherit;
+.hero-photo-banner {
+  margin: -18px -16px 14px;
+  height: 140px;
+  overflow: hidden;
+  background: var(--bg);
+  cursor: zoom-in;
 }
-.hero-photo-overlay.active { opacity: 0.28; }
-.hero-photo-overlay.active::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(180deg, transparent 30%, var(--bg) 100%);
+.hero-photo-banner img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
 }
 .hero-row { position: relative; z-index: 1; }
+
+/* 모달·라이트박스 열릴 때 배경 스크롤 고정 (iOS Safari 포함) */
+body.scroll-locked {
+  position: fixed;
+  left: 0;
+  right: 0;
+  width: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
 body.tod-morning { --hero-bg: linear-gradient(180deg, #FFF1DB 0%, #FFE8E1 60%, var(--bg) 100%); }
 body.tod-noon    { --hero-bg: linear-gradient(180deg, #DDEEFF 0%, #F0F7FF 60%, var(--bg) 100%); }
 body.tod-evening { --hero-bg: linear-gradient(180deg, #FFD8C4 0%, #E8D1E9 60%, var(--bg) 100%); }
@@ -246,6 +272,64 @@ body.tod-night .hero-date, body.tod-night .hero-greeting { color: #F2F2F7; }
   body.tod-evening { --hero-bg: linear-gradient(180deg, #3A2030 0%, #2A1E2E 60%, var(--bg) 100%); }
   body.tod-night   { --hero-bg: linear-gradient(180deg, #141428 0%, #0A0A14 60%, var(--bg) 100%); }
 }
+
+/* 수동 화면톤: 모바일이 시스템 다크여도 html[data-scheme] 밝은 테마면 hero·로그인 장식은 밝은 팔레트 유지 */
+html[data-scheme="light"] body.tod-morning,
+html[data-scheme="sepia"] body.tod-morning,
+html[data-scheme="kid"] body.tod-morning {
+  --hero-bg: linear-gradient(180deg, #FFF1DB 0%, #FFE8E1 60%, var(--bg) 100%);
+}
+html[data-scheme="light"] body.tod-noon,
+html[data-scheme="sepia"] body.tod-noon,
+html[data-scheme="kid"] body.tod-noon {
+  --hero-bg: linear-gradient(180deg, #DDEEFF 0%, #F0F7FF 60%, var(--bg) 100%);
+}
+html[data-scheme="light"] body.tod-evening,
+html[data-scheme="sepia"] body.tod-evening,
+html[data-scheme="kid"] body.tod-evening {
+  --hero-bg: linear-gradient(180deg, #FFD8C4 0%, #E8D1E9 60%, var(--bg) 100%);
+}
+html[data-scheme="light"] body.tod-night,
+html[data-scheme="sepia"] body.tod-night,
+html[data-scheme="kid"] body.tod-night {
+  --hero-bg: linear-gradient(180deg, #D8D4E8 0%, #E8E4F0 55%, var(--bg) 100%);
+}
+html[data-scheme="light"] body.tod-night .hero-date,
+html[data-scheme="light"] body.tod-night .hero-greeting,
+html[data-scheme="sepia"] body.tod-night .hero-date,
+html[data-scheme="sepia"] body.tod-night .hero-greeting,
+html[data-scheme="kid"] body.tod-night .hero-date,
+html[data-scheme="kid"] body.tod-night .hero-greeting {
+  color: var(--text);
+}
+html[data-scheme="dark"] body.tod-morning,
+html[data-scheme="darkgray"] body.tod-morning,
+html[data-scheme="hc"] body.tod-morning {
+  --hero-bg: linear-gradient(180deg, #3A2B1E 0%, #2A2022 60%, var(--bg) 100%);
+}
+html[data-scheme="dark"] body.tod-noon,
+html[data-scheme="darkgray"] body.tod-noon,
+html[data-scheme="hc"] body.tod-noon {
+  --hero-bg: linear-gradient(180deg, #1E2A3A 0%, #20242E 60%, var(--bg) 100%);
+}
+html[data-scheme="dark"] body.tod-evening,
+html[data-scheme="darkgray"] body.tod-evening,
+html[data-scheme="hc"] body.tod-evening {
+  --hero-bg: linear-gradient(180deg, #3A2030 0%, #2A1E2E 60%, var(--bg) 100%);
+}
+html[data-scheme="dark"] body.tod-night,
+html[data-scheme="darkgray"] body.tod-night,
+html[data-scheme="hc"] body.tod-night {
+  --hero-bg: linear-gradient(180deg, #141428 0%, #0A0A14 60%, var(--bg) 100%);
+}
+html[data-scheme="dark"] body.tod-night .hero-date,
+html[data-scheme="dark"] body.tod-night .hero-greeting,
+html[data-scheme="darkgray"] body.tod-night .hero-date,
+html[data-scheme="darkgray"] body.tod-night .hero-greeting,
+html[data-scheme="hc"] body.tod-night .hero-date,
+html[data-scheme="hc"] body.tod-night .hero-greeting {
+  color: #F2F2F7;
+}
 .hero-row { display: flex; align-items: center; gap: 14px; }
 .hero-avatar {
   flex-shrink: 0;
@@ -256,6 +340,17 @@ body.tod-night .hero-date, body.tod-night .hero-greeting { color: #F2F2F7; }
   display: flex; align-items: center; justify-content: center;
   font-size: 40px;
   line-height: 1;
+  overflow: hidden;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  transition: transform .12s ease, box-shadow .12s ease;
+}
+.hero-avatar:hover { box-shadow: var(--shadow-md); }
+.hero-avatar:active { transform: scale(.96); }
+.hero-avatar:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(10, 132, 255, .45), var(--shadow-sm);
 }
 .hero-text { flex: 1; min-width: 0; }
 .hero-date {
@@ -371,10 +466,11 @@ body.tod-night .hero-weather { color: rgba(242,242,247,.8); }
   display: inline-block;
   background: linear-gradient(135deg, #FF3B30, #FF9500);
   color: #fff;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 700;
-  padding: 4px 12px;
+  padding: 5px 13px;
   border-radius: 999px;
+  box-shadow: 0 2px 6px rgba(255, 59, 48, 0.25);
   letter-spacing: .5px;
   animation: pending-pulse 2.4s ease-in-out infinite;
 }
@@ -2056,9 +2152,25 @@ body.tod-night .hero-weather { color: rgba(242,242,247,.8); }
 /* ========== 오늘의 가족 질문 ========== */
 .question-card {
   background: linear-gradient(135deg, #FFF4E5 0%, #FFE6F0 100%);
+  border: 1.5px solid rgba(255, 159, 10, 0.28);
+  box-shadow: 0 6px 20px rgba(255, 159, 10, 0.14), var(--shadow-sm);
+  transition: border-color .25s ease, box-shadow .25s ease;
+}
+/* 답변 전 — 오늘 할 가장 중요한 일이므로 primary 컬러로 확실히 눈에 띄게 */
+.question-card:has(#qPendingBadge:not(.hidden)) {
+  border-color: rgba(10, 132, 255, 0.45);
+  box-shadow: 0 8px 26px rgba(10, 132, 255, 0.22), 0 2px 8px rgba(10, 132, 255, 0.1);
 }
 @media (prefers-color-scheme: dark) {
-  .question-card { background: linear-gradient(135deg, #2A2419 0%, #2A1E22 100%); }
+  .question-card {
+    background: linear-gradient(135deg, #2A2419 0%, #2A1E22 100%);
+    border-color: rgba(255, 200, 130, 0.22);
+    box-shadow: 0 6px 20px rgba(255, 159, 10, 0.1), 0 0 0 1px rgba(255,255,255,.04);
+  }
+  .question-card:has(#qPendingBadge:not(.hidden)) {
+    border-color: rgba(100, 180, 255, 0.5);
+    box-shadow: 0 8px 26px rgba(10, 132, 255, 0.28), 0 0 0 1px rgba(100,180,255,.12);
+  }
 }
 .question-card .card-title { color: #9A5B42; }
 @media (prefers-color-scheme: dark) {
@@ -2485,14 +2597,17 @@ body.tod-night .hero-weather { color: rgba(242,242,247,.8); }
 .zodiac-name { font-size: 18px; font-weight: 700; }
 .zodiac-tag {
   font-size: 13px; color: var(--sub);
-  background: var(--bg); border-radius: 999px; padding: 3px 10px;
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 3px 10px;
 }
 .zodiac-fortune { font-size: 17px; color: var(--text); margin-top: 6px; line-height: 1.5; }
 .zodiac-activity {
   margin-top: 8px;
-  padding: 8px 12px;
-  background: var(--bg);
-  border-radius: 10px;
+  padding: 8px 0 0;
+  background: transparent;
+  border-radius: 0;
   font-size: 14px;
   color: var(--text);
   font-weight: 500;
@@ -2510,7 +2625,8 @@ body.tod-night .hero-weather { color: rgba(242,242,247,.8); }
   gap: 5px;
   font-size: 12px;
   color: var(--sub);
-  background: var(--bg);
+  background: transparent;
+  border: 1px solid var(--line);
   padding: 4px 10px;
   border-radius: 999px;
   font-weight: 600;
@@ -2874,6 +2990,123 @@ body.tod-night .hero-weather { color: rgba(242,242,247,.8); }
 .invite-share-row { display: flex; gap: 8px; }
 .invite-share-row .auth-btn { flex: 1; font-size: 14px; }
 
+/* ========== 내 프로필 사진 ========== */
+.my-photo-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+.my-photo-preview {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  overflow: hidden;
+  flex-shrink: 0;
+  background: var(--bg);
+  border: 2px solid var(--line);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.my-photo-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.my-photo-placeholder {
+  font-size: 36px;
+  line-height: 1;
+}
+.my-photo-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1;
+  min-width: 140px;
+}
+.my-photo-actions .ufi-btn { width: 100%; }
+.my-photo-clear { color: var(--bad); border-color: rgba(255, 59, 48, .35); }
+.fam-photo-preview {
+  width: 120px;
+  height: 68px;
+  border-radius: 10px;
+  overflow: hidden;
+  flex-shrink: 0;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--sub);
+  font-size: 13px;
+}
+.fam-photo-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.profile-crop-hint { margin-bottom: 12px !important; line-height: 1.45; }
+.profile-crop-frame {
+  width: 320px;
+  max-width: 100%;
+  margin: 0 auto 14px;
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: var(--shadow-md);
+  touch-action: none;
+}
+.profile-crop-canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+  vertical-align: middle;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+.fam-crop-frame {
+  width: 100%;
+  max-width: 480px;
+  margin: 0 auto 14px;
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: var(--shadow-md);
+  touch-action: none;
+}
+.fam-crop-canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+  vertical-align: middle;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+.profile-crop-zoom {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.profile-crop-zoom .ufi-btn {
+  width: 48px;
+  height: 48px;
+  font-size: 22px;
+  font-weight: 700;
+  padding: 0;
+}
+.profile-crop-zoom-label {
+  font-size: 14px;
+  color: var(--sub);
+  min-width: 72px;
+  text-align: center;
+}
+
 /* ========== 계정 카드 ========== */
 .account-card { padding: 16px 18px; }
 .account-row { display: flex; align-items: center; gap: 14px; margin-bottom: 14px; }
@@ -2884,6 +3117,7 @@ body.tod-night .hero-weather { color: rgba(242,242,247,.8); }
   display: flex; align-items: center; justify-content: center;
   font-size: 32px;
   flex-shrink: 0;
+  overflow: hidden;
 }
 .account-info { flex: 1; min-width: 0; }
 .account-name { font-size: 16px; font-weight: 700; color: var(--text); }
@@ -3376,6 +3610,8 @@ body.reorder-mode #app #birthdayBanner { padding-top: 28px; }
   font-family: inherit;
   transition: transform .12s, border-color .12s, background .12s;
   color: var(--text);
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
 .th-btn:active { transform: scale(.94); }
 .th-btn.active {
@@ -3765,7 +4001,6 @@ li.memo-important .memo-text { font-weight: 700; }
 }
 .lightbox-close:active { background: rgba(255,255,255,.25); }
 .reveal-image { cursor: zoom-in; }
-.hero-photo-overlay.active { cursor: zoom-in; }
 
 /* 약 30일 히트맵 시트 */
 .med-month-wrap { max-height: 55vh; overflow-y: auto; margin-bottom: 14px; }
@@ -3817,6 +4052,283 @@ li.memo-important .memo-text { font-weight: 700; }
   object-fit: cover;
   border-radius: inherit;
 }
+
+/* ========== 가족 갤러리 ========== */
+.gallery-card .card-head-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.gallery-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  margin-top: 12px;
+}
+.gallery-grid-sheet { grid-template-columns: repeat(3, 1fr); }
+.gallery-thumb {
+  position: relative;
+  aspect-ratio: 1 / 1;
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  cursor: pointer;
+}
+.gallery-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.gallery-thumb:active img { opacity: 0.88; }
+.gallery-empty {
+  color: var(--sub);
+  font-size: 14px;
+  text-align: center;
+  padding: 22px 12px 8px;
+  line-height: 1.55;
+}
+.gallery-sheet-body {
+  max-height: 68vh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-bottom: 16px;
+}
+.gallery-loadmore {
+  display: block;
+  width: 100%;
+  margin-top: 14px;
+  height: 48px;
+  font-size: 15px;
+  font-weight: 600;
+}
+.gallery-detail-img {
+  display: block;
+  width: 100%;
+  max-height: 55vh;
+  object-fit: contain;
+  border-radius: 14px;
+  background: #000;
+  margin-bottom: 14px;
+}
+.gallery-detail-meta { margin-bottom: 12px; }
+.gallery-detail-author {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 4px;
+}
+.gallery-detail-caption {
+  font-size: 15px;
+  color: var(--text);
+  line-height: 1.5;
+  word-break: keep-all;
+  margin-bottom: 4px;
+  white-space: pre-wrap;
+}
+.gallery-detail-time {
+  font-size: 12px;
+  color: var(--sub);
+}
+.ufi-btn.danger {
+  color: var(--bad);
+  border-color: rgba(255, 59, 48, 0.35);
+}
+
+/* ========== 가족 채팅 ========== */
+.chat-card .chat-peek {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.chat-peek li {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  font-size: 14px;
+  color: var(--text);
+}
+.chat-peek .cp-name {
+  font-weight: 700;
+  color: var(--sub);
+  flex-shrink: 0;
+}
+.chat-peek .cp-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.chat-peek-empty {
+  color: var(--sub);
+  font-size: 14px;
+  text-align: center;
+  padding: 14px 0 4px;
+}
+.chat-unread-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: var(--bad);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 800;
+  margin-left: 6px;
+  vertical-align: 1px;
+}
+
+.chat-sheet { padding-bottom: 14px; display: flex; flex-direction: column; height: 88vh; }
+.chat-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 6px;
+}
+.chat-title { margin: 0; }
+.chat-close { height: 36px; padding: 0 14px; font-size: 13px; }
+.chat-load-older {
+  align-self: center;
+  height: 34px;
+  padding: 0 14px;
+  font-size: 13px;
+  margin-bottom: 8px;
+}
+.chat-messages {
+  list-style: none;
+  margin: 0;
+  padding: 8px 4px;
+  flex: 1;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.chat-msg {
+  display: flex;
+  gap: 8px;
+  align-items: flex-end;
+  max-width: 88%;
+}
+.chat-msg.mine {
+  align-self: flex-end;
+  flex-direction: row-reverse;
+}
+.chat-msg-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+.chat-msg-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.chat-msg-body { display: flex; flex-direction: column; min-width: 0; }
+.chat-msg.mine .chat-msg-body { align-items: flex-end; }
+.chat-msg-name {
+  font-size: 12px;
+  color: var(--sub);
+  margin-bottom: 3px;
+  padding: 0 4px;
+}
+.chat-msg.mine .chat-msg-name { display: none; }
+.chat-bubble {
+  background: var(--bg);
+  color: var(--text);
+  padding: 9px 13px;
+  border-radius: 16px;
+  border-top-left-radius: 4px;
+  font-size: 15px;
+  line-height: 1.45;
+  word-break: break-word;
+  white-space: pre-wrap;
+  border: 1px solid var(--line);
+}
+.chat-msg.mine .chat-bubble {
+  background: var(--primary);
+  color: #fff;
+  border-color: var(--primary);
+  border-top-left-radius: 16px;
+  border-top-right-radius: 4px;
+}
+.chat-msg-time {
+  font-size: 11px;
+  color: var(--sub);
+  margin-top: 2px;
+  padding: 0 4px;
+}
+.chat-msg-del {
+  opacity: 0;
+  transition: opacity .15s;
+  background: transparent;
+  border: none;
+  color: var(--sub);
+  font-size: 14px;
+  cursor: pointer;
+  padding: 2px 6px;
+  margin-top: 2px;
+}
+.chat-msg:hover .chat-msg-del,
+.chat-msg:focus-within .chat-msg-del { opacity: 0.7; }
+.chat-msg-del:hover { opacity: 1 !important; color: var(--bad); }
+.chat-divider {
+  align-self: center;
+  font-size: 11px;
+  color: var(--sub);
+  padding: 6px 12px;
+  background: var(--bg);
+  border-radius: 999px;
+  margin: 6px 0;
+}
+
+.chat-composer {
+  display: flex;
+  gap: 8px;
+  align-items: flex-end;
+  padding: 10px 0 calc(env(safe-area-inset-bottom, 0));
+  border-top: 1px solid var(--line);
+}
+.chat-input {
+  flex: 1;
+  min-height: 42px;
+  max-height: 120px;
+  padding: 10px 14px;
+  border-radius: 20px;
+  border: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 15px;
+  line-height: 1.4;
+  resize: none;
+  outline: none;
+}
+.chat-input:focus { border-color: var(--primary); background: var(--card); }
+.chat-send {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  border: none;
+  background: var(--primary);
+  color: #fff;
+  font-size: 22px;
+  font-weight: 800;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.chat-send:active { transform: scale(.94); }
+.chat-send:disabled { opacity: 0.5; cursor: not-allowed; }
 
 /* ========== 퀵 메모 FAB ========== */
 .quick-memo-fab {

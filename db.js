@@ -330,6 +330,43 @@ async function ensureSchema() {
       INDEX idx_answer (answer_id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   `);
+
+  // ---------- 가족 갤러리 ----------
+  await p.query(`
+    CREATE TABLE IF NOT EXISTS gallery_photos (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      family_id INT NOT NULL,
+      uploader_id INT NOT NULL,
+      url VARCHAR(500) NOT NULL,
+      caption VARCHAR(300) NULL,
+      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      INDEX idx_family_time (family_id, created_at),
+      INDEX idx_family_id (family_id, id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  `);
+
+  // ---------- 가족 채팅 ----------
+  await p.query(`
+    CREATE TABLE IF NOT EXISTS chat_messages (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      family_id INT NOT NULL,
+      user_id INT NOT NULL,
+      text VARCHAR(1000) NOT NULL,
+      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      INDEX idx_family_id (family_id, id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  `);
+
+  // 채팅 읽음 커서 — 유저별 마지막으로 읽은 메시지 id
+  await p.query(`
+    CREATE TABLE IF NOT EXISTS chat_reads (
+      user_id INT NOT NULL,
+      family_id INT NOT NULL,
+      last_read_id INT NOT NULL DEFAULT 0,
+      updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      PRIMARY KEY (user_id, family_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  `);
   // 기존 하트 전용 → 이모지 포함 버전 업그레이드
   await ensureColumn('answer_reactions', 'emoji', "VARCHAR(10) NOT NULL DEFAULT '❤️'");
   await dropIndexIfExists('answer_reactions', 'uq_answer_user');

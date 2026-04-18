@@ -81,9 +81,11 @@
 <main id="app" class="screen hidden">
 
   <header class="hero" id="heroEl">
-    <div class="hero-photo-overlay" id="heroPhotoOverlay"></div>
+    <div class="hero-photo-banner hidden" id="heroPhotoBanner">
+      <img id="heroPhotoImg" alt="" />
+    </div>
     <div class="hero-row">
-      <div class="hero-avatar" id="heroAvatar">✨</div>
+      <div class="hero-avatar" id="heroAvatar" role="button" tabindex="0" title="내 정보 편집" aria-label="내 정보 편집">✨</div>
       <div class="hero-text">
         <p class="hero-date" id="todayStr">—</p>
         <h1 class="hero-greeting" id="greeting">안녕하세요</h1>
@@ -450,8 +452,16 @@
       <label class="ufi-check" style="margin-top: 8px">
         <input id="myLunar" type="checkbox" /> 음력
       </label>
-      <label class="admin-label" style="margin-top: 12px">내 사진 URL (선택 — 아이콘 대신 사진 표시)</label>
-      <input id="myPhoto" class="ufi" type="url" placeholder="https://..." />
+      <label class="admin-label" style="margin-top: 12px">프로필 사진</label>
+      <p class="sheet-sub" style="margin: 0 0 10px; font-size: 14px">원형으로 보이는 부분만 저장돼요. 1MB 미만으로 압축해 올립니다.</p>
+      <div class="my-photo-row">
+        <div id="myPhotoPreview" class="my-photo-preview" aria-hidden="true"></div>
+        <div class="my-photo-actions">
+          <button type="button" id="myPhotoPickBtn" class="ufi-btn">사진 올리기</button>
+          <button type="button" id="myPhotoClearBtn" class="ufi-btn my-photo-clear hidden">사진 삭제</button>
+        </div>
+      </div>
+      <input id="myPhotoFile" type="file" class="hidden" accept="image/jpeg,image/png,image/webp,image/heic,image/*" />
       <label class="admin-label" style="margin-top: 12px">전화번호 (선택)</label>
       <input id="myPhone" class="ufi" type="tel" placeholder="010-1234-5678" />
       <label class="admin-label" style="margin-top: 18px">비밀번호 변경 (선택)</label>
@@ -459,6 +469,44 @@
       <input id="myNewPw" class="ufi" type="password" placeholder="새 비밀번호 (최소 4자)" />
       <button id="mySave" type="button" class="user-add" style="margin-top: 16px">저장</button>
       <button class="sheet-close" id="myProfileClose">취소</button>
+    </div>
+  </div>
+
+  <!-- 프로필 사진 원형 맞추기 -->
+  <div id="profilePhotoCropSheet" class="sheet-backdrop hidden" role="dialog">
+    <div class="sheet" role="document">
+      <div class="sheet-handle"></div>
+      <h2 class="sheet-title">프로필 사진 맞추기</h2>
+      <p class="sheet-sub profile-crop-hint">드래그해 위치를 옮기고, ＋/－로 확대·축소하세요. 흰 원 안만 프로필에 들어가요.</p>
+      <div class="profile-crop-frame">
+        <canvas id="profileCropCanvas" width="320" height="320" class="profile-crop-canvas"></canvas>
+      </div>
+      <div class="profile-crop-zoom">
+        <button type="button" id="profileCropZoomOut" class="ufi-btn" aria-label="축소">－</button>
+        <span class="profile-crop-zoom-label">확대·축소</span>
+        <button type="button" id="profileCropZoomIn" class="ufi-btn" aria-label="확대">＋</button>
+      </div>
+      <button type="button" id="profileCropApply" class="auth-btn">이 사진으로 저장</button>
+      <button class="sheet-close" id="profileCropCancel">취소</button>
+    </div>
+  </div>
+
+  <!-- 가족 사진 영역 맞추기 -->
+  <div id="famPhotoCropSheet" class="sheet-backdrop hidden" role="dialog">
+    <div class="sheet" role="document">
+      <div class="sheet-handle"></div>
+      <h2 class="sheet-title">가족 사진 맞추기</h2>
+      <p class="sheet-sub profile-crop-hint">드래그해 위치를 옮기고, ＋/－로 확대·축소하세요. 흰 사각형 안만 배너에 들어가요.</p>
+      <div class="fam-crop-frame">
+        <canvas id="famCropCanvas" class="fam-crop-canvas"></canvas>
+      </div>
+      <div class="profile-crop-zoom">
+        <button type="button" id="famCropZoomOut" class="ufi-btn" aria-label="축소">－</button>
+        <span class="profile-crop-zoom-label">확대·축소</span>
+        <button type="button" id="famCropZoomIn" class="ufi-btn" aria-label="확대">＋</button>
+      </div>
+      <button type="button" id="famCropApply" class="auth-btn">이 사진으로 저장</button>
+      <button class="sheet-close" id="famCropCancel">취소</button>
     </div>
   </div>
 
@@ -713,11 +761,16 @@
           <input id="famName" class="ufi" type="text" />
           <button id="famNameSave" class="ufi-btn">저장</button>
         </div>
-        <label class="admin-label" style="margin-top:10px">가족 사진 URL (배경으로 사용)</label>
-        <div class="admin-inline">
-          <input id="famPhoto" class="ufi" type="url" placeholder="https://... (선택)" />
-          <button id="famPhotoSave" class="ufi-btn">저장</button>
+        <label class="admin-label" style="margin-top:10px">가족 사진 (배경으로 사용)</label>
+        <p class="sheet-sub" style="margin: 0 0 10px; font-size: 14px">헤더 배경에 깔려요. 가로가 긴 풍경 사진을 추천해요. (2MB 이하로 자동 압축)</p>
+        <div class="my-photo-row">
+          <div id="famPhotoPreview" class="fam-photo-preview" aria-hidden="true"></div>
+          <div class="my-photo-actions">
+            <button type="button" id="famPhotoPickBtn" class="ufi-btn">사진 올리기</button>
+            <button type="button" id="famPhotoClearBtn" class="ufi-btn my-photo-clear hidden">사진 삭제</button>
+          </div>
         </div>
+        <input id="famPhotoFile" type="file" class="hidden" accept="image/jpeg,image/png,image/webp,image/heic,image/*" />
         <label class="admin-label" style="margin-top:10px">가족 공지 (모두에게 상단에 표시)</label>
         <textarea id="famNotice" class="ufi" style="height: 80px; padding: 10px 12px; font-family: inherit; font-size: 15px;" maxlength="500" placeholder="예: 오늘 저녁 7시에 모여요"></textarea>
         <button id="famNoticeSave" class="ufi-btn" style="width: 100%; margin-top: 8px;">공지 저장</button>
@@ -905,6 +958,29 @@
     </div>
   </section>
 
+  <!-- 가족 갤러리 -->
+  <section class="card gallery-card" data-card-id="gallery" id="galleryCard">
+    <div class="card-head-row">
+      <h2 class="card-title">🖼️ 가족 갤러리</h2>
+      <div class="card-head-actions">
+        <button type="button" id="galleryAddBtn" class="ufi-btn">＋ 사진</button>
+        <button type="button" id="galleryOpenAllBtn" class="ufi-btn">전체보기</button>
+      </div>
+    </div>
+    <input type="file" id="galleryFile" class="hidden" accept="image/jpeg,image/png,image/webp,image/heic,image/*" />
+    <div id="galleryGrid" class="gallery-grid"></div>
+    <p id="galleryEmpty" class="gallery-empty hidden">아직 공유된 사진이 없어요. ＋ 사진을 눌러 첫 장을 올려 보세요.</p>
+  </section>
+
+  <!-- 가족 채팅 -->
+  <section class="card chat-card" data-card-id="chat" id="chatCard">
+    <div class="card-head-row">
+      <h2 class="card-title">💬 가족 채팅 <span id="chatUnreadBadge" class="chat-unread-badge hidden">0</span></h2>
+      <button type="button" id="chatOpenBtn" class="ufi-btn">열기</button>
+    </div>
+    <ul id="chatPeek" class="chat-peek"></ul>
+  </section>
+
   <footer class="foot">
     <p class="foot-ver">familyboard — 부모님을 위한 하루 안내</p>
   </footer>
@@ -939,6 +1015,53 @@
 <div id="undoToast" class="undo-toast hidden" role="status">
   <span class="undo-msg">메모를 삭제했어요</span>
   <button id="undoBtn" class="undo-btn">되돌리기</button>
+</div>
+
+<!-- 가족 갤러리 전체보기 시트 -->
+<div id="gallerySheet" class="sheet-backdrop hidden" role="dialog">
+  <div class="sheet sheet-tall" role="document">
+    <div class="sheet-handle"></div>
+    <h2 class="sheet-title">🖼️ 가족 갤러리</h2>
+    <div class="gallery-sheet-body" id="gallerySheetBody">
+      <div id="gallerySheetGrid" class="gallery-grid gallery-grid-sheet"></div>
+      <button type="button" id="galleryLoadMoreBtn" class="ufi-btn gallery-loadmore hidden">더 보기</button>
+    </div>
+    <button class="sheet-close" id="gallerySheetClose">닫기</button>
+  </div>
+</div>
+
+<!-- 가족 채팅 시트 -->
+<div id="chatSheet" class="sheet-backdrop hidden" role="dialog">
+  <div class="sheet sheet-tall chat-sheet" role="document">
+    <div class="sheet-handle"></div>
+    <div class="chat-head">
+      <h2 class="sheet-title chat-title">💬 가족 채팅</h2>
+      <button type="button" id="chatSheetClose" class="ufi-btn chat-close">닫기</button>
+    </div>
+    <button type="button" id="chatLoadOlderBtn" class="ufi-btn chat-load-older hidden">이전 메시지 보기</button>
+    <ul id="chatMessages" class="chat-messages"></ul>
+    <form id="chatForm" class="chat-composer" autocomplete="off">
+      <textarea id="chatInput" class="chat-input" maxlength="1000" placeholder="메시지를 입력하세요 (최대 1000자)" rows="1"></textarea>
+      <button type="submit" id="chatSendBtn" class="chat-send" aria-label="보내기">↑</button>
+    </form>
+  </div>
+</div>
+
+<!-- 갤러리 사진 상세 시트 -->
+<div id="galleryDetailSheet" class="sheet-backdrop hidden" role="dialog">
+  <div class="sheet" role="document">
+    <div class="sheet-handle"></div>
+    <div class="gallery-detail">
+      <img id="galleryDetailImg" alt="" class="gallery-detail-img" />
+      <div class="gallery-detail-meta">
+        <div class="gallery-detail-author" id="galleryDetailAuthor"></div>
+        <div class="gallery-detail-caption" id="galleryDetailCaption"></div>
+        <div class="gallery-detail-time" id="galleryDetailTime"></div>
+      </div>
+      <button type="button" id="galleryDetailDeleteBtn" class="ufi-btn danger hidden">사진 삭제</button>
+    </div>
+    <button class="sheet-close" id="galleryDetailClose">닫기</button>
+  </div>
 </div>
 
 <!-- 약 30일 히트맵 시트 -->
@@ -992,6 +1115,6 @@
     caches.keys().then((ks) => ks.forEach((k) => caches.delete(k))).catch(() => {});
   }
 </script>
-<script src="/app.js?v=5" defer></script>
+<script src="/app.js?v=19" defer></script>
 </body>
 </html>

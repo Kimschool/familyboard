@@ -1,6 +1,8 @@
 require('dotenv').config();
 const express = require('express');
 const path = require('path');
+const fs = require('fs');
+const multer = require('multer');
 const bcrypt = require('bcryptjs');
 const { ensureSchema, getPool } = require('./db');
 const {
@@ -10,6 +12,176 @@ const {
 } = require('./auth');
 
 const app = express();
+
+/** 컨테이너 내부 경로만 허용. NAS의 /volume2/... 는 호스트 경로라 컨테이너에 없음 → 파일이 NAS에 안 보이고 레이어에만 쌓임 */
+function resolveProfilePhotosDir() {
+  const fallback = path.join(__dirname, 'data', 'profile-photos');
+  let raw = (process.env.PROFILE_PHOTOS_DIR || '').trim();
+  if ((raw.startsWith('"') && raw.endsWith('"')) || (raw.startsWith("'") && raw.endsWith("'"))) {
+    raw = raw.slice(1, -1).trim();
+  }
+  if (!raw) return fallback;
+  const norm = raw.replace(/\\/g, '/');
+  if (/^\/volume\d+\//i.test(norm)) {
+    console.warn(
+      '[profile-photos] PROFILE_PHOTOS_DIR에 NAS 호스트 경로(/volume2/...)가 들어가 있으면 안 됩니다.',
+      'docker-compose에서 /app/data 만 NAS에 마운트하고, 여기서는 컨테이너 경로를 쓰세요. 예: /app/data/profile-photos',
+      '→ 잘못된 값 무시:', raw
+    );
+    return fallback;
+  }
+  return path.isAbsolute(raw) ? raw : path.join(process.cwd(), raw);
+}
+const PROFILE_PHOTOS_DIR = resolveProfilePhotosDir();
+try {
+  fs.mkdirSync(PROFILE_PHOTOS_DIR, { recursive: true });
+} catch (e) {
+  console.warn('[profile-photos] mkdir:', e.message);
+}
+console.log('[profile-photos] 저장 경로:', PROFILE_PHOTOS_DIR);
+try {
+  const probe = path.join(PROFILE_PHOTOS_DIR, '.write-test');
+  fs.writeFileSync(probe, 'ok');
+  fs.unlinkSync(probe);
+  console.log('[profile-photos] 쓰기 테스트: OK');
+} catch (e) {
+  console.error('[profile-photos] 쓰기 테스트 실패 — 권한 또는 볼륨 마운트 확인:', e.message);
+}
+
+// 가족 갤러리: PROFILE_PHOTOS_DIR 의 부모(= /app/data) 밑에 gallery/ 로 분리 저장
+const DATA_DIR = path.dirname(PROFILE_PHOTOS_DIR);
+const GALLERY_DIR = path.join(DATA_DIR, 'gallery');
+try { fs.mkdirSync(GALLERY_DIR, { recursive: true }); } catch (e) { console.warn('[gallery] mkdir:', e.message); }
+console.log('[gallery] 저장 경로:', GALLERY_DIR);
+
+/** 빈 값·문자열 "null" 을 DB NULL / JSON null 로 통일 */
+function normalizePhoneOut(val) {
+  if (val == null) return null;
+  const s = String(val).trim();
+  if (!s || s.toLowerCase() === 'null' || s === 'undefined') return null;
+  return s;
+}
+function normalizePhoneIn(input) {
+  if (input === undefined) return undefined;
+  return normalizePhoneOut(input);
+}
+
+/** 가족별 하위 폴더명. URL 안전하게 항상 ASCII만 사용.
+ *  alias 가 영문/숫자/-/_ 만이면 그대로, 아니면 family-{id} 로 폴백.
+ *  → Cloudflare·NAS 리버스프록시에서 한글 경로 인코딩 문제 회피 */
+function familySubDir(req) {
+  const id = req.user?.family_id;
+  const rawAlias = String(req.user?.family_alias || '').trim();
+  if (/^[A-Za-z0-9_-]{1,60}$/.test(rawAlias)) return rawAlias;
+  return id != null ? `family-${id}` : 'family-x';
+}
+
+/** photoUrl 내 경로가 PROFILE_PHOTOS_DIR 밖으로 나가지 않는지 확인 후 삭제. */
+function resolveSafeUploadPath(photoUrl) {
+  if (!photoUrl || typeof photoUrl !== 'string') return null;
+  if (!photoUrl.startsWith('/uploads/profiles/')) return null;
+  const rel = photoUrl.slice('/uploads/profiles/'.length);
+  if (!rel || rel.includes('..')) return null;
+  const parts = rel.split('/').filter(Boolean);
+  if (!parts.length) return null;
+  const baseDir = path.resolve(PROFILE_PHOTOS_DIR);
+  const fp = path.resolve(baseDir, ...parts);
+  if (fp !== baseDir && !fp.startsWith(baseDir + path.sep)) return null;
+  return { fullPath: fp, basename: parts[parts.length - 1] };
+}
+
+function safeUnlinkProfileFile(photoUrl, userId) {
+  const r = resolveSafeUploadPath(photoUrl);
+  if (!r) return;
+  const m = r.basename.match(/^u(\d+)-.+\.jpg$/i);
+  if (!m || Number(m[1]) !== Number(userId)) return;
+  fs.unlink(r.fullPath, () => {});
+}
+
+function safeUnlinkFamilyFile(photoUrl) {
+  const r = resolveSafeUploadPath(photoUrl);
+  if (!r) return;
+  if (!/^family-\d+-[a-z0-9]+\.jpg$/i.test(r.basename)) return;
+  fs.unlink(r.fullPath, () => {});
+}
+
+function makeUploadDestination(req, _file, cb) {
+  try {
+    const dir = path.join(PROFILE_PHOTOS_DIR, familySubDir(req));
+    fs.mkdirSync(dir, { recursive: true });
+    cb(null, dir);
+  } catch (e) {
+    cb(e);
+  }
+}
+
+const profileUpload = multer({
+  storage: multer.diskStorage({
+    destination: makeUploadDestination,
+    filename: (req, _file, cb) => {
+      cb(null, `u${req.user.id}-${Date.now()}-${Math.random().toString(36).slice(2, 11)}.jpg`);
+    },
+  }),
+  limits: { fileSize: Math.ceil(1.05 * 1024 * 1024) },
+  fileFilter: (_req, file, cb) => {
+    const ok = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'].includes(file.mimetype);
+    cb(ok ? null : new Error('invalid-image-type'), ok);
+  },
+});
+
+const familyPhotoUpload = multer({
+  storage: multer.diskStorage({
+    destination: makeUploadDestination,
+    filename: (_req, _file, cb) => {
+      cb(null, `family-${Date.now()}-${Math.random().toString(36).slice(2, 11)}.jpg`);
+    },
+  }),
+  limits: { fileSize: Math.ceil(2.05 * 1024 * 1024) },
+  fileFilter: (_req, file, cb) => {
+    const ok = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'].includes(file.mimetype);
+    cb(ok ? null : new Error('invalid-image-type'), ok);
+  },
+});
+
+// ---------- 갤러리 업로드 ----------
+function makeGalleryDestination(req, _file, cb) {
+  try {
+    const dir = path.join(GALLERY_DIR, familySubDir(req));
+    fs.mkdirSync(dir, { recursive: true });
+    cb(null, dir);
+  } catch (e) { cb(e); }
+}
+const galleryUpload = multer({
+  storage: multer.diskStorage({
+    destination: makeGalleryDestination,
+    filename: (_req, _file, cb) => {
+      cb(null, `g-${Date.now()}-${Math.random().toString(36).slice(2, 11)}.jpg`);
+    },
+  }),
+  limits: { fileSize: Math.ceil(3.1 * 1024 * 1024) },
+  fileFilter: (_req, file, cb) => {
+    const ok = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'].includes(file.mimetype);
+    cb(ok ? null : new Error('invalid-image-type'), ok);
+  },
+});
+function resolveSafeGalleryPath(url) {
+  if (!url || typeof url !== 'string' || !url.startsWith('/uploads/gallery/')) return null;
+  const rel = url.slice('/uploads/gallery/'.length);
+  if (!rel || rel.includes('..')) return null;
+  const parts = rel.split('/').filter(Boolean);
+  if (!parts.length) return null;
+  const baseDir = path.resolve(GALLERY_DIR);
+  const fp = path.resolve(baseDir, ...parts);
+  if (fp !== baseDir && !fp.startsWith(baseDir + path.sep)) return null;
+  return { fullPath: fp, basename: parts[parts.length - 1] };
+}
+function safeUnlinkGalleryFile(url) {
+  const r = resolveSafeGalleryPath(url);
+  if (!r) return;
+  if (!/^g-\d+-[a-z0-9]+\.jpg$/i.test(r.basename)) return;
+  fs.unlink(r.fullPath, () => {});
+}
+
 app.use(express.json({ limit: '200kb' }));
 app.use(express.urlencoded({ extended: false }));
 
@@ -79,7 +251,7 @@ app.get('/api/family/:alias', async (req, res) => {
           birthYear: u.birth_year,
           birthMonth: u.birth_month,
           birthDay: u.birth_day,
-          phone: u.phone || null,
+          phone: normalizePhoneOut(u.phone),
           photoUrl: u.photo_url || null,
           mood: moodToday,
           activated: !!u.activated,
@@ -131,9 +303,13 @@ app.patch('/api/me', requireAuth, async (req, res) => {
     if (birthMonth !== undefined) { updates.push('birth_month = ?'); args.push(Number(birthMonth) || null); }
     if (birthDay !== undefined)   { updates.push('birth_day = ?');   args.push(Number(birthDay)   || null); }
     if (isLunar !== undefined)    { updates.push('is_lunar = ?');    args.push(isLunar ? 1 : 0); }
-    if (phone !== undefined)      { updates.push('phone = ?');       args.push(String(phone).trim() || null); }
+    if (phone !== undefined)      { updates.push('phone = ?');       args.push(normalizePhoneIn(phone)); }
+    let prevPhotoUrl = null;
     if (req.body?.photoUrl !== undefined) {
-      const p = String(req.body.photoUrl).trim().slice(0, 500);
+      const [curPh] = await getPool().query('SELECT photo_url FROM users WHERE id = ? LIMIT 1', [req.user.id]);
+      prevPhotoUrl = curPh[0]?.photo_url || null;
+      const rawPh = req.body.photoUrl;
+      const p = rawPh === null || rawPh === '' ? '' : String(rawPh).trim().slice(0, 500);
       updates.push('photo_url = ?'); args.push(p || null);
     }
 
@@ -150,12 +326,46 @@ app.patch('/api/me', requireAuth, async (req, res) => {
     if (!updates.length) return res.json({ ok: true });
     args.push(req.user.id);
     await getPool().query(`UPDATE users SET ${updates.join(', ')} WHERE id = ?`, args);
+    if (prevPhotoUrl != null && req.body?.photoUrl !== undefined) {
+      const rawPh = req.body.photoUrl;
+      const next = rawPh === null || rawPh === '' ? null : String(rawPh).trim().slice(0, 500) || null;
+      if (prevPhotoUrl !== next) safeUnlinkProfileFile(prevPhotoUrl, req.user.id);
+    }
     res.json({ ok: true });
   } catch (e) {
     if (e.code === 'ER_DUP_ENTRY') return res.status(409).json({ error: 'display-exists' });
     res.status(500).json({ error: 'internal', message: e.message });
   }
 });
+
+// ---------- 프로필 사진 업로드 (본인) ----------
+app.post(
+  '/api/me/photo',
+  requireAuth,
+  (req, res, next) => {
+    profileUpload.single('photo')(req, res, (err) => {
+      if (err) {
+        const msg = err.message === 'invalid-image-type' ? '이미지 파일만 올릴 수 있어요' : (err.message || '업로드 실패');
+        return res.status(400).json({ error: 'upload-failed', message: msg });
+      }
+      if (!req.file) return res.status(400).json({ error: 'no-file', message: '파일이 없어요' });
+      next();
+    });
+  },
+  async (req, res) => {
+    try {
+      const [rows] = await getPool().query('SELECT photo_url FROM users WHERE id = ? LIMIT 1', [req.user.id]);
+      const prev = rows[0]?.photo_url || null;
+      const publicPath = `/uploads/profiles/${familySubDir(req)}/${req.file.filename}`;
+      await getPool().query('UPDATE users SET photo_url = ? WHERE id = ?', [publicPath, req.user.id]);
+      safeUnlinkProfileFile(prev, req.user.id);
+      res.json({ ok: true, photoUrl: publicPath });
+    } catch (e) {
+      fs.unlink(req.file.path, () => {});
+      res.status(500).json({ error: 'internal', message: e.message });
+    }
+  }
+);
 
 // ---------- 주간 미션 ----------
 app.get('/api/missions/week', requireAuth, async (req, res) => {
@@ -310,7 +520,7 @@ app.post('/api/invite/:token/accept', async (req, res) => {
 // ---------- 가족 관리 (관리자) ----------
 app.get('/api/users', requireAdmin, async (req, res) => {
   const [rows] = await getPool().query(
-    `SELECT id, username, display_name, role, icon, birth_year, birth_month, birth_day, is_lunar,
+    `SELECT id, username, display_name, role, icon, birth_year, birth_month, birth_day, is_lunar, phone, photo_url,
             (password_hash IS NOT NULL) AS activated,
             invite_token, invite_expires_at
        FROM users WHERE family_id = ? ORDER BY role DESC, id ASC`,
@@ -318,6 +528,7 @@ app.get('/api/users', requireAdmin, async (req, res) => {
   );
   res.json(rows.map((r) => ({
     ...publicUser(r),
+    phone: normalizePhoneOut(r.phone),
     activated: !!r.activated,
     inviteToken: r.invite_token,
     inviteExpiresAt: r.invite_expires_at,
@@ -390,7 +601,7 @@ app.patch('/api/users/:id', requireAdmin, async (req, res) => {
   if (birthMonth !== undefined) { updates.push('birth_month = ?'); args.push(Number(birthMonth) || null); }
   if (birthDay !== undefined)   { updates.push('birth_day = ?');   args.push(Number(birthDay)   || null); }
   if (isLunar !== undefined)    { updates.push('is_lunar = ?');    args.push(isLunar ? 1 : 0); }
-  if (phone !== undefined)      { updates.push('phone = ?');       args.push(String(phone).trim() || null); }
+  if (phone !== undefined)      { updates.push('phone = ?');       args.push(normalizePhoneIn(phone)); }
   if (password) { updates.push('password_hash = ?'); args.push(bcrypt.hashSync(password, 10)); }
 
   if (!updates.length) return res.json({ ok: true });
@@ -651,13 +862,13 @@ app.get('/api/emergency', requireAuth, async (req, res) => {
        ORDER BY sort_order ASC, id ASC`,
     [req.user.family_id]
   );
-  res.json(rows);
+  res.json(rows.map((r) => ({ ...r, phone: normalizePhoneOut(r.phone) })));
 });
 
 app.post('/api/emergency', requireAdmin, async (req, res) => {
   try {
     const name = (req.body?.name || '').toString().trim();
-    const phone = (req.body?.phone || '').toString().trim();
+    const phone = normalizePhoneOut(req.body?.phone);
     const icon = (req.body?.icon || 'heart').toString().trim();
     const sortOrder = Number(req.body?.sortOrder) || 0;
     if (!name || !phone) return res.status(400).json({ error: 'name-phone-required' });
@@ -676,7 +887,10 @@ app.patch('/api/emergency/:id', requireAdmin, async (req, res) => {
     if (!Number.isInteger(id)) return res.status(400).json({ error: 'bad-id' });
     const updates = [], args = [];
     if (req.body?.name !== undefined)  { updates.push('name = ?');  args.push(String(req.body.name).trim().slice(0, 50)); }
-    if (req.body?.phone !== undefined) { updates.push('phone = ?'); args.push(String(req.body.phone).trim().slice(0, 30)); }
+    if (req.body?.phone !== undefined) {
+      const p = normalizePhoneIn(req.body.phone);
+      updates.push('phone = ?'); args.push(p == null ? null : String(p).slice(0, 30));
+    }
     if (req.body?.icon !== undefined)  { updates.push('icon = ?');  args.push(String(req.body.icon).trim().slice(0, 30) || 'heart'); }
     if (req.body?.sortOrder !== undefined) { updates.push('sort_order = ?'); args.push(Number(req.body.sortOrder) || 0); }
     if (!updates.length) return res.json({ ok: true });
@@ -898,9 +1112,16 @@ app.patch('/api/family', requireAdmin, async (req, res) => {
     const upd = [], args = [];
     if (alias !== undefined) { upd.push('alias = ?'); args.push(String(alias).trim()); }
     if (displayName !== undefined) { upd.push('display_name = ?'); args.push(String(displayName).trim()); }
+    let prevFamilyPhoto = null;
+    let nextFamilyPhoto = null;
+    let photoChanging = false;
     if (photoUrl !== undefined) {
-      const p = String(photoUrl).trim().slice(0, 500);
-      upd.push('photo_url = ?'); args.push(p || null);
+      photoChanging = true;
+      const [curF] = await getPool().query('SELECT photo_url FROM families WHERE id = ? LIMIT 1', [req.user.family_id]);
+      prevFamilyPhoto = curF[0]?.photo_url || null;
+      const raw = photoUrl === null || photoUrl === '' ? '' : String(photoUrl).trim().slice(0, 500);
+      nextFamilyPhoto = raw || null;
+      upd.push('photo_url = ?'); args.push(nextFamilyPhoto);
     }
     if (notice !== undefined) {
       const n = String(notice).trim();
@@ -918,11 +1139,235 @@ app.patch('/api/family', requireAdmin, async (req, res) => {
     if (!upd.length) return res.json({ ok: true });
     args.push(req.user.family_id);
     await getPool().query(`UPDATE families SET ${upd.join(', ')} WHERE id = ?`, args);
+    if (photoChanging && prevFamilyPhoto && prevFamilyPhoto !== nextFamilyPhoto) {
+      safeUnlinkFamilyFile(prevFamilyPhoto);
+    }
     res.json({ ok: true });
   } catch (e) {
     if (e.code === 'ER_DUP_ENTRY') return res.status(409).json({ error: 'alias-exists' });
     res.status(500).json({ error: 'internal', message: e.message });
   }
+});
+
+// ---------- 가족 사진 업로드 (관리자) ----------
+app.post(
+  '/api/family/photo',
+  requireAdmin,
+  (req, res, next) => {
+    familyPhotoUpload.single('photo')(req, res, (err) => {
+      if (err) {
+        const msg = err.message === 'invalid-image-type' ? '이미지 파일만 올릴 수 있어요'
+          : err.code === 'LIMIT_FILE_SIZE' ? '파일이 너무 커요 (2MB 이하)'
+          : (err.message || '업로드 실패');
+        return res.status(400).json({ error: 'upload-failed', message: msg });
+      }
+      if (!req.file) return res.status(400).json({ error: 'no-file', message: '파일이 없어요' });
+      next();
+    });
+  },
+  async (req, res) => {
+    try {
+      const [rows] = await getPool().query('SELECT photo_url FROM families WHERE id = ? LIMIT 1', [req.user.family_id]);
+      const prev = rows[0]?.photo_url || null;
+      const publicPath = `/uploads/profiles/${familySubDir(req)}/${req.file.filename}`;
+      await getPool().query('UPDATE families SET photo_url = ? WHERE id = ?', [publicPath, req.user.family_id]);
+      safeUnlinkFamilyFile(prev);
+      res.json({ ok: true, photoUrl: publicPath });
+    } catch (e) {
+      fs.unlink(req.file.path, () => {});
+      res.status(500).json({ error: 'internal', message: e.message });
+    }
+  }
+);
+
+// ---------- 가족 갤러리 ----------
+app.get('/api/gallery', requireAuth, async (req, res) => {
+  try {
+    const limit = Math.min(60, Math.max(1, Number(req.query.limit) || 24));
+    const before = Number(req.query.before) || 0;
+    const args = before > 0 ? [req.user.family_id, before] : [req.user.family_id];
+    const where = before > 0 ? 'WHERE g.family_id = ? AND g.id < ?' : 'WHERE g.family_id = ?';
+    const [rows] = await getPool().query(
+      `SELECT g.id, g.url, g.caption, g.created_at, g.uploader_id,
+              u.display_name AS uploader_name, u.icon AS uploader_icon, u.photo_url AS uploader_photo
+         FROM gallery_photos g
+         LEFT JOIN users u ON u.id = g.uploader_id
+         ${where}
+         ORDER BY g.id DESC
+         LIMIT ?`,
+      [...args, limit]
+    );
+    res.json(rows.map((r) => ({
+      id: r.id,
+      url: r.url,
+      caption: r.caption,
+      createdAt: r.created_at,
+      uploaderId: r.uploader_id,
+      uploaderName: r.uploader_name,
+      uploaderIcon: r.uploader_icon,
+      uploaderPhoto: r.uploader_photo,
+      canDelete: r.uploader_id === req.user.id || req.user.role === 'admin',
+    })));
+  } catch (e) { res.status(500).json({ error: 'internal', message: e.message }); }
+});
+
+app.post(
+  '/api/gallery',
+  requireAuth,
+  (req, res, next) => {
+    galleryUpload.single('photo')(req, res, (err) => {
+      if (err) {
+        const msg = err.message === 'invalid-image-type' ? '이미지 파일만 올릴 수 있어요'
+          : err.code === 'LIMIT_FILE_SIZE' ? '파일이 너무 커요 (3MB 이하)'
+          : (err.message || '업로드 실패');
+        return res.status(400).json({ error: 'upload-failed', message: msg });
+      }
+      if (!req.file) return res.status(400).json({ error: 'no-file', message: '파일이 없어요' });
+      next();
+    });
+  },
+  async (req, res) => {
+    try {
+      const caption = (req.body?.caption || '').toString().trim().slice(0, 300) || null;
+      const url = `/uploads/gallery/${familySubDir(req)}/${req.file.filename}`;
+      const [r] = await getPool().query(
+        'INSERT INTO gallery_photos (family_id, uploader_id, url, caption) VALUES (?, ?, ?, ?)',
+        [req.user.family_id, req.user.id, url, caption]
+      );
+      res.json({ ok: true, id: r.insertId, url, caption });
+    } catch (e) {
+      fs.unlink(req.file.path, () => {});
+      res.status(500).json({ error: 'internal', message: e.message });
+    }
+  }
+);
+
+app.delete('/api/gallery/:id', requireAuth, async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id)) return res.status(400).json({ error: 'bad-id' });
+    const [rows] = await getPool().query(
+      'SELECT id, url, uploader_id FROM gallery_photos WHERE id = ? AND family_id = ? LIMIT 1',
+      [id, req.user.family_id]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'not-found' });
+    const p = rows[0];
+    if (p.uploader_id !== req.user.id && req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'forbidden' });
+    }
+    await getPool().query('DELETE FROM gallery_photos WHERE id = ?', [id]);
+    safeUnlinkGalleryFile(p.url);
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: 'internal', message: e.message }); }
+});
+
+// ---------- 가족 채팅 ----------
+function mapChatRow(r) {
+  return {
+    id: r.id,
+    userId: r.user_id,
+    userName: r.user_name,
+    userIcon: r.user_icon,
+    userPhoto: r.user_photo,
+    text: r.text,
+    createdAt: r.created_at,
+  };
+}
+app.get('/api/chat', requireAuth, async (req, res) => {
+  try {
+    const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 50));
+    const before = Number(req.query.before) || 0;
+    const after = Number(req.query.after) || 0;
+    if (after > 0) {
+      const [rows] = await getPool().query(
+        `SELECT c.id, c.user_id, c.text, c.created_at,
+                u.display_name AS user_name, u.icon AS user_icon, u.photo_url AS user_photo
+           FROM chat_messages c
+           LEFT JOIN users u ON u.id = c.user_id
+          WHERE c.family_id = ? AND c.id > ?
+          ORDER BY c.id ASC LIMIT ?`,
+        [req.user.family_id, after, limit]
+      );
+      return res.json(rows.map(mapChatRow));
+    }
+    const args = before > 0 ? [req.user.family_id, before] : [req.user.family_id];
+    const where = before > 0 ? 'WHERE c.family_id = ? AND c.id < ?' : 'WHERE c.family_id = ?';
+    const [rows] = await getPool().query(
+      `SELECT c.id, c.user_id, c.text, c.created_at,
+              u.display_name AS user_name, u.icon AS user_icon, u.photo_url AS user_photo
+         FROM chat_messages c
+         LEFT JOIN users u ON u.id = c.user_id
+         ${where}
+         ORDER BY c.id DESC LIMIT ?`,
+      [...args, limit]
+    );
+    // 클라이언트는 오래된 것부터 아래로 렌더 → 뒤집어서 응답
+    res.json(rows.reverse().map(mapChatRow));
+  } catch (e) { res.status(500).json({ error: 'internal', message: e.message }); }
+});
+
+app.post('/api/chat', requireAuth, async (req, res) => {
+  try {
+    const text = (req.body?.text || '').toString().trim();
+    if (!text) return res.status(400).json({ error: 'empty' });
+    if (text.length > 1000) return res.status(400).json({ error: 'too-long', message: '1000자 이하로 작성해 주세요' });
+    const [r] = await getPool().query(
+      'INSERT INTO chat_messages (family_id, user_id, text) VALUES (?, ?, ?)',
+      [req.user.family_id, req.user.id, text]
+    );
+    // 보낸 사람도 자기 메시지까지 읽음 처리
+    await getPool().query(
+      `INSERT INTO chat_reads (user_id, family_id, last_read_id) VALUES (?, ?, ?)
+         ON DUPLICATE KEY UPDATE last_read_id = GREATEST(last_read_id, VALUES(last_read_id))`,
+      [req.user.id, req.user.family_id, r.insertId]
+    );
+    res.json({ ok: true, id: r.insertId });
+  } catch (e) { res.status(500).json({ error: 'internal', message: e.message }); }
+});
+
+app.delete('/api/chat/:id', requireAuth, async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id)) return res.status(400).json({ error: 'bad-id' });
+    const [rows] = await getPool().query(
+      'SELECT user_id FROM chat_messages WHERE id = ? AND family_id = ? LIMIT 1',
+      [id, req.user.family_id]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'not-found' });
+    if (rows[0].user_id !== req.user.id && req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'forbidden' });
+    }
+    await getPool().query('DELETE FROM chat_messages WHERE id = ?', [id]);
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: 'internal', message: e.message }); }
+});
+
+app.get('/api/chat/unread', requireAuth, async (req, res) => {
+  try {
+    const [rows] = await getPool().query(
+      `SELECT last_read_id FROM chat_reads WHERE user_id = ? AND family_id = ? LIMIT 1`,
+      [req.user.id, req.user.family_id]
+    );
+    const lastRead = rows[0]?.last_read_id || 0;
+    const [cnt] = await getPool().query(
+      `SELECT COUNT(*) AS c, MAX(id) AS maxId FROM chat_messages
+        WHERE family_id = ? AND id > ? AND user_id != ?`,
+      [req.user.family_id, lastRead, req.user.id]
+    );
+    res.json({ unread: cnt[0].c || 0, lastId: cnt[0].maxId || lastRead, lastRead });
+  } catch (e) { res.status(500).json({ error: 'internal', message: e.message }); }
+});
+
+app.post('/api/chat/read', requireAuth, async (req, res) => {
+  try {
+    const lastId = Number(req.body?.lastId) || 0;
+    await getPool().query(
+      `INSERT INTO chat_reads (user_id, family_id, last_read_id) VALUES (?, ?, ?)
+         ON DUPLICATE KEY UPDATE last_read_id = GREATEST(last_read_id, VALUES(last_read_id))`,
+      [req.user.id, req.user.family_id, lastId]
+    );
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: 'internal', message: e.message }); }
 });
 
 app.get('/api/notice/history', requireAuth, async (req, res) => {
@@ -2138,6 +2583,20 @@ function daysUntil(m, d) {
 }
 
 // ---------- 정적 서빙 ----------
+app.use('/uploads/profiles', express.static(PROFILE_PHOTOS_DIR, {
+  maxAge: '0',
+  index: false,
+  fallthrough: true,
+  setHeaders: (res) => {
+    res.setHeader('Cache-Control', 'private, no-cache');
+  },
+}));
+app.use('/uploads/gallery', express.static(GALLERY_DIR, {
+  maxAge: '7d',
+  immutable: true,
+  index: false,
+  fallthrough: true,
+}));
 app.use(express.static(path.join(__dirname, 'public'), {
   etag: true,
   maxAge: '1h',
@@ -2158,6 +2617,9 @@ app.get('*', (_req, res) => {
 app.use((err, _req, res, _next) => {
   console.error('[api error]', err);
   if (res.headersSent) return;
+  if (err instanceof multer.MulterError) {
+    return res.status(400).json({ error: 'upload-failed', message: err.code === 'LIMIT_FILE_SIZE' ? '파일이 너무 커요 (1MB 이하)' : err.message });
+  }
   res.status(500).json({ error: 'internal', message: err.message });
 });
 
