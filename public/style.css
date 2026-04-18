@@ -840,81 +840,67 @@ body.tod-night .hero-weather { color: rgba(242,242,247,.8); }
   line-height: 1.4;
 }
 
-/* ========== 계산기 (pill UI — 네이티브 select 제거) ========== */
-.calc-sub {
-  display: block;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--sub);
-  margin: 4px 0 8px;
-}
-.calc-pills {
-  display: flex;
-  gap: 6px;
-  margin-bottom: 10px;
-}
-.calc-pill {
-  flex: 1 1 0;
-  min-width: 0;
-  height: 48px;
-  border: 1.5px solid var(--line);
-  border-radius: var(--r-sm);
-  background: var(--card);
-  color: var(--text);
-  font-family: inherit;
-  font-size: 16px;
-  font-weight: 700;
-  cursor: pointer;
-  transition: all .12s;
-}
-.calc-pill.active {
-  background: var(--primary);
-  color: #fff;
-  border-color: var(--primary);
-}
-.calc-pill:active { transform: scale(.97); }
-
-.calc-input-full {
-  width: 100%;
-  height: 68px;
+/* ========== 계산기 (select + row 복원) ========== */
+.calc-row { display: flex; gap: 10px; align-items: stretch; min-width: 0; }
+.calc-input, .calc-sel {
+  height: 64px;
   border-radius: var(--r-sm);
   border: 1.5px solid var(--line);
   background: var(--bg);
   color: var(--text);
-  font-size: 26px;
-  font-weight: 800;
-  padding: 0 18px;
+  font-size: 20px;
+  padding: 0 14px;
   outline: none;
-  text-align: right;
-  letter-spacing: -0.5px;
+  min-width: 0;
 }
-.calc-input-full:focus { border-color: var(--primary); background: var(--card); }
-
-.calc-result-full {
-  width: 100%;
-  height: 68px;
-  border-radius: var(--r-sm);
-  background: linear-gradient(135deg, rgba(10,132,255,.08), rgba(90,200,250,.1));
-  color: var(--primary);
-  font-size: 32px;
-  font-weight: 800;
-  letter-spacing: -0.6px;
-  padding: 0 18px;
+.calc-input { flex: 1 1 0; font-weight: 700; text-align: right; letter-spacing: -0.4px; font-size: 22px; }
+.calc-input:focus { border-color: var(--primary); background: var(--card); }
+.calc-sel {
+  flex: 0 0 96px;
+  width: 96px;
+  max-width: 96px;
+  font-size: 18px;
+  font-weight: 700;
+  padding: 0 8px 0 12px;
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'><path fill='none' stroke='%236E6E73' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' d='M3 4.5l3 3 3-3'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  padding-right: 28px;
+  cursor: pointer;
+}
+.calc-result {
+  flex: 1 1 0;
   display: flex;
   align-items: center;
   justify-content: flex-end;
+  height: 64px;
+  padding: 0 14px;
+  border-radius: var(--r-sm);
+  background: linear-gradient(135deg, rgba(10,132,255,.08), rgba(90,200,250,.1));
+  color: var(--primary);
+  font-size: 30px;
+  font-weight: 800;
+  letter-spacing: -0.6px;
   overflow: hidden;
+  min-width: 0;
+}
+@media (max-width: 360px) {
+  .calc-sel { flex: 0 0 84px; width: 84px; font-size: 16px; }
+  .calc-input { font-size: 20px; padding: 0 10px; }
+  .calc-result { font-size: 26px; padding: 0 10px; }
 }
 .calc-swap {
   display: block;
-  margin: 12px auto;
-  width: 52px; height: 52px;
+  margin: 10px auto;
+  width: 48px; height: 48px;
   border-radius: 50%;
   border: 1.5px solid var(--line);
   background: var(--card);
   color: var(--primary);
-  font-size: 26px;
-  font-weight: 600;
+  font-size: 22px;
+  font-weight: 700;
   cursor: pointer;
   transition: transform .25s;
 }
@@ -1188,6 +1174,16 @@ body.tod-night .hero-weather { color: rgba(242,242,247,.8); }
 #app.scale-md { zoom: 1;    }
 #app.scale-lg { zoom: 1.12; }
 
+.account-menu { display: flex; flex-direction: column; gap: 8px; }
+.account-menu-btn {
+  width: 100%; height: 48px;
+  border: 1.5px solid var(--line); border-radius: var(--r-sm);
+  background: var(--card); color: var(--text);
+  font-size: 15px; font-weight: 600; cursor: pointer;
+  font-family: inherit;
+}
+.account-menu-btn:active { background: var(--bg); transform: scale(.99); }
+.account-menu-btn.danger { color: var(--bad); }
 .account-logout {
   width: 100%; height: 48px;
   border: 1.5px solid var(--line); border-radius: var(--r-sm);
@@ -1195,6 +1191,49 @@ body.tod-night .hero-weather { color: rgba(242,242,247,.8); }
   font-size: 15px; font-weight: 600; cursor: pointer;
 }
 .account-logout:active { background: var(--bg); transform: scale(.99); }
+
+/* ========== 설정 화면 ========== */
+.settings-screen { padding-top: 12px; }
+.settings-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 4px 20px;
+}
+.settings-head .auth-back { position: static; padding: 6px 10px; }
+.settings-title {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+}
+
+/* ========== 카드 순서 편집 모드 ========== */
+body.reorder-mode #app [data-card-id] {
+  outline: 2px dashed rgba(10,132,255,.4);
+  outline-offset: -2px;
+  position: relative;
+}
+.reorder-actions {
+  position: absolute;
+  top: 6px; right: 6px;
+  display: flex; gap: 4px;
+  z-index: 5;
+}
+.reo-btn {
+  width: 40px; height: 40px;
+  border: none;
+  border-radius: 50%;
+  background: var(--primary);
+  color: #fff;
+  font-size: 20px;
+  font-weight: 800;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(0,0,0,.15);
+}
+.reo-btn:active { transform: scale(.92); }
+body.reorder-mode #app .card { padding-top: 28px; }
+body.reorder-mode #app #birthdayBanner { padding-top: 28px; }
 
 /* ========== 프로필 시트 ========== */
 .sheet-backdrop {
@@ -1259,6 +1298,83 @@ body.tod-night .hero-weather { color: rgba(242,242,247,.8); }
   background: var(--primary); color: #fff;
   font-size: 17px; font-weight: 600; cursor: pointer;
 }
+
+/* ========== 메모 중요(별표) ========== */
+.memo-star {
+  background: none;
+  border: none;
+  font-size: 22px;
+  cursor: pointer;
+  padding: 6px 4px;
+  color: var(--sub);
+  transition: transform .15s;
+}
+.memo-star.on { color: #FFCC00; }
+.memo-star:active { transform: scale(1.2) rotate(20deg); }
+li.memo-important {
+  background: linear-gradient(90deg, rgba(255,204,0,.08), transparent 70%);
+  border-radius: 10px;
+  padding-left: 10px;
+  margin-left: -10px;
+}
+li.memo-important .memo-text { font-weight: 700; }
+
+/* ========== 어제 답변 좋아요 ========== */
+.heart-btn {
+  margin-top: 8px;
+  border: 1.5px solid var(--line);
+  background: var(--card);
+  border-radius: 999px;
+  padding: 5px 14px 5px 10px;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--sub);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: transform .15s, border-color .15s;
+}
+.heart-btn.on {
+  border-color: #FF3B30;
+  color: #FF3B30;
+  background: rgba(255,59,48,.06);
+}
+.heart-btn:active { transform: scale(.94); }
+.heart-btn.pop { animation: heart-pop .4s ease-out; }
+@keyframes heart-pop {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.18); }
+  100% { transform: scale(1); }
+}
+.heart-ico { font-size: 16px; line-height: 1; }
+
+/* ========== 맨 위로 FAB ========== */
+.to-top-fab {
+  position: fixed;
+  right: 18px;
+  bottom: calc(18px + env(safe-area-inset-bottom));
+  width: 54px; height: 54px;
+  border-radius: 50%;
+  border: none;
+  background: var(--primary);
+  color: #fff;
+  font-size: 24px;
+  font-weight: 800;
+  cursor: pointer;
+  box-shadow: 0 4px 16px rgba(10,132,255,.35);
+  z-index: 900;
+  transition: opacity .25s, transform .2s;
+  opacity: 1;
+}
+.to-top-fab.hidden {
+  display: flex !important;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(20px);
+}
+.to-top-fab:active { transform: scale(.92); }
 
 /* ========== Footer ========== */
 .foot { text-align: center; padding: 12px 0 10px; }

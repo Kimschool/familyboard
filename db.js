@@ -81,9 +81,21 @@ async function ensureSchema() {
   await ensureColumn('users', 'invite_expires_at', 'DATETIME NULL');
   await changeColumn('users', 'password_hash', 'VARCHAR(255) NULL'); // 초대대기 허용
   await ensureColumn('memos', 'family_id', 'INT NULL');
+  await ensureColumn('memos', 'important', 'TINYINT(1) NOT NULL DEFAULT 0');
   await ensureColumn('families', 'notice', 'VARCHAR(500) NULL');
   await ensureColumn('families', 'notice_updated_at', 'DATETIME NULL');
   await ensureColumn('families', 'notice_updated_by', 'INT NULL');
+
+  await p.query(`
+    CREATE TABLE IF NOT EXISTS answer_reactions (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      answer_id INT NOT NULL,
+      user_id INT NOT NULL,
+      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE KEY uq_answer_user (answer_id, user_id),
+      INDEX idx_answer (answer_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  `);
 
   // 기본 가족 보장
   const [f] = await p.query('SELECT id FROM families LIMIT 1');

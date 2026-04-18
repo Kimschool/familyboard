@@ -82,7 +82,7 @@ function api(path, opts = {}) {
 }
 
 function showOnly(id) {
-  ['invite','step1','step2','step3','app'].forEach((x) => {
+  ['invite','step1','step2','step3','app','settings'].forEach((x) => {
     const el = $(x); if (el) el.classList.toggle('hidden', x !== id);
   });
 }
@@ -258,17 +258,31 @@ function enterApp() {
   loadTodayQuestion();
   loadYesterdayReveal();
 
-  // 관리자 UI (에러 나도 위 카드에 영향 없게)
+  // 관리자 UI — 설정 화면으로 이동 (계정 카드의 '가족 관리' 버튼으로 열림)
   try {
     if (ME.role === 'admin') {
-      $('adminCard').classList.remove('hidden');
+      $('openSettingsBtn').classList.remove('hidden');
+      migrateAdminToSettings();
       loadUsers();
       loadFamilyInfo();
       renderIconPicker();
-    } else {
-      $('adminCard')?.classList.add('hidden');
     }
   } catch (e) { console.warn('[admin ui]', e); }
+
+  applyCardOrder();
+}
+
+// 관리자 DOM을 설정 화면 body 로 한 번만 이동
+let adminMigrated = false;
+function migrateAdminToSettings() {
+  if (adminMigrated) return;
+  const body = document.getElementById('adminBody');
+  const target = document.getElementById('settingsBody');
+  if (body && target) {
+    body.classList.remove('hidden');
+    target.appendChild(body);
+    adminMigrated = true;
+  }
 }
 
 // ---------- Hero ----------
@@ -291,18 +305,6 @@ function renderHero() {
   document.body.classList.add('tod-' + tod);
 }
 
-function updateHeroWeather(w) {
-  const el = $('heroWeather');
-  if (!el || !w) return;
-  const tag = w.temp <= 5 ? '추운'
-    : w.temp <= 12 ? '쌀쌀한'
-    : w.temp <= 20 ? '선선한'
-    : w.temp <= 26 ? '따뜻한' : '더운';
-  const icon = WMO_ICON[w.code] || '🌤️';
-  const rain = w.rainProb >= 60 ? ' · 비 확률 높음' : '';
-  el.textContent = `${icon} ${tag} ${w.temp}°, ${WMO[w.code] || ''}${rain}`;
-  el.classList.remove('hidden');
-}
 
 function renderAccount() {
   $('accountAvatar').textContent = iconEmoji(ME.icon);
@@ -318,9 +320,16 @@ $('logoutBtn').addEventListener('click', async () => {
 });
 
 // ---------- 우리 가족 요약 ----------
-function koreanAge(birthYear) {
+function koreanAge(birthYear, birthMonth, birthDay) {
   if (!birthYear) return null;
-  return new Date().getFullYear() - Number(birthYear) + 1;
+  const now = new Date();
+  let age = now.getFullYear() - Number(birthYear);
+  // 생일 지났는지 판정 (월/일 있으면 반영, 없으면 그냥 해 차이)
+  if (birthMonth && birthDay) {
+    const thisYearBirthday = new Date(now.getFullYear(), birthMonth - 1, birthDay);
+    if (now < thisYearBirthday) age -= 1;
+  }
+  return age;
 }
 
 function relativeTime(dateStr) {
@@ -347,7 +356,7 @@ async function loadFamilySummary() {
     const row = $('familyRow');
     row.innerHTML = '';
     for (const m of r.members) {
-      const age = koreanAge(m.birthYear);
+      const age = koreanAge(m.birthYear, m.birthMonth, m.birthDay);
       const badge = document.createElement('button');
       badge.type = 'button';
       badge.className = 'family-badge' + (m.id === ME.id ? ' me' : '') + (m.activated ? '' : ' dim');
@@ -364,7 +373,7 @@ async function loadFamilySummary() {
 }
 
 function openProfileSheet(m) {
-  const age = koreanAge(m.birthYear);
+  const age = koreanAge(m.birthYear, m.birthMonth, m.birthDay);
   $('profAvatar').textContent = iconEmoji(m.icon);
   $('profName').textContent = m.displayName + (m.id === ME.id ? ' (나)' : '');
   $('profMeta').textContent = m.role === 'admin' ? '관리자' : '가족';
@@ -474,7 +483,6 @@ async function loadWeatherAndAir() {
     $('wMin').textContent  = `${w.min}°`;
     $('wFeel').textContent = `${w.feels}°`;
     $('wHum').textContent  = `${w.humidity}%`;
-    updateHeroWeather(w);
     if (w.tomorrow) {
       $('tmIcon').textContent = WMO_ICON[w.tomorrow.code] || '🌤️';
       $('tmMax').textContent = `${w.tomorrow.max}°`;
@@ -557,21 +565,10 @@ async function loadFx() {
     $('fxJpyKrw').textContent = $('fxUsdJpy').textContent = $('fxUsdKrw').textContent = '—';
   }
 }
-let CALC_FROM = 'JPY', CALC_TO = 'KRW';
-function highlightPills() {
-  document.querySelectorAll('#calcFromGroup .calc-pill').forEach((b) =>
-    b.classList.toggle('active', b.dataset.c === CALC_FROM));
-  document.querySelectorAll('#calcToGroup .calc-pill').forEach((b) =>
-    b.classList.toggle('active', b.dataset.c === CALC_TO));
-}
-document.querySelectorAll('#calcFromGroup .calc-pill').forEach((b) => {
-  b.addEventListener('click', () => { CALC_FROM = b.dataset.c; highlightPills(); calcUpdate(); });
+['calcAmt','calcFrom','calcTo'].forEach((id) => {
+  $(id).addEventListener('input', calcUpdate);
+  $(id).addEventListener('change', calcUpdate);
 });
-document.querySelectorAll('#calcToGroup .calc-pill').forEach((b) => {
-  b.addEventListener('click', () => { CALC_TO = b.dataset.c; highlightPills(); calcUpdate(); });
-});
-highlightPills();
-$('calcAmt').addEventListener('input', calcUpdate);
 document.querySelectorAll('.calc-preset').forEach((btn) => {
   btn.addEventListener('click', () => {
     $('calcAmt').value = btn.dataset.amt;
@@ -579,21 +576,24 @@ document.querySelectorAll('.calc-preset').forEach((btn) => {
   });
 });
 $('calcSwap').addEventListener('click', () => {
-  const t = CALC_FROM; CALC_FROM = CALC_TO; CALC_TO = t;
+  const fromSel = $('calcFrom'), toSel = $('calcTo');
+  const fv = fromSel.value;
+  fromSel.value = toSel.value;
+  toSel.value = fv;
   const resultText = $('calcResult').textContent.replace(/[^\d.-]/g, '');
   const n = parseFloat(resultText);
   if (Number.isFinite(n)) $('calcAmt').value = Math.round(n);
-  highlightPills();
   calcUpdate();
 });
 function calcUpdate() {
   const amt = parseFloat($('calcAmt').value);
+  const from = $('calcFrom').value, to = $('calcTo').value;
   if (!fxCache || !Number.isFinite(amt)) { $('calcResult').textContent = '—'; return; }
   const r = fxCache.rates;
-  const usd = CALC_FROM === 'USD' ? amt : amt / r[CALC_FROM];
-  const out = CALC_TO === 'USD' ? usd : usd * r[CALC_TO];
-  const sym = CALC_TO === 'KRW' ? '원' : CALC_TO === 'JPY' ? '엔' : '$';
-  const digits = CALC_TO === 'USD' ? 2 : 0;
+  const usd = from === 'USD' ? amt : amt / r[from];
+  const out = to === 'USD' ? usd : usd * r[to];
+  const sym = to === 'KRW' ? '원' : to === 'JPY' ? '엔' : '$';
+  const digits = to === 'USD' ? 2 : 0;
   $('calcResult').textContent = fmt.format(Number(out.toFixed(digits))) + sym;
 }
 
@@ -614,6 +614,7 @@ function renderMemos(list) {
   }
   for (const m of list) {
     const li = document.createElement('li');
+    li.className = m.important ? 'memo-important' : '';
     li.innerHTML = `
       <button class="memo-check ${m.done ? 'done' : ''}" aria-label="완료"></button>
       <div class="memo-body">
@@ -624,6 +625,7 @@ function renderMemos(list) {
           <span class="memo-time"></span>
         </span>
       </div>
+      <button class="memo-star ${m.important ? 'on' : ''}" aria-label="중요">${m.important ? '⭐' : '☆'}</button>
       <button class="memo-del" aria-label="삭제">✕</button>`;
     li.querySelector('.memo-text').textContent = m.content;
     if (m.created_by_name) {
@@ -640,7 +642,12 @@ function renderMemos(list) {
       await api(`/api/memos/${m.id}`, { method: 'PATCH', body: JSON.stringify({ done: !m.done }) });
       loadMemos();
     };
+    li.querySelector('.memo-star').onclick = async () => {
+      await api(`/api/memos/${m.id}`, { method: 'PATCH', body: JSON.stringify({ important: !m.important }) });
+      loadMemos();
+    };
     li.querySelector('.memo-del').onclick = async () => {
+      if (!confirm('이 메모를 삭제할까요?')) return;
       await api(`/api/memos/${m.id}`, { method: 'DELETE' });
       loadMemos();
     };
@@ -748,11 +755,83 @@ async function loadZodiac() {
   } catch {}
 }
 
-// ---------- 가족 관리 (관리자) ----------
-$('adminToggle').addEventListener('click', () => {
-  $('adminBody').classList.toggle('hidden');
-  $('adminToggle').classList.toggle('open');
-});
+// ---------- 설정 화면 열기/닫기 ----------
+$('openSettingsBtn').addEventListener('click', () => { showOnly('settings'); window.scrollTo(0, 0); });
+$('settingsBack').addEventListener('click', () => { showOnly('app'); });
+
+// ---------- 카드 순서 편집 ----------
+const DEFAULT_CARD_ORDER = [
+  'notice','upcoming','family','birthday','weather','tips',
+  'reveal','question','zodiac','fx','calc','memo','account'
+];
+function loadCardOrder() {
+  try {
+    const saved = JSON.parse(localStorage.getItem('fb_card_order') || 'null');
+    if (!Array.isArray(saved)) return DEFAULT_CARD_ORDER.slice();
+    // 누락된 카드 뒤에 추가
+    for (const k of DEFAULT_CARD_ORDER) if (!saved.includes(k)) saved.push(k);
+    return saved;
+  } catch { return DEFAULT_CARD_ORDER.slice(); }
+}
+function saveCardOrder(order) { localStorage.setItem('fb_card_order', JSON.stringify(order)); }
+
+function applyCardOrder() {
+  const app = $('app');
+  const order = loadCardOrder();
+  const cards = new Map();
+  app.querySelectorAll('[data-card-id]').forEach((el) => cards.set(el.dataset.cardId, el));
+  // hero 바로 뒤부터 순서대로 이동
+  const hero = app.querySelector('.hero');
+  let anchor = hero;
+  for (const id of order) {
+    const el = cards.get(id);
+    if (!el) continue;
+    anchor.after(el);
+    anchor = el;
+  }
+}
+
+let REORDER_MODE = false;
+function setReorderMode(on) {
+  REORDER_MODE = on;
+  document.body.classList.toggle('reorder-mode', on);
+  $('reorderToggleBtn').textContent = on ? '✅ 순서 저장' : '🧩 카드 순서 편집';
+  // 각 카드에 ↑↓ 버튼 삽입/제거
+  document.querySelectorAll('#app [data-card-id]').forEach((el) => {
+    el.querySelector('.reorder-actions')?.remove();
+    if (!on) return;
+    if (el.dataset.cardId === 'account') return; // 계정 카드는 고정
+    const box = document.createElement('div');
+    box.className = 'reorder-actions';
+    box.innerHTML = '<button class="reo-btn" data-dir="up">↑</button><button class="reo-btn" data-dir="down">↓</button>';
+    el.appendChild(box);
+    box.addEventListener('click', (e) => {
+      const b = e.target.closest('.reo-btn'); if (!b) return;
+      moveCard(el, b.dataset.dir);
+    });
+  });
+}
+function moveCard(el, dir) {
+  const parent = el.parentElement;
+  // 스크롤 보존
+  const y = el.getBoundingClientRect().top;
+  if (dir === 'up') {
+    let prev = el.previousElementSibling;
+    while (prev && !prev.dataset.cardId) prev = prev.previousElementSibling;
+    if (prev && prev.dataset.cardId !== 'account') parent.insertBefore(el, prev);
+  } else {
+    let next = el.nextElementSibling;
+    while (next && !next.dataset.cardId) next = next.nextElementSibling;
+    if (next && next.dataset.cardId !== 'account') parent.insertBefore(next, el);
+  }
+  // 저장
+  const ids = Array.from(parent.querySelectorAll('[data-card-id]')).map((n) => n.dataset.cardId);
+  saveCardOrder(ids);
+  // 스크롤 따라가기
+  const y2 = el.getBoundingClientRect().top;
+  window.scrollBy(0, y2 - y);
+}
+$('reorderToggleBtn').addEventListener('click', () => setReorderMode(!REORDER_MODE));
 
 async function loadFamilyInfo() {
   try {
@@ -1054,9 +1133,23 @@ async function loadYesterdayReveal() {
         <div class="reveal-body">
           <div class="reveal-name"></div>
           <div class="reveal-answer"></div>
+          <button class="heart-btn ${a.my_heart ? 'on' : ''}" aria-label="좋아요">
+            <span class="heart-ico">${a.my_heart ? '❤️' : '🤍'}</span>
+            <span class="heart-cnt">${a.heart_count || 0}</span>
+          </button>
         </div>`;
       li.querySelector('.reveal-name').textContent = a.display_name + '님';
       li.querySelector('.reveal-answer').textContent = a.answer_text;
+      const hb = li.querySelector('.heart-btn');
+      hb.onclick = async () => {
+        try {
+          const res = await api(`/api/answer/${a.answer_id}/heart`, { method: 'POST' });
+          hb.classList.toggle('on', !!res.myHeart);
+          hb.querySelector('.heart-ico').textContent = res.myHeart ? '❤️' : '🤍';
+          hb.querySelector('.heart-cnt').textContent = res.count;
+          hb.classList.remove('pop'); void hb.offsetWidth; hb.classList.add('pop');
+        } catch {}
+      };
       ul.appendChild(li);
     }
     $('revealCard').classList.remove('hidden');
@@ -1193,5 +1286,14 @@ document.querySelectorAll('.fs-btn').forEach((b) => {
 });
 // 초기값 로드 (enterApp 후 적용되도록 setTimeout)
 setTimeout(() => applyFontScale(localStorage.getItem('fb_font_scale') || 'md'), 0);
+
+// ---------- 맨 위로 FAB ----------
+const toTop = document.getElementById('toTopFab');
+if (toTop) {
+  window.addEventListener('scroll', () => {
+    toTop.classList.toggle('hidden', window.scrollY < 400);
+  }, { passive: true });
+  toTop.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }));
+}
 
 boot();

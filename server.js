@@ -53,7 +53,7 @@ app.get('/api/family/:alias', async (req, res) => {
     );
     if (!f.length) return res.status(404).json({ error: 'not-found' });
     const [users] = await getPool().query(
-      `SELECT id, display_name, icon, role, birth_year,
+      `SELECT id, display_name, icon, role, birth_year, birth_month, birth_day,
               (password_hash IS NOT NULL) AS activated
          FROM users WHERE family_id = ?
          ORDER BY role DESC, id ASC`,
@@ -67,6 +67,8 @@ app.get('/api/family/:alias', async (req, res) => {
         icon: u.icon,
         role: u.role,
         birthYear: u.birth_year,
+        birthMonth: u.birth_month,
+        birthDay: u.birth_day,
         activated: !!u.activated,
       })),
     });
@@ -412,11 +414,11 @@ app.get('/api/fx', async (_req, res) => {
 // ---------- 메모 (가족 단위) ----------
 app.get('/api/memos', requireAuth, async (req, res) => {
   const [rows] = await getPool().query(
-    `SELECT m.id, m.content, m.done, m.created_at,
+    `SELECT m.id, m.content, m.done, m.important, m.created_at,
             COALESCE(u.display_name, '') AS created_by_name, u.icon AS created_by_icon
        FROM memos m LEFT JOIN users u ON u.id = m.created_by
       WHERE m.family_id = ?
-      ORDER BY m.done ASC, m.id DESC LIMIT 100`,
+      ORDER BY m.done ASC, m.important DESC, m.id DESC LIMIT 100`,
     [req.user.family_id]
   );
   res.json(rows);
@@ -437,10 +439,14 @@ app.post('/api/memos', requireAuth, async (req, res) => {
 app.patch('/api/memos/:id', requireAuth, async (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'bad-id' });
-  const done = req.body?.done ? 1 : 0;
+  const updates = [];
+  const args = [];
+  if (req.body?.done !== undefined)      { updates.push('done = ?');      args.push(req.body.done ? 1 : 0); }
+  if (req.body?.important !== undefined) { updates.push('important = ?'); args.push(req.body.important ? 1 : 0); }
+  if (!updates.length) return res.json({ ok: true });
+  args.push(id, req.user.family_id);
   await getPool().query(
-    'UPDATE memos SET done = ? WHERE id = ? AND family_id = ?',
-    [done, id, req.user.family_id]
+    `UPDATE memos SET ${updates.join(', ')} WHERE id = ? AND family_id = ?`, args
   );
   res.json({ ok: true });
 });
@@ -586,12 +592,46 @@ app.get('/api/question/yesterday', requireAuth, async (req, res) => {
     if (!qrows.length) return res.json({ date: y, question: null, answers: [] });
     const q = qrows[0];
     const [ans] = await getPool().query(
-      `SELECT a.answer_text, a.user_id, u.display_name, u.icon
+      `SELECT a.id AS answer_id, a.answer_text, a.user_id, u.display_name, u.icon,
+              (SELECT COUNT(*) FROM answer_reactions r WHERE r.answer_id = a.id) AS heart_count,
+              (SELECT COUNT(*) FROM answer_reactions r WHERE r.answer_id = a.id AND r.user_id = ?) AS my_heart
          FROM daily_answers a JOIN users u ON u.id = a.user_id
         WHERE a.question_id = ? ORDER BY a.created_at ASC`,
-      [q.id]
+      [req.user.id, q.id]
     );
     res.json({ date: y, question: q.question_text, answers: ans });
+  } catch (e) { res.status(500).json({ error: 'internal', message: e.message }); }
+});
+
+app.post('/api/answer/:id/heart', requireAuth, async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id)) return res.status(400).json({ error: 'bad-id' });
+    // 같은 가족의 답변만 반응 가능
+    const [check] = await getPool().query(
+      `SELECT a.id FROM daily_answers a
+         JOIN daily_questions q ON q.id = a.question_id
+        WHERE a.id = ? AND q.family_id = ? LIMIT 1`,
+      [id, req.user.family_id]
+    );
+    if (!check.length) return res.status(404).json({ error: 'not-found' });
+
+    const [existing] = await getPool().query(
+      'SELECT id FROM answer_reactions WHERE answer_id = ? AND user_id = ? LIMIT 1',
+      [id, req.user.id]
+    );
+    if (existing.length) {
+      await getPool().query('DELETE FROM answer_reactions WHERE id = ?', [existing[0].id]);
+    } else {
+      await getPool().query(
+        'INSERT INTO answer_reactions (answer_id, user_id) VALUES (?, ?)',
+        [id, req.user.id]
+      );
+    }
+    const [cnt] = await getPool().query(
+      'SELECT COUNT(*) AS c FROM answer_reactions WHERE answer_id = ?', [id]
+    );
+    res.json({ ok: true, myHeart: existing.length ? 0 : 1, count: cnt[0].c });
   } catch (e) { res.status(500).json({ error: 'internal', message: e.message }); }
 });
 
