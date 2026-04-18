@@ -640,6 +640,58 @@ body.tod-night .hero-weather { color: rgba(242,242,247,.8); }
   font-family: inherit;
 }
 
+/* ========== 주간 가족 요약 ========== */
+.weekly-card {
+  background: linear-gradient(135deg, #F2F7FF 0%, #F8F0FF 100%);
+}
+@media (prefers-color-scheme: dark) {
+  .weekly-card { background: linear-gradient(135deg, #1A2030 0%, #251A30 100%); }
+}
+.weekly-card .card-title { color: #4A6FA5; }
+@media (prefers-color-scheme: dark) { .weekly-card .card-title { color: #99B5DC; } }
+.weekly-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.wk-tile {
+  background: rgba(255,255,255,.8);
+  border-radius: 14px;
+  padding: 12px 8px;
+  text-align: center;
+}
+@media (prefers-color-scheme: dark) { .wk-tile { background: rgba(255,255,255,.06); } }
+.wk-emoji { font-size: 22px; line-height: 1; }
+.wk-value {
+  font-size: 26px;
+  font-weight: 800;
+  color: var(--primary);
+  line-height: 1.2;
+  margin-top: 4px;
+  letter-spacing: -0.5px;
+}
+.wk-label { font-size: 12px; color: var(--sub); margin-top: 2px; font-weight: 600; }
+.weekly-tops { padding: 4px 2px; }
+.wk-top {
+  margin: 0 0 4px;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text);
+}
+.wk-top b { color: var(--primary); font-weight: 700; }
+
+/* 어제 답변 작성 시각 */
+.reveal-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.reveal-time {
+  font-size: 11px;
+  color: var(--sub);
+  background: var(--bg);
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-weight: 600;
+}
+
 /* ========== 월간 가족 달력 ========== */
 .calendar-card { overflow: hidden; }
 .cal-nav { display: flex; gap: 4px; align-items: center; }

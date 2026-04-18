@@ -275,6 +275,7 @@ function enterApp() {
   loadStickers();
   loadMyStreak();
   loadMeds();
+  loadWeeklyReport();
 
   // 관리자 UI — 설정 화면으로 이동 (계정 카드의 '가족 관리' 버튼으로 열림)
   try {
@@ -838,6 +839,50 @@ function renderMoodFamily(members) {
     d.querySelector('.mood-chip-name').textContent = m.displayName;
     row.appendChild(d);
   }
+}
+
+// ---------- 주간 가족 요약 ----------
+async function loadWeeklyReport() {
+  try {
+    const r = await api('/api/activity/week');
+    const total = (r.answers?.total || 0) + (r.memos?.total || 0) + (r.stickers?.total || 0) + (r.moodCheckins || 0);
+    if (total === 0) { $('weeklyCard').classList.add('hidden'); return; }
+
+    const grid = $('weeklyGrid');
+    grid.innerHTML = '';
+    const tiles = [
+      { emoji: '💬', label: '답변', value: r.answers?.total || 0 },
+      { emoji: '📝', label: '메모', value: r.memos?.total || 0 },
+      { emoji: '💖', label: '응원', value: r.stickers?.total || 0 },
+      { emoji: '😊', label: '기분', value: r.moodCheckins || 0 },
+    ];
+    for (const t of tiles) {
+      const div = document.createElement('div');
+      div.className = 'wk-tile';
+      div.innerHTML = `
+        <div class="wk-emoji">${t.emoji}</div>
+        <div class="wk-value">${t.value}</div>
+        <div class="wk-label"></div>`;
+      div.querySelector('.wk-label').textContent = t.label;
+      grid.appendChild(div);
+    }
+
+    // Top 응원 표시
+    const tops = $('weeklyTops');
+    const topAns = (r.answers?.byUser || [])[0];
+    const parts = [];
+    if (topAns) parts.push(`🏆 가장 많이 답한 가족은 ${iconEmoji(topAns.icon)} <b>${topAns.name}</b>님 (${topAns.count}일)`);
+    if (r.stickers?.topSender) parts.push(`💌 가장 많이 응원한 가족은 ${iconEmoji(r.stickers.topSender.icon)} <b>${r.stickers.topSender.name}</b>님`);
+    if (r.stickers?.topReceiver) parts.push(`💖 가장 많이 응원받은 가족은 ${iconEmoji(r.stickers.topReceiver.icon)} <b>${r.stickers.topReceiver.name}</b>님`);
+    if (parts.length) {
+      tops.innerHTML = parts.map((p) => `<p class="wk-top">${p}</p>`).join('');
+      tops.classList.remove('hidden');
+    } else {
+      tops.classList.add('hidden');
+    }
+
+    $('weeklyCard').classList.remove('hidden');
+  } catch {}
 }
 
 // ---------- 월간 가족 달력 ----------
@@ -2348,10 +2393,24 @@ async function loadYesterdayReveal() {
     for (const a of r.answers) {
       const li = document.createElement('li');
       const skipped = !!a.is_skip;
+      const created = a.created_at ? new Date(a.created_at) : null;
+      const updated = a.updated_at ? new Date(a.updated_at) : null;
+      let timeLabel = '';
+      if (created) {
+        const h = created.getHours();
+        const m = String(created.getMinutes()).padStart(2, '0');
+        const ampm = h < 12 ? '오전' : '오후';
+        const h12 = h === 0 ? 12 : (h > 12 ? h - 12 : h);
+        timeLabel = `${ampm} ${h12}:${m}`;
+        if (updated && (updated - created) > 60000) timeLabel += ' 수정됨';
+      }
       li.innerHTML = `
         <span class="reveal-emoji">${iconEmoji(a.icon)}</span>
         <div class="reveal-body">
-          <div class="reveal-name"></div>
+          <div class="reveal-head">
+            <span class="reveal-name"></span>
+            ${timeLabel ? `<span class="reveal-time">${timeLabel}</span>` : ''}
+          </div>
           <div class="reveal-answer ${skipped ? 'skipped' : ''}"></div>
           <div class="reaction-row"></div>
         </div>`;

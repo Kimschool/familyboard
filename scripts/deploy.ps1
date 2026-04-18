@@ -123,6 +123,8 @@ echo '[logs]'
 sudo docker logs --tail 5 familyboard 2>&1
 "@
 
+# Windows CRLF → LF 변환 후 ssh 로 전달 (bash 가 \r 을 리다이렉션 토큰에 섞어 '::ambiguous redirect' 내는 것 방지)
+$remote = $remote -replace "`r`n", "`n"
 $remote | & ssh -p $NasPort "${NasUser}@${NasHost}" 'bash -s'
 if ($LASTEXITCODE -ne 0) { Fail "remote deploy failed" }
 

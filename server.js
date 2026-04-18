@@ -983,6 +983,76 @@ app.post('/api/question/today/answer', requireAuth, async (req, res) => {
   } catch (e) { res.status(500).json({ error: 'internal', message: e.message }); }
 });
 
+// ---------- 주간 가족 활동 요약 ----------
+app.get('/api/activity/week', requireAuth, async (req, res) => {
+  try {
+    const fid = req.user.family_id;
+
+    // 답변 수 (가족 전체, 본인 포함, skip 제외) 최근 7일
+    const [ansByUser] = await getPool().query(
+      `SELECT a.user_id, u.display_name, u.icon, COUNT(*) AS cnt
+         FROM daily_answers a
+         JOIN daily_questions q ON q.id = a.question_id
+         JOIN users u ON u.id = a.user_id
+        WHERE q.family_id = ? AND q.question_date >= DATE_SUB(CURDATE(), INTERVAL 6 DAY)
+          AND a.answer_text IS NOT NULL AND a.is_skip = 0
+        GROUP BY a.user_id ORDER BY cnt DESC`,
+      [fid]
+    );
+    const totalAnswers = ansByUser.reduce((s, r) => s + Number(r.cnt), 0);
+
+    // 메모 수
+    const [memoCnt] = await getPool().query(
+      `SELECT COUNT(*) AS cnt FROM memos
+        WHERE family_id = ? AND created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)`,
+      [fid]
+    );
+
+    // 스티커 (보낸/받은 Top 1)
+    const [stkTotal] = await getPool().query(
+      `SELECT COUNT(*) AS cnt FROM family_stickers
+        WHERE family_id = ? AND sticker_date >= DATE_SUB(CURDATE(), INTERVAL 6 DAY)`,
+      [fid]
+    );
+    const [topSender] = await getPool().query(
+      `SELECT u.display_name, u.icon, COUNT(*) AS cnt
+         FROM family_stickers s JOIN users u ON u.id = s.sender_id
+        WHERE s.family_id = ? AND s.sticker_date >= DATE_SUB(CURDATE(), INTERVAL 6 DAY)
+        GROUP BY s.sender_id ORDER BY cnt DESC LIMIT 1`,
+      [fid]
+    );
+    const [topReceiver] = await getPool().query(
+      `SELECT u.display_name, u.icon, COUNT(*) AS cnt
+         FROM family_stickers s JOIN users u ON u.id = s.receiver_id
+        WHERE s.family_id = ? AND s.sticker_date >= DATE_SUB(CURDATE(), INTERVAL 6 DAY)
+        GROUP BY s.receiver_id ORDER BY cnt DESC LIMIT 1`,
+      [fid]
+    );
+
+    // 기분 체크인
+    const [moodCnt] = await getPool().query(
+      `SELECT COUNT(*) AS cnt FROM mood_history mh
+         JOIN users u ON u.id = mh.user_id
+        WHERE u.family_id = ? AND mh.mood_date >= DATE_SUB(CURDATE(), INTERVAL 6 DAY)`,
+      [fid]
+    );
+
+    res.json({
+      answers: {
+        total: totalAnswers,
+        byUser: ansByUser.map((r) => ({ userId: r.user_id, name: r.display_name, icon: r.icon, count: Number(r.cnt) })),
+      },
+      memos: { total: Number(memoCnt[0].cnt) },
+      stickers: {
+        total: Number(stkTotal[0].cnt),
+        topSender: topSender[0] ? { name: topSender[0].display_name, icon: topSender[0].icon, count: Number(topSender[0].cnt) } : null,
+        topReceiver: topReceiver[0] ? { name: topReceiver[0].display_name, icon: topReceiver[0].icon, count: Number(topReceiver[0].cnt) } : null,
+      },
+      moodCheckins: Number(moodCnt[0].cnt),
+    });
+  } catch (e) { res.status(500).json({ error: 'internal', message: e.message }); }
+});
+
 app.get('/api/question/yesterday', requireAuth, async (req, res) => {
   try {
     const y = yesterdayLocal();
@@ -993,7 +1063,9 @@ app.get('/api/question/yesterday', requireAuth, async (req, res) => {
     if (!qrows.length) return res.json({ date: y, question: null, answers: [] });
     const q = qrows[0];
     const [ans] = await getPool().query(
-      `SELECT a.id AS answer_id, a.answer_text, a.is_skip, a.user_id, u.display_name, u.icon
+      `SELECT a.id AS answer_id, a.answer_text, a.is_skip, a.user_id,
+              a.created_at, a.updated_at,
+              u.display_name, u.icon
          FROM daily_answers a JOIN users u ON u.id = a.user_id
         WHERE a.question_id = ? AND (a.answer_text IS NOT NULL OR a.is_skip = 1)
         ORDER BY a.created_at ASC`,
