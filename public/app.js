@@ -2658,9 +2658,21 @@ function renderMemos(list) {
   const searchEl = $('memoSearch');
   ul.innerHTML = ''; doneUl.innerHTML = '';
 
-  // 검색창은 메모 5개 이상일 때만 표시
-  if (list.length >= 5) searchEl.classList.remove('hidden');
-  else searchEl.classList.add('hidden');
+  // 검색창 + 필터 행: 메모가 적으면(5개 미만) 자동으로 숨김 — UI 노이즈 감소
+  const filterRow = $('memoFilterRow');
+  if (list.length >= 5) {
+    searchEl.classList.remove('hidden');
+    filterRow?.classList.remove('hidden');
+  } else {
+    searchEl.classList.add('hidden');
+    filterRow?.classList.add('hidden');
+    // 자동 숨김 시 필터 상태도 리셋 — 나중에 다시 나타났을 때 원하는 결과가 안 나오는 혼란 방지
+    if (MEMO_FILTER !== 'all') {
+      MEMO_FILTER = 'all';
+      document.querySelectorAll('.memo-filter').forEach((x) => x.classList.remove('active'));
+      document.querySelector('.memo-filter[data-filter="all"]')?.classList.add('active');
+    }
+  }
 
   const q = MEMO_QUERY;
   let filtered = q ? list.filter((m) => (m.content || '').toLowerCase().includes(q)) : list;
