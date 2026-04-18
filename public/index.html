@@ -154,6 +154,35 @@
     <blockquote class="daily-quote" id="dailyQuote">—</blockquote>
   </section>
 
+  <!-- 가족 일정 -->
+  <section class="card events-card hidden" data-card-id="events" id="eventsCard">
+    <div class="card-head-row">
+      <p class="card-title">📅 가족 일정</p>
+      <button type="button" class="event-new-btn" id="eventNewBtn">＋ 추가</button>
+    </div>
+    <ul class="events-list" id="eventsList"></ul>
+  </section>
+
+  <!-- 일정 추가 시트 -->
+  <div id="eventCreateSheet" class="sheet-backdrop hidden" role="dialog">
+    <div class="sheet" role="document">
+      <div class="sheet-handle"></div>
+      <h2 class="sheet-title">📅 새 일정</h2>
+      <div class="ufi-row" style="margin-bottom: 8px;">
+        <input id="evTitle" class="ufi" type="text" placeholder="일정 이름 (예: 병원 방문)" maxlength="100" />
+        <input id="evEmoji" class="ufi-s" type="text" placeholder="🏥" maxlength="4" style="flex: 0 0 60px; text-align: center; font-size: 22px;" />
+      </div>
+      <div class="ufi-row" style="margin-bottom: 8px;">
+        <input id="evDate" class="ufi" type="date" />
+        <input id="evTime" class="ufi-s" type="time" style="flex: 0 0 110px;" />
+      </div>
+      <input id="evLocation" class="ufi" type="text" placeholder="장소 (선택)" maxlength="100" style="margin-bottom: 8px;" />
+      <input id="evNote" class="ufi" type="text" placeholder="메모 (선택)" maxlength="300" style="margin-bottom: 12px;" />
+      <button id="evCreate" type="button" class="auth-btn">추가</button>
+      <button class="sheet-close" id="evCreateClose">취소</button>
+    </div>
+  </div>
+
   <!-- 월간 가족 달력 -->
   <section class="card calendar-card" data-card-id="calendar" id="calendarCard">
     <div class="card-head-row">
@@ -245,6 +274,10 @@
       <div class="sheet-row" id="profTodayAnswerRow"><span class="sheet-k">오늘 질문</span><span id="profTodayAnswer">—</span></div>
       <div class="sheet-row" id="profMemoCountRow"><span class="sheet-k">오늘 메모</span><span id="profMemoCount">—</span></div>
       <ul class="prof-memo-list hidden" id="profMemoList"></ul>
+      <div class="prof-stats hidden" id="profStatsSection">
+        <label class="admin-label" style="margin-top: 14px">누적 기록</label>
+        <div class="prof-stats-grid" id="profStatsGrid"></div>
+      </div>
       <div class="mood-week hidden" id="profMoodWeek">
         <label class="admin-label" style="margin-top: 14px">지난 7일 기분</label>
         <div class="mood-week-row" id="profMoodWeekRow"></div>
@@ -813,6 +846,7 @@
         <button type="button" class="th-btn" data-scheme="darkgray" title="진회색">🌫️</button>
         <button type="button" class="th-btn" data-scheme="dark"     title="어둡게">🌙</button>
         <button type="button" class="th-btn" data-scheme="hc"       title="고대비 (약시 배려)">🔳</button>
+        <button type="button" class="th-btn" data-scheme="kid"      title="어린이 모드 (큰 글자)">🧸</button>
       </div>
     </div>
     <label class="tts-auto-row">

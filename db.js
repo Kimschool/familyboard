@@ -257,6 +257,22 @@ async function ensureSchema() {
   `);
 
   await p.query(`
+    CREATE TABLE IF NOT EXISTS family_events (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      family_id INT NOT NULL,
+      title VARCHAR(100) NOT NULL,
+      emoji VARCHAR(10) NOT NULL DEFAULT '📅',
+      event_date DATE NOT NULL,
+      event_time TIME NULL,
+      location VARCHAR(100) NULL,
+      note VARCHAR(300) NULL,
+      created_by INT NULL,
+      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      INDEX idx_family_date (family_id, event_date)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  `);
+
+  await p.query(`
     CREATE TABLE IF NOT EXISTS anniversaries (
       id INT AUTO_INCREMENT PRIMARY KEY,
       family_id INT NOT NULL,

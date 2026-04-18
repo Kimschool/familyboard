@@ -1192,6 +1192,76 @@ body.tod-night .hero-weather { color: rgba(242,242,247,.8); }
   list-style: none;
 }
 
+/* ========== 가족 공용 일정 ========== */
+.events-card {
+  background: linear-gradient(135deg, #E6F9FF 0%, #F0E6FF 100%);
+}
+@media (prefers-color-scheme: dark) {
+  .events-card { background: linear-gradient(135deg, #152535 0%, #1F1535 100%); }
+}
+.events-card .card-title { color: #3A6FA5; }
+@media (prefers-color-scheme: dark) { .events-card .card-title { color: #8FB9DC; } }
+.event-new-btn {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 5px 12px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+  cursor: pointer;
+  font-family: inherit;
+}
+.events-list { list-style: none; padding: 0; margin: 0; }
+.events-list li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid rgba(0,0,0,.06);
+  position: relative;
+}
+@media (prefers-color-scheme: dark) {
+  .events-list li { border-bottom-color: rgba(255,255,255,.08); }
+}
+.events-list li:last-child { border-bottom: none; }
+.event-item.today { background: rgba(255,204,0,.1); border-radius: 10px; padding: 10px 12px; }
+.ev-emoji { font-size: 28px; line-height: 1; flex-shrink: 0; }
+.ev-body { flex: 1; min-width: 0; }
+.ev-title { font-size: 16px; font-weight: 700; color: var(--text); }
+.ev-meta { font-size: 12px; color: var(--sub); margin-top: 2px; }
+.ev-days {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--primary);
+  background: rgba(10,132,255,.1);
+  padding: 4px 10px;
+  border-radius: 999px;
+  flex-shrink: 0;
+}
+.ev-days.today { color: #fff; background: linear-gradient(135deg, #FF3B30, #FF9500); }
+.ev-del {
+  background: none; border: none; color: var(--sub);
+  font-size: 14px; cursor: pointer; padding: 4px 6px;
+}
+
+/* 프로필 시트 누적 기록 */
+.prof-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+  margin-top: 6px;
+}
+.ps-tile {
+  background: var(--bg);
+  border-radius: 12px;
+  padding: 10px 6px;
+  text-align: center;
+}
+.ps-emoji { font-size: 20px; line-height: 1; }
+.ps-value { font-size: 20px; font-weight: 800; color: var(--primary); margin-top: 2px; letter-spacing: -0.4px; }
+.ps-label { font-size: 11px; color: var(--sub); font-weight: 600; }
+
 /* ========== 오늘의 응원 (홈 카드) ========== */
 .stickers-card {
   background: linear-gradient(135deg, #FFF0F5 0%, #FFEDD8 100%);
@@ -3192,6 +3262,32 @@ html[data-scheme="sepia"] {
   --shadow-md: 0 2px 4px rgba(60, 40, 20, .05), 0 8px 24px rgba(60, 40, 20, .06);
   color-scheme: light;
 }
+/* 어린이 모드 — 큰 글자, 밝은 색, 둥근 UI */
+html[data-scheme="kid"] {
+  --bg: #FFFEF5;
+  --card: #FFFFFF;
+  --text: #2A2A2A;
+  --sub: #7A7A7A;
+  --line: #FFE4B5;
+  --primary: #FF6B9D;
+  --good: #00C896;
+  --normal: #FFB84D;
+  --bad: #FF4D6D;
+  --worst: #B94DFF;
+  color-scheme: light;
+}
+html[data-scheme="kid"] body { font-size: 20px; font-weight: 500; }
+html[data-scheme="kid"] .card { border-radius: 22px; }
+html[data-scheme="kid"] .card-title { font-size: 20px; }
+html[data-scheme="kid"] .weather-temp { font-size: 82px; }
+html[data-scheme="kid"] .weather-icon { font-size: 64px; }
+html[data-scheme="kid"] .hero-avatar { width: 78px; height: 78px; font-size: 48px; }
+html[data-scheme="kid"] .hero-greeting { font-size: 32px; }
+html[data-scheme="kid"] .tip-ico { font-size: 36px; }
+html[data-scheme="kid"] .tip-text { font-size: 21px; }
+html[data-scheme="kid"] .family-badge { font-size: 17px; padding: 10px 18px; }
+html[data-scheme="kid"] .family-badge-emoji { font-size: 26px; }
+
 /* 고대비 (약시 배려) — 검은 배경 + 밝은 노란 글자 + 굵은 테두리 */
 html[data-scheme="hc"] {
   --bg: #000000;

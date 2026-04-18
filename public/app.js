@@ -304,6 +304,7 @@ function enterApp() {
   setupTtsRate();
   loadPoll();
   loadDiary();
+  loadEvents();
 
   // 관리자 UI — 설정 화면으로 이동 (계정 카드의 '가족 관리' 버튼으로 열림)
   try {
@@ -1211,6 +1212,72 @@ async function loadWeeklyReport() {
   } catch {}
 }
 
+// ---------- 가족 공용 일정 ----------
+let EVENTS_CACHE = [];
+async function loadEvents() {
+  try {
+    EVENTS_CACHE = await api('/api/events');
+    renderEventsCard();
+    renderCalendar(); // 달력 셀에 이벤트 표시
+  } catch {}
+}
+function renderEventsCard() {
+  const card = $('eventsCard');
+  const list = $('eventsList');
+  const upcoming = (EVENTS_CACHE || []).filter((e) => e.daysLeft >= 0 && e.daysLeft <= 30).slice(0, 8);
+  if (!upcoming.length) { card.classList.add('hidden'); return; }
+  card.classList.remove('hidden');
+  list.innerHTML = '';
+  for (const ev of upcoming) {
+    const li = document.createElement('li');
+    li.className = 'event-item' + (ev.daysLeft === 0 ? ' today' : '');
+    const dateLabel = ev.daysLeft === 0 ? '오늘' : ev.daysLeft === 1 ? '내일' : `${ev.daysLeft}일 뒤`;
+    const d = new Date(ev.event_date);
+    li.innerHTML = `
+      <span class="ev-emoji">${ev.emoji}</span>
+      <div class="ev-body">
+        <div class="ev-title"></div>
+        <div class="ev-meta">${d.getMonth() + 1}월 ${d.getDate()}일${ev.event_time ? ' ' + ev.event_time : ''}${ev.location ? ' · ' + escapeHtml(ev.location) : ''}</div>
+      </div>
+      <span class="ev-days ${ev.daysLeft === 0 ? 'today' : ''}">${dateLabel}</span>
+      ${ev.created_by === ME.id || ME.role === 'admin' ? `<button class="ev-del" data-id="${ev.id}" aria-label="삭제">✕</button>` : ''}`;
+    li.querySelector('.ev-title').textContent = ev.title;
+    const del = li.querySelector('.ev-del');
+    if (del) del.onclick = async () => {
+      if (!confirm(`"${ev.title}" 일정을 삭제할까요?`)) return;
+      await api(`/api/events/${ev.id}`, { method: 'DELETE' });
+      loadEvents();
+    };
+    list.appendChild(li);
+  }
+}
+
+$('eventNewBtn').addEventListener('click', () => {
+  $('evDate').value = new Date().toISOString().slice(0, 10);
+  $('eventCreateSheet').classList.remove('hidden');
+});
+$('evCreateClose').addEventListener('click', () => $('eventCreateSheet').classList.add('hidden'));
+$('eventCreateSheet').addEventListener('click', (e) => {
+  if (e.target.id === 'eventCreateSheet') $('eventCreateSheet').classList.add('hidden');
+});
+$('evCreate').addEventListener('click', async () => {
+  const body = {
+    title: $('evTitle').value.trim(),
+    emoji: $('evEmoji').value.trim() || '📅',
+    eventDate: $('evDate').value,
+    eventTime: $('evTime').value || null,
+    location: $('evLocation').value.trim() || null,
+    note: $('evNote').value.trim() || null,
+  };
+  if (!body.title || !body.eventDate) { alert('일정 이름과 날짜를 입력해 주세요'); return; }
+  try {
+    await api('/api/events', { method: 'POST', body: JSON.stringify(body) });
+    ['evTitle','evEmoji','evTime','evLocation','evNote'].forEach((id) => $(id).value = '');
+    $('eventCreateSheet').classList.add('hidden');
+    loadEvents();
+  } catch { alert('추가 실패'); }
+});
+
 // ---------- 월간 가족 달력 ----------
 let CAL_VIEW = new Date();
 CAL_VIEW.setDate(1);
@@ -1232,6 +1299,16 @@ function renderCalendar() {
     const arr = birthdayMap.get(key) || [];
     arr.push(mem);
     birthdayMap.set(key, arr);
+  }
+  // 이번 달 이벤트 맵
+  const eventMap = new Map();
+  for (const ev of (EVENTS_CACHE || [])) {
+    const d = new Date(ev.event_date);
+    if (d.getFullYear() !== y || d.getMonth() !== m) continue;
+    const key = d.getDate();
+    const arr = eventMap.get(key) || [];
+    arr.push(ev);
+    eventMap.set(key, arr);
   }
 
   const first = new Date(y, m, 1);
@@ -1255,15 +1332,24 @@ function renderCalendar() {
     cell.className = 'cal-cell';
     const isToday = (y === todayY && m === todayM && d === todayD);
     const bdPeople = birthdayMap.get(d);
+    const evs = eventMap.get(d);
     if (isToday) cell.classList.add('is-today');
     if (bdPeople) cell.classList.add('is-birthday');
+    if (evs) cell.classList.add('has-event');
+    const icons = [];
+    if (bdPeople) icons.push(...bdPeople.slice(0, 2).map((p) => iconEmoji(p.icon)));
+    if (evs) icons.push(...evs.slice(0, 2).map((e) => e.emoji));
     cell.innerHTML = `
       <span class="cal-day">${d}</span>
-      ${bdPeople ? `<span class="cal-bd">${bdPeople.slice(0,3).map((p) => iconEmoji(p.icon)).join('')}</span>` : ''}
+      ${icons.length ? `<span class="cal-bd">${icons.slice(0, 3).join('')}</span>` : ''}
     `;
-    if (bdPeople) {
-      cell.title = bdPeople.map((p) => p.displayName + '님 생일').join(', ');
-      cell.onclick = () => alert(bdPeople.map((p) => `${iconEmoji(p.icon)} ${p.displayName}님 생일 (${m + 1}월 ${d}일)`).join('\n'));
+    if (bdPeople || evs) {
+      cell.onclick = () => {
+        const parts = [];
+        if (bdPeople) parts.push(...bdPeople.map((p) => `${iconEmoji(p.icon)} ${p.displayName}님 생일 (${m + 1}월 ${d}일)`));
+        if (evs) parts.push(...evs.map((e) => `${e.emoji} ${e.title}${e.event_time ? ' ' + e.event_time : ''}${e.location ? ' @ ' + e.location : ''}`));
+        alert(parts.join('\n'));
+      };
     }
     grid.appendChild(cell);
   }
@@ -1408,7 +1494,31 @@ function openProfileSheet(m) {
   // 기분 7일 히스토리
   loadProfileMoodWeek(m.id);
 
+  // 누적 기록
+  loadProfileStats(m.id);
+
   $('profileSheet').classList.remove('hidden');
+}
+
+async function loadProfileStats(userId) {
+  try {
+    const s = await api(`/api/user/${userId}/stats`);
+    const grid = $('profStatsGrid');
+    grid.innerHTML = '';
+    const tiles = [
+      { emoji: '💬', label: '답변', value: s.answers },
+      { emoji: '📝', label: '메모', value: s.memos },
+      { emoji: '💖', label: '받은 응원', value: s.stickersReceived },
+      { emoji: '💌', label: '보낸 응원', value: s.stickersSent },
+    ];
+    for (const t of tiles) {
+      const d = document.createElement('div');
+      d.className = 'ps-tile';
+      d.innerHTML = `<div class="ps-emoji">${t.emoji}</div><div class="ps-value">${t.value}</div><div class="ps-label">${t.label}</div>`;
+      grid.appendChild(d);
+    }
+    $('profStatsSection').classList.remove('hidden');
+  } catch { $('profStatsSection').classList.add('hidden'); }
 }
 
 async function loadProfileMoodWeek(userId) {
@@ -3515,7 +3625,7 @@ document.getElementById('profileSheet').addEventListener('click', (e) => {
 
 // 화면 톤 (색 테마)
 function applyScheme(scheme) {
-  const s = ['light','dark','darkgray','sepia','hc'].includes(scheme) ? scheme : 'auto';
+  const s = ['light','dark','darkgray','sepia','hc','kid'].includes(scheme) ? scheme : 'auto';
   const root = document.documentElement;
   if (s === 'auto') root.removeAttribute('data-scheme');
   else root.setAttribute('data-scheme', s);

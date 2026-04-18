@@ -1791,6 +1791,101 @@ app.delete('/api/birthday/:userId/message', requireAuth, async (req, res) => {
   res.json({ ok: true });
 });
 
+// ---------- 가족 공용 일정 (events) ----------
+app.get('/api/events', requireAuth, async (req, res) => {
+  try {
+    const from = (req.query.from || todayLocal()).slice(0, 10);
+    const to = (req.query.to || '').slice(0, 10);
+    let sql = `SELECT e.id, e.title, e.emoji, DATE_FORMAT(e.event_date, '%Y-%m-%d') AS event_date,
+                      TIME_FORMAT(e.event_time, '%H:%i') AS event_time,
+                      e.location, e.note, e.created_by,
+                      u.display_name AS author_name, u.icon AS author_icon
+                 FROM family_events e
+                 LEFT JOIN users u ON u.id = e.created_by
+                WHERE e.family_id = ? AND e.event_date >= ?`;
+    const args = [req.user.family_id, from];
+    if (to) { sql += ' AND e.event_date <= ?'; args.push(to); }
+    sql += ' ORDER BY e.event_date ASC, e.event_time ASC LIMIT 100';
+    const [rows] = await getPool().query(sql, args);
+    // daysLeft
+    const now = new Date();
+    const todayMid = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const list = rows.map((r) => {
+      const d = new Date(r.event_date);
+      const daysLeft = Math.round((d - todayMid) / 86400000);
+      return { ...r, daysLeft };
+    });
+    res.json(list);
+  } catch (e) { res.status(500).json({ error: 'internal', message: e.message }); }
+});
+
+app.post('/api/events', requireAuth, async (req, res) => {
+  try {
+    const title = (req.body?.title || '').toString().trim().slice(0, 100);
+    const emoji = (req.body?.emoji || '📅').toString().slice(0, 10);
+    const eventDate = (req.body?.eventDate || '').toString().slice(0, 10);
+    const eventTime = req.body?.eventTime ? String(req.body.eventTime).slice(0, 5) : null;
+    const location = req.body?.location ? String(req.body.location).trim().slice(0, 100) : null;
+    const note = req.body?.note ? String(req.body.note).trim().slice(0, 300) : null;
+    if (!title || !eventDate) return res.status(400).json({ error: 'title-date-required' });
+    const [r] = await getPool().query(
+      `INSERT INTO family_events (family_id, title, emoji, event_date, event_time, location, note, created_by)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [req.user.family_id, title, emoji, eventDate, eventTime, location, note, req.user.id]
+    );
+    res.json({ ok: true, id: r.insertId });
+  } catch (e) { res.status(500).json({ error: 'internal', message: e.message }); }
+});
+
+app.delete('/api/events/:id', requireAuth, async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'bad-id' });
+  await getPool().query(
+    'DELETE FROM family_events WHERE id = ? AND family_id = ?',
+    [id, req.user.family_id]
+  );
+  res.json({ ok: true });
+});
+
+// ---------- 프로필 누적 통계 ----------
+app.get('/api/user/:id/stats', requireAuth, async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id)) return res.status(400).json({ error: 'bad-id' });
+    const [ok] = await getPool().query(
+      'SELECT 1 FROM users WHERE id = ? AND family_id = ? LIMIT 1',
+      [id, req.user.family_id]
+    );
+    if (!ok.length) return res.status(404).json({ error: 'not-found' });
+
+    const [ans] = await getPool().query(
+      `SELECT COUNT(*) AS c FROM daily_answers a
+         JOIN daily_questions q ON q.id = a.question_id
+        WHERE a.user_id = ? AND q.family_id = ?
+          AND a.answer_text IS NOT NULL AND a.is_skip = 0`,
+      [id, req.user.family_id]
+    );
+    const [memos] = await getPool().query(
+      'SELECT COUNT(*) AS c FROM memos WHERE family_id = ? AND created_by = ?',
+      [req.user.family_id, id]
+    );
+    const [stkRecv] = await getPool().query(
+      'SELECT COUNT(*) AS c FROM family_stickers WHERE family_id = ? AND receiver_id = ?',
+      [req.user.family_id, id]
+    );
+    const [stkSent] = await getPool().query(
+      'SELECT COUNT(*) AS c FROM family_stickers WHERE family_id = ? AND sender_id = ?',
+      [req.user.family_id, id]
+    );
+    res.json({
+      answers: Number(ans[0].c),
+      memos: Number(memos[0].c),
+      stickersReceived: Number(stkRecv[0].c),
+      stickersSent: Number(stkSent[0].c),
+    });
+  } catch (e) { res.status(500).json({ error: 'internal', message: e.message }); }
+});
+
 // ---------- 커스텀 기념일 ----------
 app.get('/api/anniversaries', requireAuth, async (req, res) => {
   try {
