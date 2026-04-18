@@ -39,8 +39,8 @@ body {
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display",
     "Pretendard", "Apple SD Gothic Neo", "Noto Sans KR", system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
-  font-size: 17px;
-  line-height: 1.5;
+  font-size: 19px;
+  line-height: 1.55;
   padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
 }
 
@@ -79,40 +79,40 @@ body {
 }
 .auth-logo { font-size: 54px; line-height: 1; }
 .auth-big-icon {
-  font-size: 72px;
+  font-size: 88px;
   line-height: 1;
-  margin: 10px 0 4px;
+  margin: 10px 0 8px;
 }
 .auth-title {
-  font-size: 30px;
+  font-size: 32px;
   font-weight: 700;
   letter-spacing: -0.5px;
-  margin: 6px 0 6px;
+  margin: 6px 0 8px;
 }
 .auth-sub {
   color: var(--sub);
-  margin: 0 0 24px;
-  font-size: 15px;
+  margin: 0 0 26px;
+  font-size: 17px;
 }
 .auth-input {
   width: 100%;
-  height: 54px;
-  padding: 0 18px;
-  font-size: 17px;
+  height: 62px;
+  padding: 0 20px;
+  font-size: 20px;
   border-radius: var(--r-md);
-  border: 1px solid var(--line);
+  border: 1.5px solid var(--line);
   background: var(--card);
   color: var(--text);
   outline: none;
   text-align: center;
-  margin-bottom: 10px;
+  margin-bottom: 12px;
 }
 .auth-input:focus { border-color: var(--primary); }
 .auth-btn {
   width: 100%;
-  height: 54px;
+  height: 62px;
   margin-top: 4px;
-  font-size: 17px;
+  font-size: 20px;
   font-weight: 600;
   border: none;
   border-radius: var(--r-md);
@@ -128,10 +128,10 @@ body {
   margin-top: 12px;
 }
 
-/* 멤버 그리드 (2단계) */
+/* 멤버 그리드 (2단계) — 노인 친화 큰 카드 */
 .member-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(2, 1fr);
   gap: 12px;
   margin-top: 8px;
 }
@@ -139,21 +139,24 @@ body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 6px;
-  padding: 14px 6px;
+  justify-content: center;
+  gap: 8px;
+  padding: 22px 10px;
+  min-height: 130px;
   background: var(--card);
-  border: 1px solid var(--line);
+  border: 1.5px solid var(--line);
   border-radius: var(--r-md);
   cursor: pointer;
-  transition: transform .1s ease, border-color .1s;
+  transition: transform .1s ease, border-color .1s, background .1s;
   font-family: inherit;
   color: var(--text);
+  box-shadow: var(--shadow-sm);
 }
 .member-card:hover { border-color: var(--primary); }
-.member-card:active { transform: scale(.96); }
-.member-card.pending { opacity: .55; }
-.member-emoji { font-size: 38px; line-height: 1; }
-.member-name { font-size: 15px; font-weight: 600; }
+.member-card:active { transform: scale(.97); }
+.member-card.pending { opacity: .5; }
+.member-emoji { font-size: 56px; line-height: 1; }
+.member-name { font-size: 19px; font-weight: 700; }
 .member-pending {
   font-size: 11px;
   color: var(--normal);
@@ -175,6 +178,50 @@ body {
   font-weight: 700;
   letter-spacing: -0.5px;
 }
+
+/* ========== 우리 가족 요약 ========== */
+.family-card { background: linear-gradient(135deg, #FFF7E6 0%, #FFE8EC 100%); }
+@media (prefers-color-scheme: dark) {
+  .family-card { background: linear-gradient(135deg, #2A2219 0%, #2A1E22 100%); }
+}
+.family-card .card-title { color: #8A6B42; }
+@media (prefers-color-scheme: dark) {
+  .family-card .card-title { color: #C9A77A; }
+}
+.family-row {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  padding: 4px 2px 2px;
+  scrollbar-width: none;
+}
+.family-row::-webkit-scrollbar { display: none; }
+.family-chip {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 10px 14px;
+  min-width: 78px;
+  background: rgba(255,255,255,.75);
+  border-radius: 14px;
+  transition: transform .15s;
+}
+@media (prefers-color-scheme: dark) {
+  .family-chip { background: rgba(255,255,255,.06); }
+}
+.family-chip.me {
+  background: #fff;
+  box-shadow: 0 2px 6px rgba(0,0,0,.08);
+  transform: translateY(-2px);
+}
+@media (prefers-color-scheme: dark) {
+  .family-chip.me { background: var(--card); }
+}
+.family-chip.dim { opacity: .5; }
+.family-chip-emoji { font-size: 34px; line-height: 1; }
+.family-chip-name { font-size: 14px; font-weight: 600; color: var(--text); }
 
 /* ========== 생일 배너 ========== */
 .banner {

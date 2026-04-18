@@ -207,21 +207,28 @@ async function acceptInvite() {
 // ---------- 메인 진입 ----------
 function enterApp() {
   showOnly('app');
-  renderHero();
-  $('tipsTitle').textContent = `${ME.displayName}님을 위한 오늘의 안내`;
-  if (ME.role === 'admin') {
-    $('adminCard').classList.remove('hidden');
-    loadUsers();
-    loadFamilyInfo();
-    renderIconPicker();
-  } else {
-    $('adminCard').classList.add('hidden');
-  }
+  try { renderHero(); } catch (e) { console.warn('[hero]', e); }
+  try { $('tipsTitle').textContent = `${ME.displayName}님을 위한 오늘의 안내`; } catch {}
+
+  // 가족 공통 데이터 — 하나 실패해도 다른 카드는 로드되게
+  loadFamilySummary();
   loadBirthday();
   loadWeatherAndAir();
   loadFx();
   loadMemos();
   loadZodiac();
+
+  // 관리자 UI (에러 나도 위 카드에 영향 없게)
+  try {
+    if (ME.role === 'admin') {
+      $('adminCard').classList.remove('hidden');
+      loadUsers();
+      loadFamilyInfo();
+      renderIconPicker();
+    } else {
+      $('adminCard')?.classList.add('hidden');
+    }
+  } catch (e) { console.warn('[admin ui]', e); }
 }
 
 // ---------- Hero ----------
@@ -243,6 +250,28 @@ $('logoutBtn').addEventListener('click', async () => {
   // 가족별칭은 기억 (다음 로그인 편의)
   location.reload();
 });
+
+// ---------- 우리 가족 요약 ----------
+async function loadFamilySummary() {
+  try {
+    const alias = ME.familyAlias;
+    if (!alias) return;
+    const r = await fetch(`/api/family/${encodeURIComponent(alias)}`).then(r => r.json());
+    $('familyCardTitle').textContent = r.family.displayName || '우리 가족';
+    const row = $('familyRow');
+    row.innerHTML = '';
+    for (const m of r.members) {
+      const div = document.createElement('div');
+      div.className = 'family-chip' + (m.id === ME.id ? ' me' : '') + (m.activated ? '' : ' dim');
+      div.innerHTML = `
+        <span class="family-chip-emoji">${iconEmoji(m.icon)}</span>
+        <span class="family-chip-name"></span>
+      `;
+      div.querySelector('.family-chip-name').textContent = m.displayName;
+      row.appendChild(div);
+    }
+  } catch {}
+}
 
 // ---------- 생일 ----------
 async function loadBirthday() {
@@ -279,11 +308,11 @@ const WMO_ICON = {
 };
 
 async function loadWeatherAndAir() {
-  try {
-    const [w, a] = await Promise.all([
-      fetch('/api/weather').then(r => r.json()),
-      fetch('/api/air').then(r => r.json()),
-    ]);
+  const wP = fetch('/api/weather').then(r => r.ok ? r.json() : null).catch(() => null);
+  const aP = fetch('/api/air').then(r => r.ok ? r.json() : null).catch(() => null);
+  const [w, a] = await Promise.all([wP, aP]);
+
+  if (w) {
     $('wCity').textContent = `${w.city} · 오늘`;
     $('wDesc').textContent = WMO[w.code] || '';
     $('wIcon').textContent = WMO_ICON[w.code] || '🌤️';
@@ -292,12 +321,18 @@ async function loadWeatherAndAir() {
     $('wMin').textContent  = `${w.min}°`;
     $('wFeel').textContent = `${w.feels}°`;
     $('wHum').textContent  = `${w.humidity}%`;
+  } else {
+    $('wDesc').textContent = '날씨 정보를 잠시 후 다시 시도해요';
+  }
+
+  if (a) {
     if (a.pm10 != null) { $('aPm10').textContent = Math.round(a.pm10); $('aPm10L').className = 'lvl ' + a.pm10Level; }
     if (a.pm25 != null) { $('aPm25').textContent = Math.round(a.pm25); $('aPm25L').className = 'lvl ' + a.pm25Level; }
     $('aPol').textContent = a.pollen != null ? Math.round(a.pollen) : '-';
     $('aPolL').className = 'lvl ' + (a.pollenLevel || 'unknown');
-    renderTips(w, a);
-  } catch { renderTips(null, null); }
+  }
+
+  renderTips(w, a);
 }
 
 function renderTips(w, a) {
