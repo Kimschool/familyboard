@@ -313,7 +313,7 @@ app.get('/api/weather', async (_req, res) => {
     const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}` +
       `&current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m` +
       `&daily=temperature_2m_max,temperature_2m_min,weather_code,precipitation_probability_max` +
-      `&timezone=${TZ_ENC}&forecast_days=1`;
+      `&timezone=${TZ_ENC}&forecast_days=2`;
     const j = await (await fetch(url)).json();
     const out = {
       city: process.env.DEFAULT_CITY || '도쿄',
@@ -325,6 +325,12 @@ app.get('/api/weather', async (_req, res) => {
       max: Math.round(j.daily?.temperature_2m_max?.[0] ?? 0),
       min: Math.round(j.daily?.temperature_2m_min?.[0] ?? 0),
       rainProb: j.daily?.precipitation_probability_max?.[0] ?? 0,
+      tomorrow: j.daily?.temperature_2m_max?.[1] != null ? {
+        max: Math.round(j.daily.temperature_2m_max[1]),
+        min: Math.round(j.daily.temperature_2m_min[1]),
+        code: j.daily.weather_code?.[1] ?? 0,
+        rainProb: j.daily.precipitation_probability_max?.[1] ?? 0,
+      } : null,
     };
     cacheSet(key, out);
     res.json(out);

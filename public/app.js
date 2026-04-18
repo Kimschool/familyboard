@@ -331,17 +331,22 @@ function relativeTime(dateStr) {
   return `${d.getMonth() + 1}월 ${d.getDate()}일`;
 }
 
+let FAMILY_CACHE = [];
+let ZODIAC_CACHE = [];
+
 async function loadFamilySummary() {
   try {
     const alias = ME.familyAlias;
     if (!alias) return;
     const r = await fetch(`/api/family/${encodeURIComponent(alias)}`).then(r => r.json());
+    FAMILY_CACHE = r.members;
     $('familyCardTitle').textContent = r.family.displayName || '우리 가족';
     const row = $('familyRow');
     row.innerHTML = '';
     for (const m of r.members) {
       const age = koreanAge(m.birthYear);
-      const badge = document.createElement('span');
+      const badge = document.createElement('button');
+      badge.type = 'button';
       badge.className = 'family-badge' + (m.id === ME.id ? ' me' : '') + (m.activated ? '' : ' dim');
       badge.innerHTML = `
         <span class="family-badge-emoji">${iconEmoji(m.icon)}</span>
@@ -349,9 +354,36 @@ async function loadFamilySummary() {
         ${age ? `<span class="family-badge-age">${age}</span>` : ''}
       `;
       badge.querySelector('.family-badge-name').textContent = m.displayName;
+      badge.onclick = () => openProfileSheet(m);
       row.appendChild(badge);
     }
   } catch {}
+}
+
+function openProfileSheet(m) {
+  const age = koreanAge(m.birthYear);
+  $('profAvatar').textContent = iconEmoji(m.icon);
+  $('profName').textContent = m.displayName + (m.id === ME.id ? ' (나)' : '');
+  $('profMeta').textContent = m.role === 'admin' ? '관리자' : '가족';
+  if (age) { $('profAge').textContent = `${age}세 (${m.birthYear}년생)`; $('profAgeRow').classList.remove('hidden'); }
+  else $('profAgeRow').classList.add('hidden');
+
+  const z = ZODIAC_CACHE.find((x) => x.name === m.displayName);
+  if (z) {
+    $('profZodiac').textContent  = `${z.zodiac}띠`;
+    $('profFortune').textContent = z.fortune;
+    $('profZodiacRow').classList.remove('hidden');
+    $('profFortuneRow').classList.remove('hidden');
+  } else {
+    $('profZodiacRow').classList.add('hidden');
+    $('profFortuneRow').classList.add('hidden');
+  }
+
+  $('profileSheet').classList.remove('hidden');
+}
+
+function closeProfileSheet() {
+  $('profileSheet').classList.add('hidden');
 }
 
 // ---------- 생일 ----------
@@ -412,6 +444,13 @@ async function loadWeatherAndAir() {
     $('wFeel').textContent = `${w.feels}°`;
     $('wHum').textContent  = `${w.humidity}%`;
     updateHeroWeather(w);
+    if (w.tomorrow) {
+      $('tmIcon').textContent = WMO_ICON[w.tomorrow.code] || '🌤️';
+      $('tmMax').textContent = `${w.tomorrow.max}°`;
+      $('tmMin').textContent = `${w.tomorrow.min}°`;
+      $('tmRain').classList.toggle('hidden', (w.tomorrow.rainProb || 0) < 60);
+      $('tomorrowBlock').classList.remove('hidden');
+    }
   } else {
     $('wDesc').textContent = '날씨 정보를 잠시 후 다시 시도해요';
   }
@@ -479,6 +518,7 @@ async function loadFx() {
     $('fxJpyKrw').textContent = fmt.format(Math.round(r.jpyKrw)) + '원';
     $('fxUsdJpy').textContent = r.usdJpy.toFixed(2) + '엔';
     $('fxUsdKrw').textContent = fmt.format(r.usdKrw) + '원';
+    $('fxHeadline').textContent = `오늘 100엔은 약 ${fmt.format(Math.round(r.jpyKrw))}원이에요`;
     const ts = new Date(r.ts);
     $('fxTs').textContent = `기준: ${ts.getMonth() + 1}월 ${ts.getDate()}일 ${String(ts.getHours()).padStart(2,'0')}시`;
     calcUpdate();
@@ -495,6 +535,17 @@ document.querySelectorAll('.calc-preset').forEach((btn) => {
     $('calcAmt').value = btn.dataset.amt;
     calcUpdate();
   });
+});
+$('calcSwap').addEventListener('click', () => {
+  const from = $('calcFrom'), to = $('calcTo');
+  const fv = from.value;
+  from.value = to.value;
+  to.value = fv;
+  // 금액도 결과값으로 치환 (연속 변환 편의)
+  const resultText = $('calcResult').textContent.replace(/[^\d.-]/g, '');
+  const n = parseFloat(resultText);
+  if (Number.isFinite(n)) $('calcAmt').value = Math.round(n);
+  calcUpdate();
 });
 function calcUpdate() {
   const amt = parseFloat($('calcAmt').value);
@@ -587,6 +638,7 @@ function dayOfYearClient(d = new Date()) {
 async function loadZodiac() {
   try {
     const list = await api('/api/zodiac');
+    ZODIAC_CACHE = list;
     const ul = $('zodiacList');
     ul.innerHTML = '';
     if (!list.length) {
@@ -784,5 +836,11 @@ $('inviteShare').addEventListener('click', async () => {
   }
 });
 $('inviteClose').addEventListener('click', () => $('inviteResult').classList.add('hidden'));
+
+// 프로필 시트 닫기
+document.getElementById('sheetClose').addEventListener('click', closeProfileSheet);
+document.getElementById('profileSheet').addEventListener('click', (e) => {
+  if (e.target.id === 'profileSheet') closeProfileSheet();
+});
 
 boot();

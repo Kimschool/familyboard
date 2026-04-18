@@ -88,6 +88,24 @@
     <div class="family-row" id="familyRow"></div>
   </section>
 
+  <!-- 가족 프로필 미니 시트 -->
+  <div id="profileSheet" class="sheet-backdrop hidden" role="dialog">
+    <div class="sheet" role="document">
+      <div class="sheet-handle"></div>
+      <div class="sheet-head">
+        <div class="sheet-avatar" id="profAvatar">✨</div>
+        <div class="sheet-head-text">
+          <div class="sheet-name" id="profName">—</div>
+          <div class="sheet-meta" id="profMeta">—</div>
+        </div>
+      </div>
+      <div class="sheet-row" id="profAgeRow"><span class="sheet-k">나이</span><span id="profAge">—</span></div>
+      <div class="sheet-row" id="profZodiacRow"><span class="sheet-k">띠</span><span id="profZodiac">—</span></div>
+      <div class="sheet-row" id="profFortuneRow"><span class="sheet-k">오늘 운세</span><span id="profFortune">—</span></div>
+      <button class="sheet-close" id="sheetClose">닫기</button>
+    </div>
+  </div>
+
   <section id="birthdayBanner" class="banner hidden">
     <span class="banner-emoji" id="bdEmoji">🎂</span>
     <div class="banner-body">
@@ -118,6 +136,14 @@
       <span class="chip"><span class="chip-k">초미세</span><b id="aPm25">--</b><i class="lvl" id="aPm25L"></i></span>
       <span class="chip"><span class="chip-k">꽃가루</span><b id="aPol">--</b><i class="lvl" id="aPolL"></i></span>
     </div>
+    <div class="tomorrow hidden" id="tomorrowBlock">
+      <span class="tomorrow-label">내일</span>
+      <span class="tomorrow-icon" id="tmIcon">🌤️</span>
+      <span class="tomorrow-range">
+        최고 <b id="tmMax">--°</b> · 최저 <b id="tmMin">--°</b>
+      </span>
+      <span class="tomorrow-rain hidden" id="tmRain">☔ 비 확률 높음</span>
+    </div>
   </section>
 
   <section class="card tips-card">
@@ -139,6 +165,7 @@
 
   <section class="card fx-card">
     <p class="card-title">오늘의 환율</p>
+    <p class="fx-headline" id="fxHeadline">—</p>
     <ul class="fx-list">
       <li><span class="fx-label">100엔 → 원</span><span class="fx-val" id="fxJpyKrw">—</span></li>
       <li><span class="fx-label">1달러 → 엔</span><span class="fx-val" id="fxUsdJpy">—</span></li>
@@ -155,7 +182,7 @@
         <option value="JPY">엔</option><option value="KRW">원</option><option value="USD">달러</option>
       </select>
     </div>
-    <div class="calc-arrow">↓</div>
+    <button type="button" class="calc-swap" id="calcSwap" aria-label="통화 바꾸기">⇅</button>
     <div class="calc-row">
       <div class="calc-result" id="calcResult">—</div>
       <select id="calcTo" class="calc-sel">
