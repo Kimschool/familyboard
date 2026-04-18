@@ -260,6 +260,57 @@ body.tod-night .hero-date, body.tod-night .hero-greeting { color: #F2F2F7; }
 }
 body.tod-night .hero-weather { color: rgba(242,242,247,.8); }
 
+/* ========== 카드 head 공통 ========== */
+.card-head-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+}
+.card-head-row .card-title { margin: 0; }
+
+/* TTS 읽어주기 버튼 */
+.tts-btn {
+  width: 40px; height: 40px;
+  border-radius: 50%;
+  border: 1.5px solid var(--line);
+  background: var(--card);
+  font-size: 18px;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background .15s, transform .1s;
+}
+.tts-btn:hover { border-color: var(--primary); }
+.tts-btn:active { transform: scale(.95); }
+.tts-btn.speaking {
+  background: var(--primary);
+  border-color: var(--primary);
+  animation: tts-pulse 1.2s ease-in-out infinite;
+}
+@keyframes tts-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(10,132,255,.35); }
+  50% { box-shadow: 0 0 0 8px rgba(10,132,255,0); }
+}
+
+/* 답변 미완료 배지 */
+.pending-badge {
+  display: inline-block;
+  background: linear-gradient(135deg, #FF3B30, #FF9500);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 4px 12px;
+  border-radius: 999px;
+  letter-spacing: .5px;
+  animation: pending-pulse 2.4s ease-in-out infinite;
+}
+@keyframes pending-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.06); }
+}
+
 /* ========== 가족 공지 (관리자 pinned) ========== */
 .notice-card {
   background: linear-gradient(135deg, #FFF9DB 0%, #FFE9B8 100%);

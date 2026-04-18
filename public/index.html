@@ -88,6 +88,7 @@
       <span class="notice-pin">📌</span>
       <span class="notice-label">가족 공지</span>
       <span class="notice-meta" id="noticeMeta"></span>
+      <button class="tts-btn" data-tts="notice" aria-label="읽어주기">🔊</button>
     </div>
     <p class="notice-text" id="noticeText"></p>
   </section>
@@ -103,6 +104,34 @@
     <p class="card-title" id="familyCardTitle">우리 가족</p>
     <div class="family-row" id="familyRow"></div>
   </section>
+
+  <!-- 관리자: 구성원 편집 시트 -->
+  <div id="editSheet" class="sheet-backdrop hidden" role="dialog">
+    <div class="sheet sheet-tall" role="document">
+      <div class="sheet-handle"></div>
+      <h2 class="sheet-title">구성원 편집</h2>
+      <label class="admin-label">표시 이름</label>
+      <input id="edDisplay" class="ufi" type="text" />
+      <label class="admin-label" style="margin-top:12px">아이콘</label>
+      <div id="edIconPicker" class="icon-picker"></div>
+      <label class="admin-label" style="margin-top:12px">생일</label>
+      <div class="ufi-row">
+        <input id="edYear"  class="ufi-s" type="number" placeholder="년도" />
+        <input id="edMonth" class="ufi-s" type="number" placeholder="월" min="1" max="12" />
+        <input id="edDay"   class="ufi-s" type="number" placeholder="일" min="1" max="31" />
+      </div>
+      <label class="ufi-check" style="margin-top:8px">
+        <input id="edLunar" type="checkbox" /> 음력
+      </label>
+      <label class="ufi-check">
+        <input id="edAdmin" type="checkbox" /> 관리자 권한
+      </label>
+      <label class="admin-label" style="margin-top:12px">새 비밀번호 (바꾸려면 입력, 비우면 유지)</label>
+      <input id="edPassword" class="ufi" type="password" placeholder="최소 4자" />
+      <button id="edSave" type="button" class="user-add" style="margin-top:16px">저장</button>
+      <button class="sheet-close" id="edClose" style="margin-top:10px;background:var(--card);color:var(--text);border:1.5px solid var(--line)">취소</button>
+    </div>
+  </div>
 
   <!-- 가족 프로필 미니 시트 -->
   <div id="profileSheet" class="sheet-backdrop hidden" role="dialog">
@@ -164,14 +193,20 @@
 
   <!-- 어제의 공개 질문/답변 -->
   <section class="card reveal-card hidden" id="revealCard">
-    <p class="card-title">✨ 어제의 답변</p>
+    <div class="card-head-row">
+      <p class="card-title">✨ 어제의 답변</p>
+      <button class="tts-btn" data-tts="reveal" aria-label="읽어주기">🔊</button>
+    </div>
     <p class="reveal-question" id="revealQuestion">—</p>
     <ul class="reveal-list" id="revealList"></ul>
   </section>
 
   <!-- 오늘의 가족 질문 -->
   <section class="card question-card" id="questionCard">
-    <p class="card-title">오늘의 가족 질문</p>
+    <div class="card-head-row">
+      <p class="card-title">오늘의 가족 질문</p>
+      <span class="pending-badge hidden" id="qPendingBadge">아직 답변 전</span>
+    </div>
     <p class="question-text" id="questionText">—</p>
     <textarea id="questionAnswer" class="question-input" placeholder="답변을 적어 주세요 (가족에겐 내일 공개돼요)"></textarea>
     <button id="questionSubmit" type="button" class="question-submit">답변 저장</button>
@@ -193,7 +228,10 @@
   </div>
 
   <section class="card tips-card">
-    <p class="card-title" id="tipsTitle">오늘의 안내</p>
+    <div class="card-head-row">
+      <p class="card-title" id="tipsTitle">오늘의 안내</p>
+      <button class="tts-btn" data-tts="tips" aria-label="읽어주기">🔊</button>
+    </div>
     <ul class="tips">
       <li><span class="tip-ico">👕</span><span class="tip-text" id="tipDress">—</span></li>
       <li><span class="tip-ico">💧</span><span class="tip-text" id="tipHum">—</span></li>

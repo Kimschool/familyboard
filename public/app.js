@@ -827,10 +827,12 @@ async function loadUsers() {
           <div class="user-sub">${u.role === 'admin' ? '관리자' : '가족'} · ${dob}${status}</div>
         </div>
         <div class="user-actions">
+          <button class="ufi-btn user-edit" title="편집">✏️</button>
           <button class="ufi-btn user-reinvite" title="초대 링크 재발급">🔗</button>
           <button class="user-del" title="삭제"${u.id === ME.id ? ' disabled' : ''}>✕</button>
         </div>`;
       li.querySelector('.user-name').textContent = `${u.displayName} (${u.username})`;
+      li.querySelector('.user-edit').onclick = () => openEditSheet(u);
       li.querySelector('.user-reinvite').onclick = async () => {
         if (!confirm(`${u.displayName}님의 초대 링크를 새로 발급할까요?\n(기존 비밀번호는 초기화됩니다)`)) return;
         try {
@@ -936,6 +938,64 @@ $('inviteShare').addEventListener('click', async () => {
 });
 $('inviteClose').addEventListener('click', () => $('inviteResult').classList.add('hidden'));
 
+// ---------- TTS (읽어주기) ----------
+function speakText(text) {
+  if (!('speechSynthesis' in window) || !text) return;
+  try {
+    speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = 'ko-KR';
+    u.rate = 0.95;
+    u.pitch = 1;
+    speechSynthesis.speak(u);
+  } catch {}
+}
+function buildTtsText(kind) {
+  if (kind === 'tips') {
+    const lines = ['오늘의 안내입니다.'];
+    [$('tipDress'), $('tipHum'), $('tipAir'), $('tipPollen')].forEach((el) => {
+      if (el?.textContent && el.textContent !== '—') lines.push(el.textContent);
+    });
+    return lines.join(' ');
+  }
+  if (kind === 'reveal') {
+    const q = $('revealQuestion').textContent;
+    const answers = Array.from(document.querySelectorAll('#revealList li')).map((li) => {
+      const name = li.querySelector('.reveal-name')?.textContent || '';
+      const ans = li.querySelector('.reveal-answer')?.textContent || '';
+      return `${name} ${ans}`;
+    }).join(' ');
+    return `어제의 질문: ${q}. ${answers}`;
+  }
+  if (kind === 'notice') {
+    return `가족 공지입니다. ${$('noticeText').textContent}`;
+  }
+  return '';
+}
+document.querySelectorAll('.tts-btn').forEach((btn) => {
+  btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const kind = btn.dataset.tts;
+    const t = buildTtsText(kind);
+    if (!t) return;
+    if (speechSynthesis.speaking) {
+      speechSynthesis.cancel();
+      btn.classList.remove('speaking');
+    } else {
+      speakText(t);
+      btn.classList.add('speaking');
+      const u = speechSynthesis.getVoices;
+      // clear speaking class when done (poll briefly)
+      const poll = setInterval(() => {
+        if (!speechSynthesis.speaking) { btn.classList.remove('speaking'); clearInterval(poll); }
+      }, 300);
+    }
+  });
+});
+if (!('speechSynthesis' in window)) {
+  document.querySelectorAll('.tts-btn').forEach((b) => b.style.display = 'none');
+}
+
 // ---------- 오늘의 가족 질문 ----------
 async function loadTodayQuestion() {
   try {
@@ -944,6 +1004,8 @@ async function loadTodayQuestion() {
     $('questionAnswer').value = q.myAnswer || '';
     $('questionMeta').textContent =
       `${q.answeredCount} / ${q.memberCount}명이 답했어요 · 모든 답변은 내일 공개돼요`;
+    // 답변 미완료 배지
+    $('qPendingBadge').classList.toggle('hidden', !!q.myAnswer);
 
     // 참여 아바타 — 답한 사람만 컬러, 아직 안 한 사람은 회색
     const ids = new Set((q.answerers || []).map(a => a.user_id));
@@ -1047,6 +1109,66 @@ $('qHistoryBtn').addEventListener('click', async () => {
 $('historyClose').addEventListener('click', () => $('historySheet').classList.add('hidden'));
 $('historySheet').addEventListener('click', (e) => {
   if (e.target.id === 'historySheet') $('historySheet').classList.add('hidden');
+});
+
+// ---------- 구성원 편집 시트 ----------
+let EDITING_USER = null;
+let ED_PICKED_ICON = 'star';
+function openEditSheet(u) {
+  EDITING_USER = u;
+  ED_PICKED_ICON = u.icon || 'star';
+  $('edDisplay').value = u.displayName || '';
+  $('edYear').value  = u.birthYear || '';
+  $('edMonth').value = u.birthMonth || '';
+  $('edDay').value   = u.birthDay || '';
+  $('edLunar').checked = !!u.isLunar;
+  $('edAdmin').checked = u.role === 'admin';
+  $('edPassword').value = '';
+  // 아이콘 픽커 (미니)
+  const grid = $('edIconPicker');
+  grid.innerHTML = '';
+  for (const i of ICONS) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'icon-opt' + (i.code === ED_PICKED_ICON ? ' selected' : '');
+    b.title = i.label;
+    b.innerHTML = `<span class="icon-emoji">${i.emoji}</span>`;
+    b.onclick = () => {
+      ED_PICKED_ICON = i.code;
+      grid.querySelectorAll('.icon-opt').forEach((x) => x.classList.remove('selected'));
+      b.classList.add('selected');
+    };
+    grid.appendChild(b);
+  }
+  $('editSheet').classList.remove('hidden');
+}
+$('edClose').addEventListener('click', () => $('editSheet').classList.add('hidden'));
+$('editSheet').addEventListener('click', (e) => {
+  if (e.target.id === 'editSheet') $('editSheet').classList.add('hidden');
+});
+$('edSave').addEventListener('click', async () => {
+  if (!EDITING_USER) return;
+  const body = {
+    displayName: $('edDisplay').value.trim(),
+    icon: ED_PICKED_ICON,
+    birthYear:  $('edYear').value  || null,
+    birthMonth: $('edMonth').value || null,
+    birthDay:   $('edDay').value   || null,
+    isLunar: $('edLunar').checked,
+    role: $('edAdmin').checked ? 'admin' : 'member',
+  };
+  const pw = $('edPassword').value;
+  if (pw) {
+    if (pw.length < 4) { alert('비밀번호는 최소 4자 이상이어야 해요'); return; }
+    body.password = pw;
+  }
+  try {
+    await api(`/api/users/${EDITING_USER.id}`, { method: 'PATCH', body: JSON.stringify(body) });
+    $('editSheet').classList.add('hidden');
+    loadUsers(); loadZodiac(); loadFamilySummary();
+  } catch (e) {
+    alert(e.status === 409 ? '같은 이름이 이미 있어요' : '저장 실패');
+  }
 });
 
 // 프로필 시트 닫기
