@@ -3139,8 +3139,18 @@ $('settingsBack').addEventListener('click', () => { showOnly('app'); });
 
 // ---------- 카드 순서 편집 ----------
 const DEFAULT_CARD_ORDER = [
-  'notice','upcoming','family','chat','birthday','weather','tips',
-  'reveal','gallery','question','zodiac','fx','calc','memo','account'
+  // 1) 긴급·실시간: 가족 공지
+  'notice',
+  // 2) 오늘의 핵심 CTA: 질문/답변
+  'question',
+  // 3) 매일 새로움: 어제 답변 공개
+  'reveal',
+  // 4) 소통·일정 묶음
+  'upcoming','family','chat','birthday',
+  // 5) 보조 정보
+  'weather','tips','gallery',
+  // 6) 엔터·유틸·메모 (아래로)
+  'zodiac','fx','calc','memo','account'
 ];
 function loadCardOrder() {
   try {
