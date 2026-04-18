@@ -297,6 +297,7 @@
     </div>
     <div class="streak-row hidden" id="streakRow">
       <span class="streak-badge" id="myStreakBadge"></span>
+      <button type="button" class="streak-family-btn" id="openRecoverSheet">🩹 복구</button>
       <button type="button" class="streak-family-btn" id="openStreakSheet">🏆 가족 기록</button>
     </div>
     <div class="question-participants" id="questionParticipants"></div>
@@ -341,6 +342,17 @@
         <ol class="rank-list" id="rankReceived"></ol>
       </div>
       <button class="sheet-close" id="rankingClose">닫기</button>
+    </div>
+  </div>
+
+  <!-- 스트릭 복구 바텀시트 (주 1회) -->
+  <div id="recoverSheet" class="sheet-backdrop hidden" role="dialog">
+    <div class="sheet" role="document">
+      <div class="sheet-handle"></div>
+      <h2 class="sheet-title">🩹 연속 기록 복구</h2>
+      <p class="sheet-sub" id="recoverSub">지난 7일 중 놓친 하루 하나를 만회할 수 있어요. 일주일에 한 번 가능.</p>
+      <ul class="recover-list" id="recoverList"></ul>
+      <button class="sheet-close" id="recoverClose">닫기</button>
     </div>
   </div>
 

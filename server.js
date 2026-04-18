@@ -925,6 +925,78 @@ app.post('/api/question/today/skip', requireAuth, async (req, res) => {
   } catch (e) { res.status(500).json({ error: 'internal', message: e.message }); }
 });
 
+// ISO 주차 (YYYY-WW) 반환
+function weekKey(date = new Date()) {
+  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  const day = d.getUTCDay() || 7;
+  d.setUTCDate(d.getUTCDate() + 4 - day);
+  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+  const weekNum = Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+  return `${d.getUTCFullYear()}-${String(weekNum).padStart(2, '0')}`;
+}
+
+// 스트릭 복구 상태
+app.get('/api/question/recovery-status', requireAuth, async (req, res) => {
+  try {
+    const [rows] = await getPool().query(
+      `SELECT last_recovery_week FROM users WHERE id = ?`, [req.user.id]
+    );
+    const current = weekKey();
+    const used = rows[0]?.last_recovery_week === current;
+    // 최근 7일에 is_skip 또는 미답변이 있는지
+    const [gaps] = await getPool().query(
+      `SELECT q.id AS question_id, DATE_FORMAT(q.question_date, '%Y-%m-%d') AS date,
+              q.question_text,
+              (SELECT COUNT(*) FROM daily_answers a
+                WHERE a.question_id = q.id AND a.user_id = ? AND a.is_skip = 0 AND a.answer_text IS NOT NULL) AS answered
+         FROM daily_questions q
+        WHERE q.family_id = ? AND q.question_date >= DATE_SUB(CURDATE(), INTERVAL 6 DAY)
+          AND q.question_date < CURDATE()
+        ORDER BY q.question_date DESC`,
+      [req.user.id, req.user.family_id]
+    );
+    const recoverable = gaps.filter((g) => !g.answered);
+    res.json({ usedThisWeek: !!used, currentWeek: current, recoverable });
+  } catch (e) { res.status(500).json({ error: 'internal', message: e.message }); }
+});
+
+// 스트릭 복구 사용: 지난 7일 중 한 날에 답변 달아 스트릭 이어 붙이기
+app.post('/api/question/recover', requireAuth, async (req, res) => {
+  try {
+    const questionId = Number(req.body?.questionId);
+    const answer = (req.body?.answer || '').toString().trim();
+    if (!Number.isInteger(questionId)) return res.status(400).json({ error: 'bad-id' });
+    if (!answer) return res.status(400).json({ error: 'empty-answer' });
+
+    // 주차 제한
+    const current = weekKey();
+    const [u] = await getPool().query('SELECT last_recovery_week FROM users WHERE id = ?', [req.user.id]);
+    if (u[0]?.last_recovery_week === current) return res.status(429).json({ error: 'already-used-this-week' });
+
+    // 질문이 내 가족의 최근 7일 안인지 검증
+    const [q] = await getPool().query(
+      `SELECT id FROM daily_questions
+        WHERE id = ? AND family_id = ?
+          AND question_date >= DATE_SUB(CURDATE(), INTERVAL 6 DAY)
+          AND question_date < CURDATE()
+        LIMIT 1`,
+      [questionId, req.user.family_id]
+    );
+    if (!q.length) return res.status(404).json({ error: 'not-found-or-out-of-window' });
+
+    await getPool().query(
+      `INSERT INTO daily_answers (question_id, user_id, answer_text, is_skip) VALUES (?, ?, ?, 0)
+       ON DUPLICATE KEY UPDATE answer_text = VALUES(answer_text), is_skip = 0`,
+      [questionId, req.user.id, answer.slice(0, 1000)]
+    );
+    await getPool().query(
+      'UPDATE users SET last_recovery_week = ? WHERE id = ?',
+      [current, req.user.id]
+    );
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: 'internal', message: e.message }); }
+});
+
 app.get('/api/question/streak', requireAuth, async (req, res) => {
   try {
     // 최근 60일 질문 중 내 답변 유무 (스킵 제외)

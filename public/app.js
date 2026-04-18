@@ -1375,10 +1375,37 @@ function renderTips(w, a) {
 
 // ---------- 환율 ----------
 let fxCache = null;
+function renderFxChange(elId, currentValue, savedValue, digits = 0) {
+  const el = document.getElementById(elId);
+  if (!el) return;
+  const chip = el.querySelector('.fx-change');
+  if (chip) chip.remove();
+  if (savedValue == null || Math.abs(currentValue - savedValue) < 0.005) return;
+  const diff = currentValue - savedValue;
+  const up = diff > 0;
+  const span = document.createElement('span');
+  span.className = 'fx-change ' + (up ? 'up' : 'down');
+  span.textContent = (up ? '▲' : '▼') + Math.abs(diff).toFixed(digits > 0 ? digits : (Math.abs(diff) < 10 ? 2 : 0));
+  el.appendChild(span);
+}
 async function loadFx() {
   try {
     const r = await fetch('/api/fx').then(r => r.json());
     fxCache = r;
+
+    // 전일자 스냅샷 비교 (localStorage)
+    const today = new Date().toISOString().slice(0, 10);
+    let prev = null;
+    try {
+      const snap = JSON.parse(localStorage.getItem('fb_fx_snapshot') || 'null');
+      if (snap && snap.date !== today) prev = snap; // 어제 이전 스냅샷만
+      if (!snap || snap.date !== today) {
+        localStorage.setItem('fb_fx_snapshot', JSON.stringify({
+          date: today, jpyKrw: r.jpyKrw, usdJpy: r.usdJpy, usdKrw: r.usdKrw,
+        }));
+      }
+    } catch {}
+
     $('fxJpyKrw').textContent = fmt.format(Math.round(r.jpyKrw)) + '원';
     $('fxUsdJpy').textContent = r.usdJpy.toFixed(2) + '엔';
     $('fxUsdKrw').textContent = fmt.format(r.usdKrw) + '원';
@@ -1387,6 +1414,12 @@ async function loadFx() {
     $('fxHeadline').textContent = `오늘 100엔은 약 ${fmt.format(Math.round(r.jpyKrw))}원이에요`;
     const ts = new Date(r.ts);
     $('fxTs').textContent = `기준: ${ts.getMonth() + 1}월 ${ts.getDate()}일 ${String(ts.getHours()).padStart(2,'0')}시`;
+
+    if (prev) {
+      renderFxChange('fxJpyKrw', r.jpyKrw, prev.jpyKrw);
+      renderFxChange('fxUsdJpy', r.usdJpy, prev.usdJpy, 2);
+      renderFxChange('fxUsdKrw', r.usdKrw, prev.usdKrw);
+    }
     calcUpdate();
   } catch {
     $('fxJpyKrw').textContent = $('fxUsdJpy').textContent = $('fxUsdKrw').textContent = '—';
@@ -1530,6 +1563,7 @@ function renderMemos(list) {
         </span>
       </div>
       <button class="memo-star ${m.important ? 'on' : ''}" aria-label="중요">${m.important ? '⭐' : '☆'}</button>
+      <button class="memo-share" aria-label="공유">↗</button>
       <button class="memo-del" aria-label="삭제">✕</button>`;
     const textEl = li.querySelector('.memo-text');
     textEl.textContent = m.content;
@@ -1568,6 +1602,17 @@ function renderMemos(list) {
     li.querySelector('.memo-star').onclick = async () => {
       await api(`/api/memos/${m.id}`, { method: 'PATCH', body: JSON.stringify({ important: !m.important }) });
       loadMemos();
+    };
+    li.querySelector('.memo-share').onclick = async () => {
+      const text = m.content;
+      try {
+        if (navigator.share) {
+          await navigator.share({ text });
+        } else {
+          await navigator.clipboard.writeText(text);
+          showSimpleToast('메모가 복사됐어요');
+        }
+      } catch {}
     };
     li.querySelector('.memo-del').onclick = async () => {
       await api(`/api/memos/${m.id}`, { method: 'DELETE' });
@@ -2296,6 +2341,56 @@ async function loadMyStreak() {
   } catch {}
 }
 
+// 스트릭 복구 시트
+$('openRecoverSheet').addEventListener('click', async () => {
+  try {
+    const r = await api('/api/question/recovery-status');
+    const sub = $('recoverSub');
+    const ul = $('recoverList');
+    ul.innerHTML = '';
+    if (r.usedThisWeek) {
+      sub.textContent = '이번 주 복구는 이미 사용했어요. 다음 주 월요일에 다시 가능해요.';
+    } else if (!r.recoverable?.length) {
+      sub.textContent = '복구할 날이 없어요 🎉 (지난 7일 모두 답변하셨네요)';
+    } else {
+      sub.textContent = '지난 7일 중 놓친 하루 하나를 만회할 수 있어요. 이번 주 1회만 가능.';
+      for (const item of r.recoverable) {
+        const d = new Date(item.date);
+        const li = document.createElement('li');
+        li.className = 'recover-item';
+        li.innerHTML = `
+          <div class="recover-date">${d.getMonth() + 1}월 ${d.getDate()}일</div>
+          <div class="recover-q"></div>
+          <textarea class="recover-input" placeholder="지금이라도 남기는 한 마디" maxlength="1000"></textarea>
+          <button type="button" class="recover-btn">이 날 복구하기</button>`;
+        li.querySelector('.recover-q').textContent = item.question_text;
+        const input = li.querySelector('.recover-input');
+        li.querySelector('.recover-btn').onclick = async () => {
+          const text = input.value.trim();
+          if (!text) { alert('답변을 적어 주세요'); return; }
+          try {
+            await api('/api/question/recover', {
+              method: 'POST',
+              body: JSON.stringify({ questionId: item.question_id, answer: text }),
+            });
+            $('recoverSheet').classList.add('hidden');
+            loadMyStreak();
+            showSimpleToast('복구 완료! 연속 기록이 이어졌어요');
+          } catch (e) {
+            alert(e.status === 429 ? '이번 주 복구를 이미 사용했어요' : '복구 실패');
+          }
+        };
+        ul.appendChild(li);
+      }
+    }
+    $('recoverSheet').classList.remove('hidden');
+  } catch { alert('상태 조회 실패'); }
+});
+$('recoverClose').addEventListener('click', () => $('recoverSheet').classList.add('hidden'));
+$('recoverSheet').addEventListener('click', (e) => {
+  if (e.target.id === 'recoverSheet') $('recoverSheet').classList.add('hidden');
+});
+
 // 주간 응원 랭킹
 $('openRankingBtn').addEventListener('click', async () => {
   try {
@@ -2649,6 +2744,17 @@ $('noticeHistSheet').addEventListener('click', (e) => {
 });
 
 // ---------- 메모 삭제 실행 취소 토스트 ----------
+function showSimpleToast(msg) {
+  const el = $('undoToast');
+  if (!el) return;
+  el.querySelector('.undo-msg').textContent = msg;
+  const btn = $('undoBtn');
+  btn.textContent = '확인';
+  btn.onclick = () => el.classList.add('hidden');
+  el.classList.remove('hidden');
+  setTimeout(() => el.classList.add('hidden'), 2500);
+}
+
 let UNDO_TIMER = null;
 function showUndoToast(memo) {
   const el = $('undoToast');
