@@ -1,4 +1,5 @@
 const mysql = require('mysql2/promise');
+const bcrypt = require('bcryptjs');
 
 let pool = null;
 
@@ -114,6 +115,39 @@ async function ensureSchema() {
   // 레거시 birthdays 제거
   await dropLegacyTable('birthdays');
 
+  // ---------- 오늘의 질문 ----------
+  await p.query(`
+    CREATE TABLE IF NOT EXISTS daily_questions (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      family_id INT NOT NULL,
+      question_date DATE NOT NULL,
+      question_text VARCHAR(300) NOT NULL,
+      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE KEY uq_family_date (family_id, question_date)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  `);
+  await p.query(`
+    CREATE TABLE IF NOT EXISTS daily_answers (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      question_id INT NOT NULL,
+      user_id INT NOT NULL,
+      answer_text VARCHAR(1000) NOT NULL,
+      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      UNIQUE KEY uq_question_user (question_id, user_id),
+      INDEX idx_question (question_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  `);
+
+  // ---------- 1회성 마이그레이션 ----------
+  await p.query(`
+    CREATE TABLE IF NOT EXISTS migrations_applied (
+      name VARCHAR(100) PRIMARY KEY,
+      applied_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+  `);
+  await runOnceMigrations();
+
   // 레거시 sessions 컬럼 (user_key) 감지 시 재생성
   const [sc] = await p.query(
     `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
@@ -199,6 +233,63 @@ async function dropLegacyTable(table) {
     [table]
   );
   if (rows[0].c > 0) await getPool().query(`DROP TABLE \`${table}\``);
+}
+
+async function runOnceMigrations() {
+  const p = getPool();
+  const [rows] = await p.query('SELECT name FROM migrations_applied');
+  const applied = new Set(rows.map(r => r.name));
+
+  // 1) star 아이콘 일괄 다변화 (기존 사용자)
+  if (!applied.has('2026_vary_icons')) {
+    await p.query(`
+      UPDATE users SET icon = CASE
+        WHEN display_name LIKE '%외할아버지%' THEN 'grandpaOut'
+        WHEN display_name LIKE '%외할머니%'  THEN 'grandmaOut'
+        WHEN display_name LIKE '%할아버지%'  THEN 'grandpa'
+        WHEN display_name LIKE '%할머니%'    THEN 'grandma'
+        WHEN display_name LIKE '%엄마%'      THEN 'mom'
+        WHEN display_name LIKE '%아빠%'      THEN 'dad'
+        WHEN username = 'jeonghwa'           THEN 'grandma'
+        WHEN username = 'hyunjoo'            THEN 'aunt'
+        WHEN username = 'mari'               THEN 'daughter'
+        WHEN display_name LIKE '%마리%'      THEN 'daughter'
+        WHEN username LIKE '%bidan%' OR display_name LIKE '%비단%' THEN 'dog'
+        WHEN (id % 8) = 0 THEN 'smile'
+        WHEN (id % 8) = 1 THEN 'love'
+        WHEN (id % 8) = 2 THEN 'flower'
+        WHEN (id % 8) = 3 THEN 'cool'
+        WHEN (id % 8) = 4 THEN 'angel'
+        WHEN (id % 8) = 5 THEN 'heart'
+        WHEN (id % 8) = 6 THEN 'sun'
+        ELSE 'rainbow'
+      END WHERE icon = 'star'
+    `);
+    await p.query("INSERT INTO migrations_applied (name) VALUES ('2026_vary_icons')");
+    console.log('[migration] 2026_vary_icons applied');
+  }
+
+  // 2) jeonghwa / hyunjoo admin 승격 + 비번 12345, admin 계정 삭제
+  if (!applied.has('2026_reassign_admin')) {
+    const hash = bcrypt.hashSync('12345', 10);
+    await p.query(
+      `UPDATE users SET role = 'admin', password_hash = ?, invite_token = NULL, invite_expires_at = NULL
+         WHERE username IN ('jeonghwa', 'hyunjoo')`,
+      [hash]
+    );
+    const [promoted] = await p.query(
+      `SELECT COUNT(*) AS c FROM users WHERE username IN ('jeonghwa','hyunjoo') AND role = 'admin'`
+    );
+    if (promoted[0].c >= 1) {
+      const [adminRows] = await p.query("SELECT id FROM users WHERE username = 'admin' LIMIT 1");
+      if (adminRows.length) {
+        await p.query('DELETE FROM sessions WHERE user_id = ?', [adminRows[0].id]);
+        await p.query('DELETE FROM users WHERE id = ?', [adminRows[0].id]);
+      }
+    }
+    await p.query("INSERT INTO migrations_applied (name) VALUES ('2026_reassign_admin')");
+    console.log('[migration] 2026_reassign_admin applied');
+  }
 }
 
 module.exports = { getPool, ensureSchema };

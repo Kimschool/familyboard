@@ -152,6 +152,35 @@
     </div>
   </section>
 
+  <!-- 어제의 공개 질문/답변 -->
+  <section class="card reveal-card hidden" id="revealCard">
+    <p class="card-title">✨ 어제의 답변</p>
+    <p class="reveal-question" id="revealQuestion">—</p>
+    <ul class="reveal-list" id="revealList"></ul>
+  </section>
+
+  <!-- 오늘의 가족 질문 -->
+  <section class="card question-card" id="questionCard">
+    <p class="card-title">오늘의 가족 질문</p>
+    <p class="question-text" id="questionText">—</p>
+    <textarea id="questionAnswer" class="question-input" placeholder="답변을 적어 주세요 (가족에겐 내일 공개돼요)"></textarea>
+    <button id="questionSubmit" type="button" class="question-submit">답변 저장</button>
+    <p class="question-meta" id="questionMeta"></p>
+    <div class="question-actions">
+      <button id="qHistoryBtn" type="button" class="question-action-btn">지난 질문 모아보기</button>
+    </div>
+  </section>
+
+  <!-- 히스토리 바텀시트 -->
+  <div id="historySheet" class="sheet-backdrop hidden" role="dialog">
+    <div class="sheet sheet-tall" role="document">
+      <div class="sheet-handle"></div>
+      <h2 class="sheet-title">지난 질문 모아보기</h2>
+      <div class="history-list" id="historyList"></div>
+      <button class="sheet-close" id="historyClose">닫기</button>
+    </div>
+  </div>
+
   <section class="card tips-card">
     <p class="card-title" id="tipsTitle">오늘의 안내</p>
     <ul class="tips">
@@ -182,19 +211,25 @@
 
   <section class="card calc-card">
     <p class="card-title">환율 계산기</p>
-    <div class="calc-row">
-      <input id="calcAmt" class="calc-input" type="number" inputmode="decimal" placeholder="금액" />
-      <select id="calcFrom" class="calc-sel">
-        <option value="JPY">엔</option><option value="KRW">원</option><option value="USD">달러</option>
-      </select>
+
+    <label class="calc-sub">바꾸기 전 통화</label>
+    <div class="calc-pills" id="calcFromGroup">
+      <button type="button" class="calc-pill" data-c="JPY">엔</button>
+      <button type="button" class="calc-pill" data-c="KRW">원</button>
+      <button type="button" class="calc-pill" data-c="USD">달러</button>
     </div>
+    <input id="calcAmt" class="calc-input-full" type="number" inputmode="decimal" placeholder="금액 입력" />
+
     <button type="button" class="calc-swap" id="calcSwap" aria-label="통화 바꾸기">⇅</button>
-    <div class="calc-row">
-      <div class="calc-result" id="calcResult">—</div>
-      <select id="calcTo" class="calc-sel">
-        <option value="KRW">원</option><option value="JPY">엔</option><option value="USD">달러</option>
-      </select>
+
+    <label class="calc-sub">바꾸고 나서</label>
+    <div class="calc-pills" id="calcToGroup">
+      <button type="button" class="calc-pill" data-c="KRW">원</button>
+      <button type="button" class="calc-pill" data-c="JPY">엔</button>
+      <button type="button" class="calc-pill" data-c="USD">달러</button>
     </div>
+    <div class="calc-result-full" id="calcResult">—</div>
+
     <div class="calc-presets" id="calcPresets">
       <button type="button" class="calc-preset" data-amt="1000">1,000</button>
       <button type="button" class="calc-preset" data-amt="10000">1만</button>

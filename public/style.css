@@ -353,6 +353,129 @@ body.tod-night .hero-weather { color: rgba(242,242,247,.8); }
   .family-badge-age { background: rgba(255,255,255,.1); }
 }
 
+/* ========== 오늘의 가족 질문 ========== */
+.question-card {
+  background: linear-gradient(135deg, #FFF4E5 0%, #FFE6F0 100%);
+}
+@media (prefers-color-scheme: dark) {
+  .question-card { background: linear-gradient(135deg, #2A2419 0%, #2A1E22 100%); }
+}
+.question-card .card-title { color: #9A5B42; }
+@media (prefers-color-scheme: dark) {
+  .question-card .card-title { color: #E9B97A; }
+}
+.question-text {
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.5;
+  color: var(--text);
+  margin: 0 0 14px;
+  word-break: keep-all;
+}
+.question-input {
+  width: 100%;
+  min-height: 80px;
+  max-height: 200px;
+  padding: 14px 16px;
+  border: 1.5px solid rgba(0,0,0,.1);
+  border-radius: var(--r-sm);
+  background: rgba(255,255,255,.75);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 16px;
+  line-height: 1.5;
+  resize: vertical;
+  outline: none;
+}
+@media (prefers-color-scheme: dark) {
+  .question-input { background: rgba(255,255,255,.05); border-color: rgba(255,255,255,.12); }
+}
+.question-input:focus { border-color: var(--primary); }
+.question-submit {
+  width: 100%; height: 52px;
+  margin-top: 10px;
+  border: none; border-radius: var(--r-sm);
+  background: var(--primary); color: #fff;
+  font-size: 16px; font-weight: 700; cursor: pointer;
+}
+.question-meta {
+  margin: 10px 0 0;
+  font-size: 13px;
+  color: var(--sub);
+  text-align: center;
+}
+.question-actions {
+  display: flex; gap: 8px;
+  margin-top: 10px;
+}
+.question-action-btn {
+  flex: 1;
+  height: 44px;
+  border: 1px solid rgba(0,0,0,.1);
+  border-radius: var(--r-sm);
+  background: rgba(255,255,255,.75);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 13px; font-weight: 600;
+  cursor: pointer;
+}
+@media (prefers-color-scheme: dark) {
+  .question-action-btn { background: rgba(255,255,255,.05); border-color: rgba(255,255,255,.12); }
+}
+
+/* 어제의 공개 카드 (reveal) */
+.reveal-card {
+  background: linear-gradient(135deg, #E6F7FF 0%, #F0F4FF 100%);
+}
+@media (prefers-color-scheme: dark) {
+  .reveal-card { background: linear-gradient(135deg, #1E2A3A 0%, #20242E 100%); }
+}
+.reveal-card .card-title { color: #2A6FAF; }
+@media (prefers-color-scheme: dark) {
+  .reveal-card .card-title { color: #9AC7EE; }
+}
+.reveal-question {
+  font-size: 18px;
+  font-weight: 700;
+  margin: 0 0 12px;
+  color: var(--text);
+  word-break: keep-all;
+}
+.reveal-list { list-style: none; margin: 0; padding: 0; }
+.reveal-list li {
+  display: flex;
+  gap: 12px;
+  padding: 12px 0;
+  border-top: 1px solid rgba(0,0,0,.06);
+}
+.reveal-list li:first-child { border-top: none; padding-top: 4px; }
+@media (prefers-color-scheme: dark) {
+  .reveal-list li { border-top-color: rgba(255,255,255,.08); }
+}
+.reveal-emoji { font-size: 32px; line-height: 1; flex-shrink: 0; width: 42px; text-align: center; }
+.reveal-body { flex: 1; min-width: 0; }
+.reveal-name { font-size: 14px; font-weight: 700; color: var(--text); }
+.reveal-answer { font-size: 16px; color: var(--text); line-height: 1.5; margin-top: 4px; word-break: keep-all; }
+
+/* 히스토리 시트 */
+.sheet-tall { max-height: 85vh; overflow-y: auto; }
+.sheet-title { margin: 0 0 16px; font-size: 20px; font-weight: 800; text-align: center; }
+.history-list { padding-bottom: 10px; }
+.history-item {
+  padding: 14px 0;
+  border-top: 1px solid var(--line);
+}
+.history-item:first-child { border-top: none; padding-top: 4px; }
+.history-date {
+  font-size: 12px; font-weight: 700; color: var(--sub);
+  letter-spacing: 1px; margin-bottom: 4px;
+}
+.history-q {
+  font-size: 16px; font-weight: 700; color: var(--text);
+  margin-bottom: 10px; line-height: 1.4;
+  word-break: keep-all;
+}
+
 /* ========== 생일 배너 ========== */
 .banner {
   display: flex;
@@ -563,29 +686,70 @@ body.tod-night .hero-weather { color: rgba(242,242,247,.8); }
   line-height: 1.4;
 }
 
-/* ========== 계산기 ========== */
-.calc-row { display: flex; gap: 8px; align-items: stretch; min-width: 0; }
-.calc-input, .calc-sel {
-  height: 64px; border-radius: var(--r-sm);
-  border: 1.5px solid var(--line); background: var(--bg); color: var(--text);
-  font-size: 20px; padding: 0 12px; outline: none;
-  min-width: 0;
-}
-.calc-input { flex: 1 1 0; font-weight: 600; }
-.calc-input:focus { border-color: var(--primary); background: var(--card); }
-.calc-sel {
-  flex: 0 0 88px;
-  width: 88px;
-  max-width: 88px;
-  font-size: 17px;
+/* ========== 계산기 (pill UI — 네이티브 select 제거) ========== */
+.calc-sub {
+  display: block;
+  font-size: 13px;
   font-weight: 600;
-  padding: 0 8px;
-  appearance: none;
-  -webkit-appearance: none;
-  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'><path fill='none' stroke='%236E6E73' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' d='M3 4.5l3 3 3-3'/></svg>");
-  background-repeat: no-repeat;
-  background-position: right 8px center;
-  padding-right: 24px;
+  color: var(--sub);
+  margin: 4px 0 8px;
+}
+.calc-pills {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+.calc-pill {
+  flex: 1 1 0;
+  min-width: 0;
+  height: 48px;
+  border: 1.5px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--card);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all .12s;
+}
+.calc-pill.active {
+  background: var(--primary);
+  color: #fff;
+  border-color: var(--primary);
+}
+.calc-pill:active { transform: scale(.97); }
+
+.calc-input-full {
+  width: 100%;
+  height: 68px;
+  border-radius: var(--r-sm);
+  border: 1.5px solid var(--line);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 26px;
+  font-weight: 800;
+  padding: 0 18px;
+  outline: none;
+  text-align: right;
+  letter-spacing: -0.5px;
+}
+.calc-input-full:focus { border-color: var(--primary); background: var(--card); }
+
+.calc-result-full {
+  width: 100%;
+  height: 68px;
+  border-radius: var(--r-sm);
+  background: linear-gradient(135deg, rgba(10,132,255,.08), rgba(90,200,250,.1));
+  color: var(--primary);
+  font-size: 32px;
+  font-weight: 800;
+  letter-spacing: -0.6px;
+  padding: 0 18px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  overflow: hidden;
 }
 .calc-swap {
   display: block;
@@ -602,16 +766,9 @@ body.tod-night .hero-weather { color: rgba(242,242,247,.8); }
 }
 .calc-swap:hover { border-color: var(--primary); }
 .calc-swap:active { transform: rotate(180deg) scale(.95); }
-.calc-result {
-  flex: 1 1 0; display: flex; align-items: center; justify-content: flex-end;
-  padding: 0 12px; height: 64px; border-radius: var(--r-sm); background: var(--bg);
-  font-size: 32px; font-weight: 800; letter-spacing: -0.6px;
-  color: var(--primary); overflow: hidden;
-  min-width: 0;
-}
 .calc-presets {
   display: flex; gap: 6px; flex-wrap: wrap;
-  margin-top: 12px;
+  margin-top: 14px;
 }
 .calc-preset {
   flex: 1 1 0; min-width: 0;

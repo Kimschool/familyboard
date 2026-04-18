@@ -254,6 +254,8 @@ function enterApp() {
   loadFx();
   loadMemos();
   loadZodiac();
+  loadTodayQuestion();
+  loadYesterdayReveal();
 
   // 관리자 UI (에러 나도 위 카드에 영향 없게)
   try {
@@ -397,8 +399,8 @@ async function loadBirthday() {
       const isMe = ME && r.today.display_name === ME.displayName;
       $('bdEmoji').textContent = isMe ? '🎉' : iconEmoji(r.today.icon);
       $('bdTitle').textContent = isMe
-        ? `${ME.displayName}님, 생신 축하드려요!`
-        : `오늘은 ${r.today.display_name}님 생신이에요`;
+        ? `${ME.displayName}님, 생일 축하드려요!`
+        : `오늘은 ${r.today.display_name}님 생일이에요`;
       $('bdSub').textContent = isMe
         ? '가족 모두가 함께 축하하고 있어요 🎂'
         : '따뜻한 축하 한마디 전해보세요 🌷';
@@ -407,7 +409,7 @@ async function loadBirthday() {
     } else if (r.upcoming?.length) {
       const u = r.upcoming[0];
       $('bdEmoji').textContent = iconEmoji(u.icon);
-      $('bdTitle').textContent = `${u.daysLeft}일 뒤 ${u.display_name}님 생신`;
+      $('bdTitle').textContent = `${u.daysLeft}일 뒤 ${u.display_name}님 생일`;
       $('bdSub').textContent = `${u.birth_month}월 ${u.birth_day}일${u.is_lunar ? ' (음력)' : ''}`;
       el.classList.remove('hidden');
     }
@@ -431,7 +433,7 @@ function renderUpcomingCard(r) {
       <span class="up-emoji">${iconEmoji(u.icon)}</span>
       <div class="up-body">
         <div class="up-name"></div>
-        <div class="up-date">${u.birth_month}월 ${u.birth_day}일${u.is_lunar ? ' (음력)' : ''} 생신</div>
+        <div class="up-date">${u.birth_month}월 ${u.birth_day}일${u.is_lunar ? ' (음력)' : ''} 생일</div>
       </div>
       <span class="up-days ${u.daysLeft === 0 ? 'today' : ''}"></span>`;
     li.querySelector('.up-name').textContent = `${u.display_name}님`;
@@ -554,10 +556,21 @@ async function loadFx() {
     $('fxJpyKrw').textContent = $('fxUsdJpy').textContent = $('fxUsdKrw').textContent = '—';
   }
 }
-['calcAmt','calcFrom','calcTo'].forEach((id) => {
-  $(id).addEventListener('input', calcUpdate);
-  $(id).addEventListener('change', calcUpdate);
+let CALC_FROM = 'JPY', CALC_TO = 'KRW';
+function highlightPills() {
+  document.querySelectorAll('#calcFromGroup .calc-pill').forEach((b) =>
+    b.classList.toggle('active', b.dataset.c === CALC_FROM));
+  document.querySelectorAll('#calcToGroup .calc-pill').forEach((b) =>
+    b.classList.toggle('active', b.dataset.c === CALC_TO));
+}
+document.querySelectorAll('#calcFromGroup .calc-pill').forEach((b) => {
+  b.addEventListener('click', () => { CALC_FROM = b.dataset.c; highlightPills(); calcUpdate(); });
 });
+document.querySelectorAll('#calcToGroup .calc-pill').forEach((b) => {
+  b.addEventListener('click', () => { CALC_TO = b.dataset.c; highlightPills(); calcUpdate(); });
+});
+highlightPills();
+$('calcAmt').addEventListener('input', calcUpdate);
 document.querySelectorAll('.calc-preset').forEach((btn) => {
   btn.addEventListener('click', () => {
     $('calcAmt').value = btn.dataset.amt;
@@ -565,25 +578,21 @@ document.querySelectorAll('.calc-preset').forEach((btn) => {
   });
 });
 $('calcSwap').addEventListener('click', () => {
-  const from = $('calcFrom'), to = $('calcTo');
-  const fv = from.value;
-  from.value = to.value;
-  to.value = fv;
-  // 금액도 결과값으로 치환 (연속 변환 편의)
+  const t = CALC_FROM; CALC_FROM = CALC_TO; CALC_TO = t;
   const resultText = $('calcResult').textContent.replace(/[^\d.-]/g, '');
   const n = parseFloat(resultText);
   if (Number.isFinite(n)) $('calcAmt').value = Math.round(n);
+  highlightPills();
   calcUpdate();
 });
 function calcUpdate() {
   const amt = parseFloat($('calcAmt').value);
-  const from = $('calcFrom').value, to = $('calcTo').value;
   if (!fxCache || !Number.isFinite(amt)) { $('calcResult').textContent = '—'; return; }
   const r = fxCache.rates;
-  const usd = from === 'USD' ? amt : amt / r[from];
-  const out = to === 'USD' ? usd : usd * r[to];
-  const sym = to === 'KRW' ? '원' : to === 'JPY' ? '엔' : '$';
-  const digits = to === 'USD' ? 2 : 0;
+  const usd = CALC_FROM === 'USD' ? amt : amt / r[CALC_FROM];
+  const out = CALC_TO === 'USD' ? usd : usd * r[CALC_TO];
+  const sym = CALC_TO === 'KRW' ? '원' : CALC_TO === 'JPY' ? '엔' : '$';
+  const digits = CALC_TO === 'USD' ? 2 : 0;
   $('calcResult').textContent = fmt.format(Number(out.toFixed(digits))) + sym;
 }
 
@@ -864,6 +873,103 @@ $('inviteShare').addEventListener('click', async () => {
   }
 });
 $('inviteClose').addEventListener('click', () => $('inviteResult').classList.add('hidden'));
+
+// ---------- 오늘의 가족 질문 ----------
+async function loadTodayQuestion() {
+  try {
+    const q = await api('/api/question/today');
+    $('questionText').textContent = q.question;
+    $('questionAnswer').value = q.myAnswer || '';
+    $('questionMeta').textContent =
+      `${q.answeredCount} / ${q.memberCount}명이 답했어요 · 모든 답변은 내일 공개돼요`;
+  } catch {
+    $('questionText').textContent = '잠시 후 다시 시도해 주세요';
+  }
+}
+
+$('questionSubmit').addEventListener('click', async () => {
+  const a = $('questionAnswer').value.trim();
+  if (!a) { alert('답변을 적어 주세요'); return; }
+  try {
+    await api('/api/question/today/answer', {
+      method: 'POST', body: JSON.stringify({ answer: a }),
+    });
+    $('questionSubmit').textContent = '저장됐어요';
+    setTimeout(() => $('questionSubmit').textContent = '답변 저장', 1500);
+    loadTodayQuestion();
+  } catch { alert('저장 실패'); }
+});
+
+async function loadYesterdayReveal() {
+  try {
+    const r = await api('/api/question/yesterday');
+    if (!r.question || !r.answers?.length) { $('revealCard').classList.add('hidden'); return; }
+    $('revealQuestion').textContent = r.question;
+    const ul = $('revealList');
+    ul.innerHTML = '';
+    for (const a of r.answers) {
+      const li = document.createElement('li');
+      li.innerHTML = `
+        <span class="reveal-emoji">${iconEmoji(a.icon)}</span>
+        <div class="reveal-body">
+          <div class="reveal-name"></div>
+          <div class="reveal-answer"></div>
+        </div>`;
+      li.querySelector('.reveal-name').textContent = a.display_name + '님';
+      li.querySelector('.reveal-answer').textContent = a.answer_text;
+      ul.appendChild(li);
+    }
+    $('revealCard').classList.remove('hidden');
+  } catch {}
+}
+
+$('qHistoryBtn').addEventListener('click', async () => {
+  try {
+    const list = await api('/api/question/history?limit=30');
+    const el = $('historyList');
+    el.innerHTML = '';
+    if (!list.length) {
+      el.innerHTML = '<p class="empty-state-text" style="text-align:center;padding:30px 0">아직 지난 기록이 없어요</p>';
+    } else {
+      for (const item of list) {
+        const d = new Date(item.date);
+        const div = document.createElement('div');
+        div.className = 'history-item';
+        div.innerHTML = `
+          <div class="history-date">${d.getMonth() + 1}월 ${d.getDate()}일</div>
+          <div class="history-q"></div>
+          <ul class="reveal-list history-answers"></ul>`;
+        div.querySelector('.history-q').textContent = item.question;
+        const ul = div.querySelector('.history-answers');
+        if (item.answers.length) {
+          for (const a of item.answers) {
+            const li = document.createElement('li');
+            li.innerHTML = `
+              <span class="reveal-emoji">${iconEmoji(a.icon)}</span>
+              <div class="reveal-body">
+                <div class="reveal-name"></div>
+                <div class="reveal-answer"></div>
+              </div>`;
+            li.querySelector('.reveal-name').textContent = a.display_name + '님';
+            li.querySelector('.reveal-answer').textContent = a.answer_text;
+            ul.appendChild(li);
+          }
+        } else {
+          const li = document.createElement('li');
+          li.innerHTML = '<div class="reveal-body"><div class="reveal-answer" style="color:var(--sub)">답변 기록 없음</div></div>';
+          ul.appendChild(li);
+        }
+        el.appendChild(div);
+      }
+    }
+    $('historySheet').classList.remove('hidden');
+  } catch { alert('기록 불러오기 실패'); }
+});
+
+$('historyClose').addEventListener('click', () => $('historySheet').classList.add('hidden'));
+$('historySheet').addEventListener('click', (e) => {
+  if (e.target.id === 'historySheet') $('historySheet').classList.add('hidden');
+});
 
 // 프로필 시트 닫기
 document.getElementById('sheetClose').addEventListener('click', closeProfileSheet);

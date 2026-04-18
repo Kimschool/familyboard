@@ -435,6 +435,163 @@ app.delete('/api/memos/:id', requireAuth, async (req, res) => {
   res.json({ ok: true });
 });
 
+// ---------- 오늘의 가족 질문 ----------
+const QUESTIONS = [
+  '오늘 가장 기뻤던 일은 무엇인가요?',
+  '가장 행복했던 순간은 언제인가요?',
+  '가족에게 가장 고마운 점은?',
+  '다시 돌아가고 싶은 시기가 있다면?',
+  '어릴 적 꿈은 무엇이었나요?',
+  '최근에 가장 맛있게 드신 음식은?',
+  '가족과 함께 가보고 싶은 여행지는?',
+  '오늘 하루를 한 단어로 표현한다면?',
+  '내가 가장 존경하는 사람은?',
+  '가족 중에 가장 닮고 싶은 모습은?',
+  '어릴 적 가장 좋아했던 음식은?',
+  '요즘 가장 고마웠던 사람은?',
+  '가장 좋아하는 계절과 그 이유는?',
+  '어릴 적 가장 좋아했던 놀이는?',
+  '가족에게 가장 하고 싶은 말은?',
+  '10년 뒤의 내 모습은 어떨까요?',
+  '가장 기억에 남는 여행지는?',
+  '최근에 가장 감동받았던 일은?',
+  '내가 가장 잘하는 것은 무엇인가요?',
+  '부모님께서 가장 자주 하셨던 말씀은?',
+  '우리 가족만의 추억 하나를 나눠 주세요',
+  '가족과 함께 꼭 해보고 싶은 일은?',
+  '가장 좋아하는 음식 조합은?',
+  '어릴 적 가장 무서웠던 기억은?',
+  '가족과 다시 가보고 싶은 장소는?',
+  '가장 많이 울었던 날은 언제였나요?',
+  '요즘 가장 자주 생각나는 사람은?',
+  '인생에서 가장 잘한 선택은?',
+  '가장 오래된 좋은 친구는 누구인가요?',
+  '가장 고치고 싶은 내 습관은?',
+  '어릴 적 가장 예뻤던 동네 풍경은?',
+  '가장 좋아하는 명절과 그 이유는?',
+  '가장 맛있게 끓인 음식은 무엇인가요?',
+  '아침에 눈을 뜨면 가장 먼저 드는 생각은?',
+  '가장 소중하게 간직하는 물건은?',
+  '요즘 가장 듣고 싶은 말은?',
+  '가장 위로가 되는 장소는 어디인가요?',
+  '최근에 가장 크게 웃었던 순간은?',
+  '20대의 나에게 한마디 한다면?',
+  '가족과 함께한 최고의 식사는?',
+];
+
+function todayLocal() {
+  const tz = process.env.DEFAULT_TZ || 'Asia/Tokyo';
+  return new Intl.DateTimeFormat('sv-SE', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+}
+function yesterdayLocal() {
+  const tz = process.env.DEFAULT_TZ || 'Asia/Tokyo';
+  const d = new Date();
+  d.setDate(d.getDate() - 1);
+  return new Intl.DateTimeFormat('sv-SE', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' }).format(d);
+}
+
+async function getOrCreateQuestion(familyId, dateStr) {
+  const [rows] = await getPool().query(
+    'SELECT * FROM daily_questions WHERE family_id = ? AND question_date = ? LIMIT 1',
+    [familyId, dateStr]
+  );
+  if (rows.length) return rows[0];
+  const days = Math.floor(new Date(dateStr).getTime() / 86400000);
+  const idx = ((familyId + days) % QUESTIONS.length + QUESTIONS.length) % QUESTIONS.length;
+  await getPool().query(
+    'INSERT IGNORE INTO daily_questions (family_id, question_date, question_text) VALUES (?, ?, ?)',
+    [familyId, dateStr, QUESTIONS[idx]]
+  );
+  const [rows2] = await getPool().query(
+    'SELECT * FROM daily_questions WHERE family_id = ? AND question_date = ? LIMIT 1',
+    [familyId, dateStr]
+  );
+  return rows2[0];
+}
+
+app.get('/api/question/today', requireAuth, async (req, res) => {
+  try {
+    const today = todayLocal();
+    const q = await getOrCreateQuestion(req.user.family_id, today);
+    const [my] = await getPool().query(
+      'SELECT answer_text FROM daily_answers WHERE question_id = ? AND user_id = ? LIMIT 1',
+      [q.id, req.user.id]
+    );
+    const [counts] = await getPool().query(
+      'SELECT COUNT(*) AS c FROM daily_answers WHERE question_id = ?', [q.id]
+    );
+    const [members] = await getPool().query(
+      "SELECT COUNT(*) AS c FROM users WHERE family_id = ? AND password_hash IS NOT NULL",
+      [req.user.family_id]
+    );
+    res.json({
+      date: today,
+      question: q.question_text,
+      myAnswer: my[0]?.answer_text || null,
+      answeredCount: counts[0].c,
+      memberCount: members[0].c,
+    });
+  } catch (e) { res.status(500).json({ error: 'internal', message: e.message }); }
+});
+
+app.post('/api/question/today/answer', requireAuth, async (req, res) => {
+  try {
+    const answer = (req.body?.answer || '').toString().trim();
+    if (!answer) return res.status(400).json({ error: 'empty' });
+    if (answer.length > 1000) return res.status(400).json({ error: 'too-long' });
+    const today = todayLocal();
+    const q = await getOrCreateQuestion(req.user.family_id, today);
+    await getPool().query(
+      `INSERT INTO daily_answers (question_id, user_id, answer_text) VALUES (?, ?, ?)
+       ON DUPLICATE KEY UPDATE answer_text = VALUES(answer_text)`,
+      [q.id, req.user.id, answer]
+    );
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: 'internal', message: e.message }); }
+});
+
+app.get('/api/question/yesterday', requireAuth, async (req, res) => {
+  try {
+    const y = yesterdayLocal();
+    const [qrows] = await getPool().query(
+      'SELECT * FROM daily_questions WHERE family_id = ? AND question_date = ? LIMIT 1',
+      [req.user.family_id, y]
+    );
+    if (!qrows.length) return res.json({ date: y, question: null, answers: [] });
+    const q = qrows[0];
+    const [ans] = await getPool().query(
+      `SELECT a.answer_text, a.user_id, u.display_name, u.icon
+         FROM daily_answers a JOIN users u ON u.id = a.user_id
+        WHERE a.question_id = ? ORDER BY a.created_at ASC`,
+      [q.id]
+    );
+    res.json({ date: y, question: q.question_text, answers: ans });
+  } catch (e) { res.status(500).json({ error: 'internal', message: e.message }); }
+});
+
+app.get('/api/question/history', requireAuth, async (req, res) => {
+  try {
+    const limit = Math.min(60, Number(req.query.limit) || 30);
+    const today = todayLocal();
+    const [qrows] = await getPool().query(
+      `SELECT * FROM daily_questions WHERE family_id = ? AND question_date < ?
+         ORDER BY question_date DESC LIMIT ?`,
+      [req.user.family_id, today, limit]
+    );
+    const results = [];
+    for (const q of qrows) {
+      const [ans] = await getPool().query(
+        `SELECT a.answer_text, u.display_name, u.icon
+           FROM daily_answers a JOIN users u ON u.id = a.user_id
+          WHERE a.question_id = ? ORDER BY a.created_at ASC`,
+        [q.id]
+      );
+      results.push({ date: q.question_date, question: q.question_text, answers: ans });
+    }
+    res.json(results);
+  } catch (e) { res.status(500).json({ error: 'internal', message: e.message }); }
+});
+
 // ---------- 띠별운세 ----------
 const ZODIAC = ['원숭이','닭','개','돼지','쥐','소','호랑이','토끼','용','뱀','말','양'];
 function zodiacOf(year) {
