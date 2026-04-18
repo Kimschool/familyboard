@@ -15,22 +15,54 @@
 </head>
 <body>
 
-<!-- 로그인 (테스트 중 임시 비활성화 — 되살리려면:
-     1) 아래 <section> 주석 해제
-     2) app.js 에서 AUTO_LOGIN=false
-<section id="login" class="screen login-screen hidden">
-  <div class="login-inner">
-    <div class="login-emoji">🌿</div>
-    <h1 class="login-title">가족보드</h1>
-    <p class="login-sub">아이디와 비밀번호를 입력해 주세요</p>
-    <input id="un" class="pw-input" type="text" placeholder="아이디" autocomplete="username" autocapitalize="off" />
-    <input id="pw" class="pw-input" type="password" placeholder="비밀번호" autocomplete="current-password" />
-    <button id="loginBtn" class="pw-btn">들어가기</button>
-    <p id="loginErr" class="pw-err"></p>
+<!-- 초대 수락 화면 (URL /invite?token=...) -->
+<section id="invite" class="screen invite-screen hidden">
+  <div class="auth-inner">
+    <div id="invIcon" class="auth-big-icon">✨</div>
+    <h1 class="auth-title" id="invTitle">가족보드에 오신 것을 환영해요</h1>
+    <p class="auth-sub" id="invSub">비밀번호를 만들어 주세요</p>
+    <input id="invPw"  class="auth-input" type="password" placeholder="비밀번호 (4자 이상)" autocomplete="new-password" />
+    <input id="invPw2" class="auth-input" type="password" placeholder="비밀번호 확인" autocomplete="new-password" />
+    <button id="invSubmit" class="auth-btn">시작하기</button>
+    <p id="invErr" class="auth-err"></p>
   </div>
 </section>
--->
 
+<!-- 로그인 - 1단계: 가족별칭 -->
+<section id="step1" class="screen login-screen hidden">
+  <div class="auth-inner">
+    <div class="auth-logo">🌿</div>
+    <h1 class="auth-title">가족보드</h1>
+    <p class="auth-sub">가족별칭을 입력해 주세요</p>
+    <input id="aliasInput" class="auth-input" type="text" placeholder="예: kim-family" autocapitalize="off" autocomplete="off" />
+    <button id="aliasNext" class="auth-btn">다음</button>
+    <p id="aliasErr" class="auth-err"></p>
+  </div>
+</section>
+
+<!-- 로그인 - 2단계: 멤버 선택 -->
+<section id="step2" class="screen login-screen hidden">
+  <div class="auth-inner">
+    <button class="auth-back" id="back1">← 가족별칭</button>
+    <h1 class="auth-title" id="familyTitle">—</h1>
+    <p class="auth-sub">누구신가요?</p>
+    <div id="memberGrid" class="member-grid"></div>
+    <p id="memberErr" class="auth-err"></p>
+  </div>
+</section>
+
+<!-- 로그인 - 3단계: 비밀번호 -->
+<section id="step3" class="screen login-screen hidden">
+  <div class="auth-inner">
+    <button class="auth-back" id="back2">← 다시 선택</button>
+    <div id="pickedIcon" class="auth-big-icon">✨</div>
+    <h1 class="auth-title" id="pickedName">—</h1>
+    <p class="auth-sub">비밀번호를 입력해 주세요</p>
+    <input id="pw" class="auth-input" type="password" placeholder="비밀번호" autocomplete="current-password" />
+    <button id="loginBtn" class="auth-btn">들어가기</button>
+    <p id="loginErr" class="auth-err"></p>
+  </div>
+</section>
 
 <!-- 메인 -->
 <main id="app" class="screen hidden">
@@ -40,7 +72,6 @@
     <h1 class="hero-greeting" id="greeting">안녕하세요</h1>
   </header>
 
-  <!-- 생일 배너 -->
   <section id="birthdayBanner" class="banner hidden">
     <span class="banner-emoji">🎂</span>
     <div>
@@ -49,7 +80,6 @@
     </div>
   </section>
 
-  <!-- 오늘 날씨/대기 -->
   <section class="card weather-card">
     <div class="weather-top">
       <div>
@@ -61,15 +91,11 @@
         <span id="wTemp" class="weather-temp">--°</span>
       </div>
     </div>
-
     <div class="weather-range">
-      <span>최고 <b id="wMax">--°</b></span>
-      <span class="dot">·</span>
-      <span>최저 <b id="wMin">--°</b></span>
-      <span class="dot">·</span>
+      <span>최고 <b id="wMax">--°</b></span><span class="dot">·</span>
+      <span>최저 <b id="wMin">--°</b></span><span class="dot">·</span>
       <span>체감 <b id="wFeel">--°</b></span>
     </div>
-
     <div class="chip-row">
       <span class="chip"><span class="chip-k">습도</span><b id="wHum">--%</b></span>
       <span class="chip"><span class="chip-k">미세</span><b id="aPm10">--</b><i class="lvl" id="aPm10L"></i></span>
@@ -78,7 +104,6 @@
     </div>
   </section>
 
-  <!-- 부모님 건강 조언 4개 -->
   <section class="card tips-card">
     <p class="card-title" id="tipsTitle">오늘의 안내</p>
     <ul class="tips">
@@ -89,7 +114,6 @@
     </ul>
   </section>
 
-  <!-- 띠별 운세 -->
   <section class="card zodiac-card">
     <p class="card-title">오늘의 띠별 운세</p>
     <ul class="zodiac-list" id="zodiacList">
@@ -97,7 +121,6 @@
     </ul>
   </section>
 
-  <!-- 환율 -->
   <section class="card fx-card">
     <p class="card-title">오늘의 환율</p>
     <ul class="fx-list">
@@ -108,29 +131,23 @@
     <p class="card-foot" id="fxTs">—</p>
   </section>
 
-  <!-- 환율 계산기 -->
   <section class="card calc-card">
     <p class="card-title">환율 계산기</p>
     <div class="calc-row">
       <input id="calcAmt" class="calc-input" type="number" inputmode="decimal" placeholder="금액" />
       <select id="calcFrom" class="calc-sel">
-        <option value="JPY">엔</option>
-        <option value="KRW">원</option>
-        <option value="USD">달러</option>
+        <option value="JPY">엔</option><option value="KRW">원</option><option value="USD">달러</option>
       </select>
     </div>
     <div class="calc-arrow">↓</div>
     <div class="calc-row">
       <div class="calc-result" id="calcResult">—</div>
       <select id="calcTo" class="calc-sel">
-        <option value="KRW">원</option>
-        <option value="JPY">엔</option>
-        <option value="USD">달러</option>
+        <option value="KRW">원</option><option value="JPY">엔</option><option value="USD">달러</option>
       </select>
     </div>
   </section>
 
-  <!-- 메모 -->
   <section class="card memo-card">
     <p class="card-title">오늘의 메모</p>
     <ul class="memo-list" id="memoList"></ul>
@@ -143,25 +160,66 @@
   <!-- 가족 관리 (관리자만) -->
   <section id="adminCard" class="card admin-card hidden">
     <button class="admin-toggle" id="adminToggle">
-      <span>가족 관리</span>
-      <span class="admin-chevron">▾</span>
+      <span>가족 관리</span><span class="admin-chevron">▾</span>
     </button>
     <div class="admin-body hidden" id="adminBody">
-      <ul class="user-list" id="userList"></ul>
-      <form id="userForm" class="user-form">
-        <input id="uUsername"  class="ufi" type="text"     placeholder="아이디 (예: mom)" autocapitalize="off" />
-        <input id="uDisplay"   class="ufi" type="text"     placeholder="표시 이름 (예: 엄마)" />
-        <input id="uPassword"  class="ufi" type="password" placeholder="비밀번호 (최소 4자)" />
+
+      <div class="admin-section">
+        <label class="admin-label">가족별칭 <span class="admin-hint">(중복 불가)</span></label>
+        <div class="admin-inline">
+          <input id="famAlias" class="ufi" type="text" autocapitalize="off" />
+          <button id="famAliasSave" class="ufi-btn">저장</button>
+        </div>
+        <label class="admin-label" style="margin-top:10px">가족 이름</label>
+        <div class="admin-inline">
+          <input id="famName" class="ufi" type="text" />
+          <button id="famNameSave" class="ufi-btn">저장</button>
+        </div>
+      </div>
+
+      <div class="admin-section">
+        <label class="admin-label">가족 구성원</label>
+        <ul class="user-list" id="userList"></ul>
+      </div>
+
+      <div class="admin-section">
+        <label class="admin-label">가족 추가</label>
         <div class="ufi-row">
-          <input id="uYear"  class="ufi-s" type="number" placeholder="출생년도 (예: 1960)" />
-          <input id="uMonth" class="ufi-s" type="number" placeholder="월" min="1" max="12" />
-          <input id="uDay"   class="ufi-s" type="number" placeholder="일" min="1" max="31" />
+          <input id="uUsername" class="ufi" type="text"     placeholder="아이디 (예: mom)" autocapitalize="off" />
+          <input id="uDisplay"  class="ufi" type="text"     placeholder="별칭 (예: 엄마)" />
+        </div>
+
+        <label class="admin-label" style="margin-top:10px">아이콘 선택</label>
+        <div id="iconPicker" class="icon-picker"></div>
+
+        <div class="ufi-row" style="margin-top:10px">
+          <input id="uYear"  class="ufi-s" type="number" placeholder="출생년도" />
+          <input id="uMonth" class="ufi-s" type="number" placeholder="월"  min="1" max="12" />
+          <input id="uDay"   class="ufi-s" type="number" placeholder="일"  min="1" max="31" />
         </div>
         <label class="ufi-check">
           <input id="uLunar" type="checkbox" /> 음력
         </label>
-        <button type="submit" class="user-add">가족 추가</button>
-      </form>
+        <label class="ufi-check">
+          <input id="uAdmin" type="checkbox" /> 이 구성원도 관리자 권한
+        </label>
+        <button id="userAddBtn" type="button" class="user-add">가족 추가 → 초대 링크 생성</button>
+      </div>
+
+      <!-- 초대 링크 모달 -->
+      <div id="inviteResult" class="invite-result hidden">
+        <p class="invite-result-title">초대 링크가 준비됐어요</p>
+        <p class="invite-result-desc" id="inviteResultDesc">—</p>
+        <div class="invite-url-row">
+          <input id="inviteUrl" class="invite-url" readonly />
+          <button id="inviteCopy" class="ufi-btn">복사</button>
+        </div>
+        <div class="invite-share-row">
+          <button id="inviteShare" class="auth-btn" style="height:44px">공유하기</button>
+          <button id="inviteClose" class="ufi-btn">닫기</button>
+        </div>
+      </div>
+
     </div>
   </section>
 
@@ -172,15 +230,14 @@
 </main>
 
 <script>
-  // 테스트 중: 과거 SW/캐시 흔적을 부팅 직전에 털어냄
+  // 캐시로 인한 옛 화면 방지
   if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.getRegistrations()
-      .then((rs) => rs.forEach((r) => r.unregister())).catch(() => {});
+    navigator.serviceWorker.getRegistrations().then((rs) => rs.forEach((r) => r.unregister())).catch(() => {});
   }
   if (window.caches) {
     caches.keys().then((ks) => ks.forEach((k) => caches.delete(k))).catch(() => {});
   }
 </script>
-<script src="/app.js?v=4" defer></script>
+<script src="/app.js?v=5" defer></script>
 </body>
 </html>

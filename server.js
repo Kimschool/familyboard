@@ -4,19 +4,19 @@ const path = require('path');
 const bcrypt = require('bcryptjs');
 const { ensureSchema, getPool } = require('./db');
 const {
-  bootstrapAdmin, login, logout, verify,
+  bootstrapAdmin, login, logout, verify, issueToken,
   requireAuth, requireAdmin, publicUser,
+  newInviteToken, INVITE_TTL_DAYS,
 } = require('./auth');
 
 const app = express();
 app.use(express.json({ limit: '200kb' }));
 app.use(express.urlencoded({ extended: false }));
 
-// async 라우트 에러 → 500 (미처리 거부로 프로세스 죽지 않도록)
 process.on('unhandledRejection', (e) => console.error('[unhandledRejection]', e));
 process.on('uncaughtException',  (e) => console.error('[uncaughtException]',  e));
 
-// ---------- 간단 쿠키 파서 ----------
+// ---------- cookie parser ----------
 app.use((req, _res, next) => {
   const raw = req.headers.cookie || '';
   req.cookies = Object.fromEntries(
@@ -28,27 +28,63 @@ app.use((req, _res, next) => {
   next();
 });
 
-// ---------- 캐시 ----------
+// ---------- cache ----------
 const cache = new Map();
 function cacheGet(key, ttlMs) {
-  const v = cache.get(key);
-  if (!v) return null;
+  const v = cache.get(key); if (!v) return null;
   if (Date.now() - v.t > ttlMs) { cache.delete(key); return null; }
   return v.data;
 }
 function cacheSet(key, data) { cache.set(key, { t: Date.now(), data }); }
 
+const setSessionCookie = (res, token) =>
+  res.setHeader('Set-Cookie',
+    `fb_token=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${30 * 86400}`);
+
 // ---------- 헬스 ----------
 app.get('/api/health', (_req, res) => res.json({ ok: true, ts: Date.now() }));
+
+// ---------- 가족 조회 (public): 별칭으로 멤버 목록 ----------
+app.get('/api/family/:alias', async (req, res) => {
+  try {
+    const alias = (req.params.alias || '').trim();
+    const [f] = await getPool().query(
+      'SELECT id, alias, display_name FROM families WHERE alias = ? LIMIT 1', [alias]
+    );
+    if (!f.length) return res.status(404).json({ error: 'not-found' });
+    const [users] = await getPool().query(
+      `SELECT id, display_name, icon, role,
+              (password_hash IS NOT NULL) AS activated
+         FROM users WHERE family_id = ?
+         ORDER BY role DESC, id ASC`,
+      [f[0].id]
+    );
+    res.json({
+      family: { alias: f[0].alias, displayName: f[0].display_name },
+      members: users.map((u) => ({
+        id: u.id,
+        displayName: u.display_name,
+        icon: u.icon,
+        role: u.role,
+        activated: !!u.activated,
+      })),
+    });
+  } catch (e) { res.status(500).json({ error: 'internal', message: e.message }); }
+});
 
 // ---------- 인증 ----------
 app.post('/api/login', async (req, res) => {
   try {
-    const r = await login(req.body?.username, req.body?.password);
+    const r = await login({
+      alias: req.body?.alias,
+      userId: req.body?.userId,
+      username: req.body?.username,
+      password: req.body?.password,
+    });
     if (!r) return res.status(401).json({ error: 'invalid' });
-    res.setHeader('Set-Cookie',
-      `fb_token=${encodeURIComponent(r.token)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${30 * 86400}`);
-    res.json({ ok: true, user: r.user });
+    setSessionCookie(res, r.token);
+    const me = await verify(r.token);
+    res.json({ ok: true, user: publicUser(me) });
   } catch (e) {
     console.error('[login] error:', e.message);
     res.status(500).json({ error: 'login-failed', message: e.message });
@@ -67,76 +103,203 @@ app.post('/api/logout', async (req, res) => {
   res.json({ ok: true });
 });
 
-// ---------- 사용자 관리 (관리자만) ----------
-app.get('/api/users', requireAdmin, async (_req, res) => {
+// ---------- 초대 (public) ----------
+app.get('/api/invite/:token', async (req, res) => {
+  try {
+    const token = req.params.token;
+    const [rows] = await getPool().query(
+      `SELECT u.id, u.display_name, u.icon, u.invite_expires_at,
+              f.alias AS family_alias, f.display_name AS family_name
+         FROM users u JOIN families f ON f.id = u.family_id
+        WHERE u.invite_token = ? LIMIT 1`,
+      [token]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'invalid-invite' });
+    const u = rows[0];
+    if (u.invite_expires_at && new Date(u.invite_expires_at) < new Date()) {
+      return res.status(410).json({ error: 'expired' });
+    }
+    res.json({
+      family: { alias: u.family_alias, displayName: u.family_name },
+      member: { id: u.id, displayName: u.display_name, icon: u.icon },
+    });
+  } catch (e) { res.status(500).json({ error: 'internal', message: e.message }); }
+});
+
+app.post('/api/invite/:token/accept', async (req, res) => {
+  try {
+    const token = req.params.token;
+    const pw = (req.body?.password || '').toString();
+    if (pw.length < 4) return res.status(400).json({ error: 'password-too-short' });
+
+    const [rows] = await getPool().query(
+      'SELECT id, invite_expires_at FROM users WHERE invite_token = ? LIMIT 1',
+      [token]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'invalid-invite' });
+    if (rows[0].invite_expires_at && new Date(rows[0].invite_expires_at) < new Date()) {
+      return res.status(410).json({ error: 'expired' });
+    }
+    const uid = rows[0].id;
+    const hash = bcrypt.hashSync(pw, 10);
+    await getPool().query(
+      'UPDATE users SET password_hash = ?, invite_token = NULL, invite_expires_at = NULL WHERE id = ?',
+      [hash, uid]
+    );
+    const r = await issueToken(uid);
+    setSessionCookie(res, r.token);
+    const me = await verify(r.token);
+    res.json({ ok: true, user: publicUser(me) });
+  } catch (e) { res.status(500).json({ error: 'internal', message: e.message }); }
+});
+
+// ---------- 가족 관리 (관리자) ----------
+app.get('/api/users', requireAdmin, async (req, res) => {
   const [rows] = await getPool().query(
-    `SELECT id, username, display_name, role, birth_year, birth_month, birth_day, is_lunar
-       FROM users ORDER BY role DESC, id ASC`
+    `SELECT id, username, display_name, role, icon, birth_year, birth_month, birth_day, is_lunar,
+            (password_hash IS NOT NULL) AS activated,
+            invite_token, invite_expires_at
+       FROM users WHERE family_id = ? ORDER BY role DESC, id ASC`,
+    [req.user.family_id]
   );
-  res.json(rows.map(publicUser));
+  res.json(rows.map((r) => ({
+    ...publicUser(r),
+    activated: !!r.activated,
+    inviteToken: r.invite_token,
+    inviteExpiresAt: r.invite_expires_at,
+  })));
 });
 
 app.post('/api/users', requireAdmin, async (req, res) => {
-  const { username, displayName, password, role, birthYear, birthMonth, birthDay, isLunar } = req.body || {};
-  const u = (username || '').trim();
-  const d = (displayName || '').trim();
-  const p = password || '';
-  const r = role === 'admin' ? 'admin' : 'member';
-
-  if (!u || !d || p.length < 4) return res.status(400).json({ error: 'invalid-input' });
-  const by = Number(birthYear) || null;
-  const bm = Number(birthMonth) || null;
-  const bd = Number(birthDay) || null;
-  if (bm !== null && !(bm >= 1 && bm <= 12)) return res.status(400).json({ error: 'bad-month' });
-  if (bd !== null && !(bd >= 1 && bd <= 31)) return res.status(400).json({ error: 'bad-day' });
-
-  const hash = bcrypt.hashSync(p, 10);
   try {
+    const { username, displayName, role, icon, birthYear, birthMonth, birthDay, isLunar } = req.body || {};
+    const u = (username || '').trim();
+    const d = (displayName || '').trim();
+    const r = role === 'admin' ? 'admin' : 'member';
+    const ic = (icon || 'star').trim();
+    if (!u || !d) return res.status(400).json({ error: 'invalid-input' });
+    const by = Number(birthYear) || null;
+    const bm = Number(birthMonth) || null;
+    const bd = Number(birthDay) || null;
+    if (bm !== null && !(bm >= 1 && bm <= 12)) return res.status(400).json({ error: 'bad-month' });
+    if (bd !== null && !(bd >= 1 && bd <= 31)) return res.status(400).json({ error: 'bad-day' });
+
+    const token = newInviteToken();
+    const expires = new Date(Date.now() + INVITE_TTL_DAYS * 86400_000);
     const [result] = await getPool().query(
-      `INSERT INTO users (username, display_name, role, password_hash, birth_year, birth_month, birth_day, is_lunar)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      [u, d, r, hash, by, bm, bd, isLunar ? 1 : 0]
+      `INSERT INTO users (family_id, username, display_name, role, icon, password_hash,
+                          invite_token, invite_expires_at, birth_year, birth_month, birth_day, is_lunar)
+       VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?)`,
+      [req.user.family_id, u, d, r, ic, token, expires, by, bm, bd, isLunar ? 1 : 0]
     );
-    res.json({ ok: true, id: result.insertId });
+    res.json({ ok: true, id: result.insertId, inviteToken: token, inviteExpiresAt: expires });
   } catch (e) {
-    if (e.code === 'ER_DUP_ENTRY') return res.status(409).json({ error: 'username-exists' });
-    throw e;
+    if (e.code === 'ER_DUP_ENTRY') {
+      const m = e.sqlMessage.includes('uniq_family_display') ? 'display-exists' : 'username-exists';
+      return res.status(409).json({ error: m });
+    }
+    res.status(500).json({ error: 'internal', message: e.message });
   }
+});
+
+app.post('/api/users/:id/invite', requireAdmin, async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id)) return res.status(400).json({ error: 'bad-id' });
+    const [rows] = await getPool().query(
+      'SELECT id FROM users WHERE id = ? AND family_id = ? LIMIT 1',
+      [id, req.user.family_id]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'not-found' });
+
+    const token = newInviteToken();
+    const expires = new Date(Date.now() + INVITE_TTL_DAYS * 86400_000);
+    // 비번도 초기화 (재설정 요청)
+    await getPool().query(
+      'UPDATE users SET invite_token = ?, invite_expires_at = ?, password_hash = NULL WHERE id = ?',
+      [token, expires, id]
+    );
+    res.json({ ok: true, inviteToken: token, inviteExpiresAt: expires });
+  } catch (e) { res.status(500).json({ error: 'internal', message: e.message }); }
 });
 
 app.patch('/api/users/:id', requireAdmin, async (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'bad-id' });
 
-  const updates = [];
-  const args = [];
-  const { displayName, password, birthYear, birthMonth, birthDay, isLunar } = req.body || {};
-
+  const updates = [], args = [];
+  const { displayName, role, icon, birthYear, birthMonth, birthDay, isLunar, password } = req.body || {};
   if (displayName !== undefined) { updates.push('display_name = ?'); args.push(String(displayName).trim()); }
-  if (password) { updates.push('password_hash = ?'); args.push(bcrypt.hashSync(password, 10)); }
-  if (birthYear !== undefined)  { updates.push('birth_year = ?');  args.push(Number(birthYear) || null); }
+  if (role !== undefined && (role === 'admin' || role === 'member')) { updates.push('role = ?'); args.push(role); }
+  if (icon !== undefined) { updates.push('icon = ?'); args.push(String(icon).trim() || 'star'); }
+  if (birthYear !== undefined)  { updates.push('birth_year = ?');  args.push(Number(birthYear)  || null); }
   if (birthMonth !== undefined) { updates.push('birth_month = ?'); args.push(Number(birthMonth) || null); }
-  if (birthDay !== undefined)   { updates.push('birth_day = ?');   args.push(Number(birthDay) || null); }
+  if (birthDay !== undefined)   { updates.push('birth_day = ?');   args.push(Number(birthDay)   || null); }
   if (isLunar !== undefined)    { updates.push('is_lunar = ?');    args.push(isLunar ? 1 : 0); }
+  if (password) { updates.push('password_hash = ?'); args.push(bcrypt.hashSync(password, 10)); }
 
   if (!updates.length) return res.json({ ok: true });
-  args.push(id);
-  await getPool().query(`UPDATE users SET ${updates.join(', ')} WHERE id = ?`, args);
-  res.json({ ok: true });
+  args.push(id, req.user.family_id);
+  try {
+    await getPool().query(
+      `UPDATE users SET ${updates.join(', ')} WHERE id = ? AND family_id = ?`, args);
+    res.json({ ok: true });
+  } catch (e) {
+    if (e.code === 'ER_DUP_ENTRY') return res.status(409).json({ error: 'display-exists' });
+    res.status(500).json({ error: 'internal', message: e.message });
+  }
 });
 
 app.delete('/api/users/:id', requireAdmin, async (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'bad-id' });
   if (id === req.user.id) return res.status(400).json({ error: 'cannot-delete-self' });
-  await getPool().query('DELETE FROM users WHERE id = ?', [id]);
+
+  // 마지막 관리자 삭제 방지
+  const [target] = await getPool().query(
+    'SELECT role FROM users WHERE id = ? AND family_id = ? LIMIT 1',
+    [id, req.user.family_id]
+  );
+  if (!target.length) return res.status(404).json({ error: 'not-found' });
+  if (target[0].role === 'admin') {
+    const [cnt] = await getPool().query(
+      "SELECT COUNT(*) AS c FROM users WHERE family_id = ? AND role = 'admin'",
+      [req.user.family_id]
+    );
+    if (cnt[0].c <= 1) return res.status(400).json({ error: 'last-admin' });
+  }
+
+  await getPool().query('DELETE FROM users WHERE id = ? AND family_id = ?', [id, req.user.family_id]);
   await getPool().query('DELETE FROM sessions WHERE user_id = ?', [id]);
   res.json({ ok: true });
 });
 
-// ---------- 날씨 (Open-Meteo) ----------
-const TZ = process.env.DEFAULT_TZ || 'Asia/Tokyo';
-const TZ_ENC = encodeURIComponent(TZ);
+// ---------- 가족 정보 (관리자: 별칭 수정) ----------
+app.get('/api/family', requireAuth, async (req, res) => {
+  const [rows] = await getPool().query(
+    'SELECT alias, display_name FROM families WHERE id = ? LIMIT 1', [req.user.family_id]
+  );
+  res.json(rows[0] ? { alias: rows[0].alias, displayName: rows[0].display_name } : {});
+});
+
+app.patch('/api/family', requireAdmin, async (req, res) => {
+  try {
+    const { alias, displayName } = req.body || {};
+    const upd = [], args = [];
+    if (alias !== undefined) { upd.push('alias = ?'); args.push(String(alias).trim()); }
+    if (displayName !== undefined) { upd.push('display_name = ?'); args.push(String(displayName).trim()); }
+    if (!upd.length) return res.json({ ok: true });
+    args.push(req.user.family_id);
+    await getPool().query(`UPDATE families SET ${upd.join(', ')} WHERE id = ?`, args);
+    res.json({ ok: true });
+  } catch (e) {
+    if (e.code === 'ER_DUP_ENTRY') return res.status(409).json({ error: 'alias-exists' });
+    res.status(500).json({ error: 'internal', message: e.message });
+  }
+});
+
+// ---------- 날씨 / 대기질 / 환율 ----------
+const TZ_ENC = encodeURIComponent(process.env.DEFAULT_TZ || 'Asia/Tokyo');
 
 app.get('/api/weather', async (_req, res) => {
   try {
@@ -150,9 +313,7 @@ app.get('/api/weather', async (_req, res) => {
       `&current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m` +
       `&daily=temperature_2m_max,temperature_2m_min,weather_code,precipitation_probability_max` +
       `&timezone=${TZ_ENC}&forecast_days=1`;
-    const r = await fetch(url);
-    const j = await r.json();
-
+    const j = await (await fetch(url)).json();
     const out = {
       city: process.env.DEFAULT_CITY || '도쿄',
       temp: Math.round(j.current?.temperature_2m ?? 0),
@@ -166,12 +327,9 @@ app.get('/api/weather', async (_req, res) => {
     };
     cacheSet(key, out);
     res.json(out);
-  } catch (e) {
-    res.status(502).json({ error: 'weather-fetch-failed', message: e.message });
-  }
+  } catch (e) { res.status(502).json({ error: 'weather-fetch-failed', message: e.message }); }
 });
 
-// ---------- 대기질 ----------
 app.get('/api/air', async (_req, res) => {
   try {
     const lat = process.env.DEFAULT_LAT || '35.6895';
@@ -182,74 +340,58 @@ app.get('/api/air', async (_req, res) => {
 
     const url = `https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${lat}&longitude=${lon}` +
       `&current=pm10,pm2_5,alder_pollen,birch_pollen,grass_pollen&timezone=${TZ_ENC}`;
-    const r = await fetch(url);
-    const j = await r.json();
+    const j = await (await fetch(url)).json();
 
     const pm10 = j.current?.pm10 ?? null;
     const pm25 = j.current?.pm2_5 ?? null;
     const pollen = Math.max(
-      j.current?.alder_pollen ?? 0,
-      j.current?.birch_pollen ?? 0,
-      j.current?.grass_pollen ?? 0
+      j.current?.alder_pollen ?? 0, j.current?.birch_pollen ?? 0, j.current?.grass_pollen ?? 0
     );
-
     const out = {
       pm10, pm25,
       pm10Level: level(pm10, [30, 80, 150]),
       pm25Level: level(pm25, [15, 35, 75]),
-      pollen,
-      pollenLevel: level(pollen, [1, 10, 50]),
+      pollen, pollenLevel: level(pollen, [1, 10, 50]),
     };
     cacheSet(key, out);
     res.json(out);
-  } catch (e) {
-    res.status(502).json({ error: 'air-fetch-failed', message: e.message });
-  }
+  } catch (e) { res.status(502).json({ error: 'air-fetch-failed', message: e.message }); }
 });
-
 function level(v, [g, m, b]) {
   if (v == null) return 'unknown';
-  if (v <= g) return 'good';
-  if (v <= m) return 'normal';
-  if (v <= b) return 'bad';
+  if (v <= g) return 'good'; if (v <= m) return 'normal'; if (v <= b) return 'bad';
   return 'worst';
 }
 
-// ---------- 환율 ----------
 app.get('/api/fx', async (_req, res) => {
   try {
     const key = 'fx:USD';
     const cached = cacheGet(key, 60 * 60 * 1000);
     if (cached) return res.json(cached);
-
-    const r = await fetch('https://open.er-api.com/v6/latest/USD');
-    const j = await r.json();
+    const j = await (await fetch('https://open.er-api.com/v6/latest/USD')).json();
     if (j.result !== 'success') throw new Error('fx-bad-response');
-
-    const krw = j.rates.KRW;
-    const jpy = j.rates.JPY;
+    const krw = j.rates.KRW, jpy = j.rates.JPY;
     const out = {
       ts: j.time_last_update_unix * 1000,
       usdKrw: Math.round(krw),
       usdJpy: Math.round(jpy * 100) / 100,
       jpyKrw: Math.round((krw / jpy) * 100 * 100) / 100,
-      rates: j.rates,
-      base: 'USD',
+      rates: j.rates, base: 'USD',
     };
     cacheSet(key, out);
     res.json(out);
-  } catch (e) {
-    res.status(502).json({ error: 'fx-fetch-failed', message: e.message });
-  }
+  } catch (e) { res.status(502).json({ error: 'fx-fetch-failed', message: e.message }); }
 });
 
-// ---------- 메모 CRUD ----------
-app.get('/api/memos', requireAuth, async (_req, res) => {
+// ---------- 메모 (가족 단위) ----------
+app.get('/api/memos', requireAuth, async (req, res) => {
   const [rows] = await getPool().query(
     `SELECT m.id, m.content, m.done, m.created_at,
-            COALESCE(u.display_name, '') AS created_by_name
+            COALESCE(u.display_name, '') AS created_by_name, u.icon AS created_by_icon
        FROM memos m LEFT JOIN users u ON u.id = m.created_by
-      ORDER BY m.done ASC, m.id DESC LIMIT 100`
+      WHERE m.family_id = ?
+      ORDER BY m.done ASC, m.id DESC LIMIT 100`,
+    [req.user.family_id]
   );
   res.json(rows);
 });
@@ -259,35 +401,39 @@ app.post('/api/memos', requireAuth, async (req, res) => {
   if (!content) return res.status(400).json({ error: 'content-required' });
   if (content.length > 500) return res.status(400).json({ error: 'too-long' });
   const [r] = await getPool().query(
-    'INSERT INTO memos (content, created_by) VALUES (?, ?)', [content, req.user.id]
+    'INSERT INTO memos (family_id, content, created_by) VALUES (?, ?, ?)',
+    [req.user.family_id, content, req.user.id]
   );
-  res.json({ id: r.insertId, content, done: 0, created_by_name: req.user.display_name });
+  res.json({ id: r.insertId, content, done: 0,
+            created_by_name: req.user.display_name, created_by_icon: req.user.icon });
 });
 
 app.patch('/api/memos/:id', requireAuth, async (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'bad-id' });
   const done = req.body?.done ? 1 : 0;
-  await getPool().query('UPDATE memos SET done = ? WHERE id = ?', [done, id]);
+  await getPool().query(
+    'UPDATE memos SET done = ? WHERE id = ? AND family_id = ?',
+    [done, id, req.user.family_id]
+  );
   res.json({ ok: true });
 });
 
 app.delete('/api/memos/:id', requireAuth, async (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'bad-id' });
-  await getPool().query('DELETE FROM memos WHERE id = ?', [id]);
+  await getPool().query(
+    'DELETE FROM memos WHERE id = ? AND family_id = ?', [id, req.user.family_id]
+  );
   res.json({ ok: true });
 });
 
 // ---------- 띠별운세 ----------
 const ZODIAC = ['원숭이','닭','개','돼지','쥐','소','호랑이','토끼','용','뱀','말','양'];
-// 기준: AD 0년 = 원숭이년 기준 (year % 12 매핑) → 2024 = (2024 % 12 = 8) = 용 ✓
 function zodiacOf(year) {
   if (!year) return null;
-  const i = ((year % 12) + 12) % 12;
-  return ZODIAC[i];
+  return ZODIAC[((year % 12) + 12) % 12];
 }
-
 const FORTUNE = {
   '쥐':  ['꼼꼼함이 빛을 발하는 하루','작은 정보 하나가 큰 도움이 돼요','돈 관리에 좋은 흐름','가족과의 대화가 기분을 올려줘요','서두르지 않으면 좋은 결과가 있어요','새로운 시도가 재미있을 거예요','조용한 휴식이 필요한 날'],
   '소':  ['한 걸음씩 나아가는 힘이 있어요','꾸준함이 복을 불러와요','무리하지 말고 쉬어 가세요','든든한 한 끼가 마음을 채워줘요','오랜 친구에게 연락해 보세요','작은 성취에 기뻐하는 하루','마음을 비우면 편해져요'],
@@ -302,38 +448,38 @@ const FORTUNE = {
   '개':  ['신의 있는 모습이 인정받아요','든든한 하루','가족이 큰 힘이 돼요','작은 여행이 떠오르는 날','몸 상태를 살피면 좋아요','따뜻한 한마디가 힘이 돼요','조용히 보내는 저녁'],
   '돼지':['여유 속에 행복이 있어요','좋은 인연이 가까이 있어요','맛있는 것이 위안이 돼요','기분 좋은 소식을 듣는 날','소소한 복이 많은 하루','무리하지 않아도 괜찮아요','따뜻한 휴식이 필요해요'],
 };
-
 function dayOfYear(d = new Date()) {
-  const start = new Date(d.getFullYear(), 0, 0);
-  return Math.floor((d - start) / 86400000);
+  return Math.floor((d - new Date(d.getFullYear(), 0, 0)) / 86400000);
 }
 
-app.get('/api/zodiac', requireAuth, async (_req, res) => {
+app.get('/api/zodiac', requireAuth, async (req, res) => {
   const [rows] = await getPool().query(
-    `SELECT id, display_name, birth_year, birth_month, birth_day
-       FROM users WHERE birth_year IS NOT NULL
-       ORDER BY role DESC, id ASC`
+    `SELECT id, display_name, icon, birth_year FROM users
+      WHERE family_id = ? AND birth_year IS NOT NULL
+      ORDER BY role DESC, id ASC`,
+    [req.user.family_id]
   );
   const doy = dayOfYear();
-  const out = rows.map((u) => {
+  res.json(rows.map((u) => {
     const z = zodiacOf(u.birth_year);
     const pool = FORTUNE[z] || [];
     const fortune = pool.length ? pool[(doy + u.id) % pool.length] : '좋은 하루 되세요';
-    return { name: u.display_name, year: u.birth_year, zodiac: z, fortune };
-  });
-  res.json(out);
+    return { name: u.display_name, icon: u.icon, year: u.birth_year, zodiac: z, fortune };
+  }));
 });
 
-// ---------- 곧 다가오는 생일 (인증 필요) ----------
-app.get('/api/birthdays/soon', requireAuth, async (_req, res) => {
+// ---------- 곧 다가오는 생일 ----------
+app.get('/api/birthdays/soon', requireAuth, async (req, res) => {
   const [rows] = await getPool().query(
-    `SELECT id, display_name, birth_month, birth_day, is_lunar
-       FROM users WHERE birth_month IS NOT NULL AND birth_day IS NOT NULL`
+    `SELECT id, display_name, icon, birth_month, birth_day, is_lunar
+       FROM users WHERE family_id = ?
+         AND birth_month IS NOT NULL AND birth_day IS NOT NULL`,
+    [req.user.family_id]
   );
   const today = new Date();
   const todayKey = `${today.getMonth() + 1}-${today.getDate()}`;
-  const within7 = [];
   let todayMatch = null;
+  const within7 = [];
   for (const r of rows) {
     const k = `${r.birth_month}-${r.birth_day}`;
     if (k === todayKey) todayMatch = r;
@@ -343,12 +489,11 @@ app.get('/api/birthdays/soon', requireAuth, async (_req, res) => {
   within7.sort((a, b) => a.daysLeft - b.daysLeft);
   res.json({ today: todayMatch, upcoming: within7 });
 });
-
 function daysUntil(m, d) {
   const now = new Date();
   const y = now.getFullYear();
-  let target = new Date(y, m - 1, d);
   const todayMid = new Date(y, now.getMonth(), now.getDate());
+  let target = new Date(y, m - 1, d);
   if (target < todayMid) target = new Date(y + 1, m - 1, d);
   return Math.round((target - todayMid) / 86400000);
 }
@@ -358,7 +503,6 @@ app.use(express.static(path.join(__dirname, 'public'), {
   etag: true,
   maxAge: '1h',
   setHeaders: (res, p) => {
-    // 테스트 중: SW / HTML / app.js 는 캐싱 금지 (Cloudflare 우회)
     if (p.endsWith('service-worker.js') || p.endsWith('index.html') || p.endsWith('app.js')) {
       res.setHeader('Cache-Control', 'private, no-cache, no-store, must-revalidate');
       res.setHeader('Pragma', 'no-cache');
@@ -367,11 +511,11 @@ app.use(express.static(path.join(__dirname, 'public'), {
   },
 }));
 
+// 초대 페이지도 index.html 로 떨어뜨려 SPA 처리
 app.get('*', (_req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// Express 에러 미들웨어 (async 핸들러의 거부를 500 으로 변환)
 app.use((err, _req, res, _next) => {
   console.error('[api error]', err);
   if (res.headersSent) return;
@@ -385,8 +529,6 @@ const PORT = Number(process.env.PORT || 3003);
     await ensureSchema();
     console.log('[db] schema ready');
     await bootstrapAdmin();
-  } catch (e) {
-    console.warn('[db] init failed (continuing):', e.message);
-  }
+  } catch (e) { console.warn('[db] init failed (continuing):', e.message); }
   app.listen(PORT, () => console.log(`familyboard listening on :${PORT}`));
 })();

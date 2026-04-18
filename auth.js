@@ -4,6 +4,7 @@ const crypto = require('crypto');
 const { getPool } = require('./db');
 
 const TOKEN_TTL_DAYS = 30;
+const INVITE_TTL_DAYS = 14;
 
 function getSecret() {
   const s = process.env.JWT_SECRET;
@@ -22,38 +23,61 @@ async function bootstrapAdmin() {
     console.warn('[auth] ADMIN_PASSWORD not set — admin account not bootstrapped');
     return;
   }
+
+  const [f] = await getPool().query('SELECT id FROM families ORDER BY id ASC LIMIT 1');
+  if (!f.length) { console.warn('[auth] no family found; skip admin bootstrap'); return; }
+
   const hash = bcrypt.hashSync(password, 10);
   await getPool().query(
-    'INSERT INTO users (username, display_name, role, password_hash) VALUES (?, ?, ?, ?)',
-    [username, display, 'admin', hash]
+    `INSERT INTO users (family_id, username, display_name, role, icon, password_hash)
+     VALUES (?, ?, ?, 'admin', 'star', ?)`,
+    [f[0].id, username, display, hash]
   );
   console.log(`[auth] admin account created: ${username}`);
 }
 
-async function login(username, password) {
-  username = (username || '').trim();
-  if (!username || !password) return null;
-  const [rows] = await getPool().query(
-    'SELECT id, username, display_name, role, password_hash FROM users WHERE username = ? LIMIT 1',
-    [username]
-  );
-  if (!rows.length) return null;
-  const u = rows[0];
-  if (!bcrypt.compareSync(password, u.password_hash)) return null;
+// --- login: alias + username/id + password ---
+async function login({ alias, userId, username, password }) {
+  password = password || '';
+  alias = (alias || '').trim();
+  if (!alias || !password) return null;
 
-  // jti 로 토큰 유일성 보장 (같은 초에 같은 사용자로 로그인해도 토큰 다름)
+  const [frows] = await getPool().query('SELECT id FROM families WHERE alias = ? LIMIT 1', [alias]);
+  if (!frows.length) return null;
+  const familyId = frows[0].id;
+
+  let row;
+  if (userId) {
+    const [r] = await getPool().query(
+      'SELECT id, username, display_name, role, icon, password_hash FROM users WHERE family_id = ? AND id = ? LIMIT 1',
+      [familyId, Number(userId)]
+    );
+    row = r[0];
+  } else if (username) {
+    const [r] = await getPool().query(
+      'SELECT id, username, display_name, role, icon, password_hash FROM users WHERE family_id = ? AND username = ? LIMIT 1',
+      [familyId, (username || '').trim()]
+    );
+    row = r[0];
+  }
+  if (!row || !row.password_hash) return null;
+  if (!bcrypt.compareSync(password, row.password_hash)) return null;
+
+  return issueToken(row.id);
+}
+
+async function issueToken(userId) {
   const jti = crypto.randomBytes(16).toString('hex');
-  const token = jwt.sign({ uid: u.id, un: u.username, jti }, getSecret(), {
+  const token = jwt.sign({ uid: userId, jti }, getSecret(), {
     expiresIn: `${TOKEN_TTL_DAYS}d`,
   });
   const expires = new Date(Date.now() + TOKEN_TTL_DAYS * 86400_000);
-  // 방어: 혹시라도 토큰 충돌 시 crash 대신 expires 갱신
   await getPool().query(
     'INSERT INTO sessions (token, user_id, expires_at) VALUES (?, ?, ?) ' +
     'ON DUPLICATE KEY UPDATE expires_at = VALUES(expires_at)',
-    [token, u.id, expires]
+    [token, userId, expires]
   );
-  return { token, user: publicUser(u) };
+  return { token };
 }
 
 async function logout(token) {
@@ -66,9 +90,12 @@ async function verify(token) {
   try { jwt.verify(token, getSecret()); } catch { return null; }
 
   const [rows] = await getPool().query(
-    `SELECT u.id, u.username, u.display_name, u.role, u.birth_year, u.birth_month, u.birth_day, u.is_lunar
+    `SELECT u.id, u.family_id, u.username, u.display_name, u.role, u.icon,
+            u.birth_year, u.birth_month, u.birth_day, u.is_lunar,
+            f.alias AS family_alias, f.display_name AS family_name
        FROM sessions s
-       JOIN users u ON u.id = s.user_id
+       JOIN users    u ON u.id = s.user_id
+       JOIN families f ON f.id = u.family_id
       WHERE s.token = ? AND s.expires_at > NOW() LIMIT 1`,
     [token]
   );
@@ -78,13 +105,17 @@ async function verify(token) {
 function publicUser(u) {
   return {
     id: u.id,
+    familyId: u.family_id ?? u.familyId ?? null,
+    familyAlias: u.family_alias ?? u.familyAlias ?? null,
+    familyName:  u.family_name  ?? u.familyName  ?? null,
     username: u.username,
-    displayName: u.display_name,
+    displayName: u.display_name ?? u.displayName,
     role: u.role,
-    birthYear: u.birth_year ?? null,
-    birthMonth: u.birth_month ?? null,
-    birthDay: u.birth_day ?? null,
-    isLunar: !!u.is_lunar,
+    icon: u.icon || 'star',
+    birthYear:  u.birth_year  ?? u.birthYear  ?? null,
+    birthMonth: u.birth_month ?? u.birthMonth ?? null,
+    birthDay:   u.birth_day   ?? u.birthDay   ?? null,
+    isLunar: !!(u.is_lunar ?? u.isLunar),
   };
 }
 
@@ -105,4 +136,12 @@ function requireAdmin(req, res, next) {
   });
 }
 
-module.exports = { bootstrapAdmin, login, logout, verify, requireAuth, requireAdmin, publicUser };
+function newInviteToken() {
+  return crypto.randomBytes(24).toString('base64url');
+}
+
+module.exports = {
+  bootstrapAdmin, login, logout, verify, issueToken,
+  requireAuth, requireAdmin, publicUser,
+  newInviteToken, INVITE_TTL_DAYS,
+};

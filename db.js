@@ -21,12 +21,25 @@ async function ensureSchema() {
   const p = getPool();
 
   await p.query(`
+    CREATE TABLE IF NOT EXISTS families (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      alias VARCHAR(50) NOT NULL UNIQUE,
+      display_name VARCHAR(100) NOT NULL,
+      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  `);
+
+  await p.query(`
     CREATE TABLE IF NOT EXISTS users (
       id INT AUTO_INCREMENT PRIMARY KEY,
-      username VARCHAR(50) NOT NULL UNIQUE,
+      family_id INT NOT NULL,
+      username VARCHAR(50) NOT NULL,
       display_name VARCHAR(50) NOT NULL,
       role ENUM('admin','member') NOT NULL DEFAULT 'member',
-      password_hash VARCHAR(255) NOT NULL,
+      icon VARCHAR(30) NOT NULL DEFAULT 'star',
+      password_hash VARCHAR(255) NULL,
+      invite_token VARCHAR(100) NULL,
+      invite_expires_at DATETIME NULL,
       birth_year INT NULL,
       birth_month TINYINT NULL,
       birth_day TINYINT NULL,
@@ -39,17 +52,19 @@ async function ensureSchema() {
   await p.query(`
     CREATE TABLE IF NOT EXISTS memos (
       id INT AUTO_INCREMENT PRIMARY KEY,
+      family_id INT NOT NULL,
       content VARCHAR(500) NOT NULL,
       done TINYINT(1) NOT NULL DEFAULT 0,
       created_by INT NULL,
       created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      INDEX idx_memos_family (family_id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   `);
 
   await p.query(`
     CREATE TABLE IF NOT EXISTS sessions (
-      token VARCHAR(255) PRIMARY KEY,
+      token VARCHAR(512) PRIMARY KEY,
       user_id INT NOT NULL,
       created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
       expires_at DATETIME NOT NULL,
@@ -58,21 +73,58 @@ async function ensureSchema() {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   `);
 
-  // 이전 스키마에서 넘어온 경우를 대비한 컬럼 보정
-  await ensureColumn('memos', 'created_by', 'INT NULL');
-  await dropLegacyTable('birthdays'); // 초기 배포 후 users로 통합
+  // ---------- 마이그레이션 (기존 users → 새 스키마) ----------
+  await ensureColumn('users', 'family_id', 'INT NULL');
+  await ensureColumn('users', 'icon', "VARCHAR(30) NOT NULL DEFAULT 'star'");
+  await ensureColumn('users', 'invite_token', 'VARCHAR(100) NULL');
+  await ensureColumn('users', 'invite_expires_at', 'DATETIME NULL');
+  await changeColumn('users', 'password_hash', 'VARCHAR(255) NULL'); // 초대대기 허용
+  await ensureColumn('memos', 'family_id', 'INT NULL');
 
-  // 레거시 sessions 테이블 (user_key 컬럼) 감지 시 재생성
-  const [sc] = await getPool().query(
-    `SELECT column_name FROM INFORMATION_SCHEMA.COLUMNS
+  // 기본 가족 보장
+  const [f] = await p.query('SELECT id FROM families LIMIT 1');
+  let defaultFamilyId;
+  if (f.length === 0) {
+    const alias = (process.env.ADMIN_FAMILY_ALIAS || 'family').trim();
+    const displayName = (process.env.ADMIN_FAMILY_NAME || '우리 가족').trim();
+    const [r] = await p.query(
+      'INSERT INTO families (alias, display_name) VALUES (?, ?)',
+      [alias, displayName]
+    );
+    defaultFamilyId = r.insertId;
+    console.log(`[db] default family created: ${alias} (#${defaultFamilyId})`);
+  } else {
+    defaultFamilyId = f[0].id;
+  }
+
+  // family_id 가 null 인 레거시 row 들을 기본 가족에 편입
+  await p.query('UPDATE users SET family_id = ? WHERE family_id IS NULL', [defaultFamilyId]);
+  await p.query('UPDATE memos SET family_id = ? WHERE family_id IS NULL', [defaultFamilyId]);
+
+  // 인덱스 재조정: 레거시 UNIQUE(username) 있으면 제거, (family_id, username) UNIQUE 보장
+  await dropIndexIfExists('users', 'username');
+  await ensureUniqueIndex('users', 'uniq_family_username', ['family_id', 'username']);
+  await ensureUniqueIndex('users', 'uniq_family_display',  ['family_id', 'display_name']);
+  await ensureIndex('users', 'idx_invite', ['invite_token']);
+
+  // family_id NOT NULL 강제
+  await changeColumn('users', 'family_id', 'INT NOT NULL');
+  await changeColumn('memos', 'family_id', 'INT NOT NULL');
+
+  // 레거시 birthdays 제거
+  await dropLegacyTable('birthdays');
+
+  // 레거시 sessions 컬럼 (user_key) 감지 시 재생성
+  const [sc] = await p.query(
+    `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
       WHERE table_schema = DATABASE() AND table_name = 'sessions'`
   );
-  const cols = new Set(sc.map(r => (r.column_name || r.COLUMN_NAME).toLowerCase()));
+  const cols = new Set(sc.map(r => (r.COLUMN_NAME || r.column_name).toLowerCase()));
   if (cols.has('user_key') && !cols.has('user_id')) {
-    await getPool().query('DROP TABLE sessions');
-    await getPool().query(`
+    await p.query('DROP TABLE sessions');
+    await p.query(`
       CREATE TABLE sessions (
-        token VARCHAR(255) PRIMARY KEY,
+        token VARCHAR(512) PRIMARY KEY,
         user_id INT NOT NULL,
         created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
         expires_at DATETIME NOT NULL,
@@ -91,6 +143,52 @@ async function ensureColumn(table, column, definition) {
   );
   if (rows[0].c === 0) {
     await getPool().query(`ALTER TABLE \`${table}\` ADD COLUMN \`${column}\` ${definition}`);
+  }
+}
+
+async function changeColumn(table, column, definition) {
+  const [rows] = await getPool().query(
+    `SELECT COUNT(*) AS c FROM INFORMATION_SCHEMA.COLUMNS
+     WHERE table_schema = DATABASE() AND table_name = ? AND column_name = ?`,
+    [table, column]
+  );
+  if (rows[0].c > 0) {
+    await getPool().query(`ALTER TABLE \`${table}\` MODIFY COLUMN \`${column}\` ${definition}`);
+  }
+}
+
+async function dropIndexIfExists(table, indexName) {
+  const [rows] = await getPool().query(
+    `SELECT COUNT(*) AS c FROM INFORMATION_SCHEMA.STATISTICS
+      WHERE table_schema = DATABASE() AND table_name = ? AND index_name = ?`,
+    [table, indexName]
+  );
+  if (rows[0].c > 0) {
+    await getPool().query(`ALTER TABLE \`${table}\` DROP INDEX \`${indexName}\``);
+  }
+}
+
+async function ensureUniqueIndex(table, indexName, columns) {
+  const [rows] = await getPool().query(
+    `SELECT COUNT(*) AS c FROM INFORMATION_SCHEMA.STATISTICS
+      WHERE table_schema = DATABASE() AND table_name = ? AND index_name = ?`,
+    [table, indexName]
+  );
+  if (rows[0].c === 0) {
+    const cols = columns.map((c) => `\`${c}\``).join(', ');
+    await getPool().query(`ALTER TABLE \`${table}\` ADD UNIQUE INDEX \`${indexName}\` (${cols})`);
+  }
+}
+
+async function ensureIndex(table, indexName, columns) {
+  const [rows] = await getPool().query(
+    `SELECT COUNT(*) AS c FROM INFORMATION_SCHEMA.STATISTICS
+      WHERE table_schema = DATABASE() AND table_name = ? AND index_name = ?`,
+    [table, indexName]
+  );
+  if (rows[0].c === 0) {
+    const cols = columns.map((c) => `\`${c}\``).join(', ');
+    await getPool().query(`ALTER TABLE \`${table}\` ADD INDEX \`${indexName}\` (${cols})`);
   }
 }
 
