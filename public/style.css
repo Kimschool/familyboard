@@ -128,6 +128,38 @@ body {
   margin-top: 12px;
 }
 
+/* 2단계 환영 헤더 */
+.family-welcome {
+  background: linear-gradient(135deg, #FFF3E6 0%, #FFE5EC 100%);
+  border-radius: 22px;
+  padding: 22px 16px 20px;
+  margin: 4px 0 24px;
+  text-align: center;
+  box-shadow: var(--shadow-sm);
+}
+@media (prefers-color-scheme: dark) {
+  .family-welcome { background: linear-gradient(135deg, #2A2419 0%, #2A1E22 100%); }
+}
+.family-welcome-emoji { font-size: 48px; line-height: 1; }
+.family-welcome-label {
+  margin: 8px 0 2px;
+  font-size: 14px;
+  color: #8A6B42;
+  font-weight: 600;
+  letter-spacing: 1px;
+}
+@media (prefers-color-scheme: dark) {
+  .family-welcome-label { color: #C9A77A; }
+}
+.family-welcome-name {
+  margin: 0;
+  font-size: 26px;
+  font-weight: 800;
+  color: var(--text);
+  letter-spacing: -0.5px;
+  line-height: 1.2;
+}
+
 /* 멤버 그리드 (2단계) — 노인 친화 큰 카드 */
 .member-grid {
   display: grid;
@@ -296,19 +328,19 @@ body.tod-night .hero-date, body.tod-night .hero-greeting { color: #F2F2F7; }
 .card {
   background: var(--card);
   border-radius: var(--r-md);
-  padding: 18px 18px 16px;
-  margin-bottom: 14px;
+  padding: 20px 20px 18px;
+  margin-bottom: 18px;
   box-shadow: var(--shadow-sm);
 }
 .card-title {
-  margin: 0 0 12px;
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--sub);
-  letter-spacing: -0.2px;
+  margin: 0 0 14px;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: -0.3px;
 }
-.card-eyebrow { margin: 0 0 4px; color: var(--sub); font-size: 14px; }
-.card-foot    { margin: 10px 0 0; font-size: 12px; color: var(--sub); }
+.card-eyebrow { margin: 0 0 4px; color: var(--sub); font-size: 15px; }
+.card-foot    { margin: 12px 0 0; font-size: 13px; color: var(--sub); }
 
 /* ========== 날씨 ========== */
 .weather-top { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; }
@@ -434,10 +466,24 @@ body.tod-night .hero-date, body.tod-night .hero-greeting { color: #F2F2F7; }
   background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'><path fill='none' stroke='white' stroke-width='3' stroke-linecap='round' stroke-linejoin='round' d='M5 10.5l3.5 3.5L15 7'/></svg>");
   background-size: 70%; background-position: center; background-repeat: no-repeat;
 }
-.memo-body { flex: 1; display: flex; flex-direction: column; }
+.memo-body { flex: 1; display: flex; flex-direction: column; min-width: 0; }
 .memo-text { font-size: 19px; color: var(--text); word-break: break-word; line-height: 1.4; }
 .memo-text.done { color: var(--sub); text-decoration: line-through; }
-.memo-author { font-size: 13px; color: var(--sub); margin-top: 4px; }
+.memo-author {
+  display: flex; align-items: center; gap: 6px;
+  margin-top: 6px;
+  font-size: 13px;
+  color: var(--sub);
+}
+.memo-author-avatar {
+  width: 24px; height: 24px;
+  border-radius: 50%;
+  background: var(--bg);
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 15px;
+  flex-shrink: 0;
+}
+.memo-author-name { font-weight: 600; color: var(--text); }
 .memo-del {
   background: none; border: none; color: var(--sub);
   font-size: 18px; padding: 6px 4px; cursor: pointer;

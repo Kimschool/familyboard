@@ -43,8 +43,12 @@
 <!-- 로그인 - 2단계: 멤버 선택 -->
 <section id="step2" class="screen login-screen hidden">
   <div class="auth-inner">
-    <button class="auth-back" id="back1">← 가족별칭</button>
-    <h1 class="auth-title" id="familyTitle">—</h1>
+    <button class="auth-back" id="back1">← 다른 가족</button>
+    <div class="family-welcome">
+      <div class="family-welcome-emoji">🏡</div>
+      <p class="family-welcome-label">환영해요</p>
+      <h1 class="family-welcome-name" id="familyTitle">—</h1>
+    </div>
     <p class="auth-sub">누구신가요?</p>
     <div id="memberGrid" class="member-grid"></div>
     <p id="memberErr" class="auth-err"></p>

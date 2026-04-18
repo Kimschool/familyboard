@@ -450,12 +450,19 @@ function renderMemos(list) {
       <button class="memo-check ${m.done ? 'done' : ''}" aria-label="완료"></button>
       <div class="memo-body">
         <span class="memo-text ${m.done ? 'done' : ''}"></span>
-        <span class="memo-author"></span>
+        <span class="memo-author">
+          <span class="memo-author-avatar"></span>
+          <span class="memo-author-name"></span>
+        </span>
       </div>
       <button class="memo-del" aria-label="삭제">✕</button>`;
     li.querySelector('.memo-text').textContent = m.content;
-    const author = m.created_by_name ? `${iconEmoji(m.created_by_icon) || ''} ${m.created_by_name}` : '';
-    li.querySelector('.memo-author').textContent = author;
+    if (m.created_by_name) {
+      li.querySelector('.memo-author-avatar').textContent = iconEmoji(m.created_by_icon);
+      li.querySelector('.memo-author-name').textContent = m.created_by_name;
+    } else {
+      li.querySelector('.memo-author').style.display = 'none';
+    }
     li.querySelector('.memo-check').onclick = async () => {
       await api(`/api/memos/${m.id}`, { method: 'PATCH', body: JSON.stringify({ done: !m.done }) });
       loadMemos();
