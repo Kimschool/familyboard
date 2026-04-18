@@ -173,6 +173,27 @@ async function ensureSchema() {
   `);
 
   await p.query(`
+    CREATE TABLE IF NOT EXISTS memo_reactions (
+      memo_id INT NOT NULL,
+      user_id INT NOT NULL,
+      emoji VARCHAR(10) NOT NULL,
+      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (memo_id, user_id, emoji),
+      INDEX idx_memo (memo_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  `);
+
+  await p.query(`
+    CREATE TABLE IF NOT EXISTS answer_favorites (
+      user_id INT NOT NULL,
+      answer_id INT NOT NULL,
+      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (user_id, answer_id),
+      INDEX idx_user_time (user_id, created_at)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  `);
+
+  await p.query(`
     CREATE TABLE IF NOT EXISTS answer_comments (
       id INT AUTO_INCREMENT PRIMARY KEY,
       answer_id INT NOT NULL,

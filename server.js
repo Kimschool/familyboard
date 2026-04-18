@@ -927,7 +927,112 @@ app.get('/api/memos', requireAuth, async (req, res) => {
       ORDER BY m.done ASC, m.important DESC, m.id DESC LIMIT 100`,
     [req.user.family_id]
   );
+  if (!rows.length) return res.json(rows);
+  const ids = rows.map((r) => r.id);
+  const [rx] = await getPool().query(
+    `SELECT memo_id, emoji, user_id FROM memo_reactions WHERE memo_id IN (?)`,
+    [ids]
+  );
+  for (const m of rows) {
+    const list = rx.filter((r) => r.memo_id === m.id);
+    const by = new Map();
+    for (const r of list) {
+      const v = by.get(r.emoji) || { emoji: r.emoji, count: 0, mine: false };
+      v.count += 1;
+      if (r.user_id === req.user.id) v.mine = true;
+      by.set(r.emoji, v);
+    }
+    m.reactions = [...by.values()];
+  }
   res.json(rows);
+});
+
+app.post('/api/memo/:id/react', requireAuth, async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const emoji = (req.body?.emoji || '').toString().slice(0, 10);
+    if (!Number.isInteger(id) || !emoji) return res.status(400).json({ error: 'bad-input' });
+    const [ok] = await getPool().query(
+      'SELECT 1 FROM memos WHERE id = ? AND family_id = ? LIMIT 1',
+      [id, req.user.family_id]
+    );
+    if (!ok.length) return res.status(404).json({ error: 'not-found' });
+
+    const [existing] = await getPool().query(
+      'SELECT 1 FROM memo_reactions WHERE memo_id = ? AND user_id = ? AND emoji = ? LIMIT 1',
+      [id, req.user.id, emoji]
+    );
+    if (existing.length) {
+      await getPool().query(
+        'DELETE FROM memo_reactions WHERE memo_id = ? AND user_id = ? AND emoji = ?',
+        [id, req.user.id, emoji]
+      );
+    } else {
+      await getPool().query(
+        'INSERT INTO memo_reactions (memo_id, user_id, emoji) VALUES (?, ?, ?)',
+        [id, req.user.id, emoji]
+      );
+    }
+    const [agg] = await getPool().query(
+      `SELECT emoji, COUNT(*) AS c, SUM(user_id = ?) AS mine
+         FROM memo_reactions WHERE memo_id = ? GROUP BY emoji`,
+      [req.user.id, id]
+    );
+    res.json({
+      ok: true,
+      reactions: agg.map((r) => ({ emoji: r.emoji, count: Number(r.c), mine: Number(r.mine) > 0 })),
+    });
+  } catch (e) { res.status(500).json({ error: 'internal', message: e.message }); }
+});
+
+// ---------- 답변 즐겨찾기 ⭐ ----------
+app.post('/api/answer/:id/favorite', requireAuth, async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id)) return res.status(400).json({ error: 'bad-id' });
+    const [ok] = await getPool().query(
+      `SELECT 1 FROM daily_answers a
+         JOIN daily_questions q ON q.id = a.question_id
+        WHERE a.id = ? AND q.family_id = ? LIMIT 1`,
+      [id, req.user.family_id]
+    );
+    if (!ok.length) return res.status(404).json({ error: 'not-found' });
+
+    const [ex] = await getPool().query(
+      'SELECT 1 FROM answer_favorites WHERE user_id = ? AND answer_id = ? LIMIT 1',
+      [req.user.id, id]
+    );
+    if (ex.length) {
+      await getPool().query(
+        'DELETE FROM answer_favorites WHERE user_id = ? AND answer_id = ?',
+        [req.user.id, id]
+      );
+      res.json({ ok: true, favorited: false });
+    } else {
+      await getPool().query(
+        'INSERT INTO answer_favorites (user_id, answer_id) VALUES (?, ?)',
+        [req.user.id, id]
+      );
+      res.json({ ok: true, favorited: true });
+    }
+  } catch (e) { res.status(500).json({ error: 'internal', message: e.message }); }
+});
+
+app.get('/api/favorites/answers', requireAuth, async (req, res) => {
+  try {
+    const [rows] = await getPool().query(
+      `SELECT a.id AS answer_id, a.answer_text, a.user_id, u.display_name, u.icon,
+              q.question_text, q.question_date
+         FROM answer_favorites f
+         JOIN daily_answers a ON a.id = f.answer_id
+         JOIN daily_questions q ON q.id = a.question_id
+         JOIN users u ON u.id = a.user_id
+        WHERE f.user_id = ? AND q.family_id = ?
+        ORDER BY f.created_at DESC LIMIT 50`,
+      [req.user.id, req.user.family_id]
+    );
+    res.json(rows);
+  } catch (e) { res.status(500).json({ error: 'internal', message: e.message }); }
 });
 
 app.post('/api/memos', requireAuth, async (req, res) => {
@@ -1337,11 +1442,12 @@ app.get('/api/question/yesterday', requireAuth, async (req, res) => {
     const [ans] = await getPool().query(
       `SELECT a.id AS answer_id, a.answer_text, a.is_skip, a.user_id,
               a.created_at, a.updated_at,
-              u.display_name, u.icon
+              u.display_name, u.icon,
+              EXISTS (SELECT 1 FROM answer_favorites f WHERE f.user_id = ? AND f.answer_id = a.id) AS my_favorite
          FROM daily_answers a JOIN users u ON u.id = a.user_id
         WHERE a.question_id = ? AND (a.answer_text IS NOT NULL OR a.is_skip = 1)
         ORDER BY a.created_at ASC`,
-      [q.id]
+      [req.user.id, q.id]
     );
     const ids = ans.map((a) => a.answer_id);
     let reactions = [];

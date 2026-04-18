@@ -1968,6 +1968,12 @@ function renderMemos(list) {
       await api(`/api/memos/${m.id}`, { method: 'PATCH', body: JSON.stringify({ important: !m.important }) });
       loadMemos();
     };
+    // 이모지 반응 행
+    const reactRow = document.createElement('div');
+    reactRow.className = 'memo-react-row';
+    renderMemoReactions(reactRow, m.id, m.reactions || []);
+    li.querySelector('.memo-body').appendChild(reactRow);
+
     li.querySelector('.memo-share').onclick = async () => {
       const text = m.content;
       try {
@@ -3121,6 +3127,7 @@ async function loadYesterdayReveal() {
           <div class="reveal-head">
             <span class="reveal-name"></span>
             ${timeLabel ? `<span class="reveal-time">${timeLabel}</span>` : ''}
+            ${skipped ? '' : `<button class="fav-btn ${a.my_favorite ? 'on' : ''}" title="즐겨찾기" aria-label="즐겨찾기">${a.my_favorite ? '⭐' : '☆'}</button>`}
           </div>
           <div class="reveal-answer ${skipped ? 'skipped' : ''}"></div>
           <div class="reaction-row"></div>
@@ -3133,6 +3140,14 @@ async function loadYesterdayReveal() {
         renderReactionRow(li.querySelector('.reaction-row'), a.answer_id, a.reactions || []);
         const tbtn = li.querySelector('.comment-toggle');
         tbtn.onclick = () => toggleCommentSection(a.answer_id, li.querySelector('.comment-section'), tbtn);
+        const favBtn = li.querySelector('.fav-btn');
+        favBtn.onclick = async () => {
+          try {
+            const res = await api(`/api/answer/${a.answer_id}/favorite`, { method: 'POST' });
+            favBtn.classList.toggle('on', !!res.favorited);
+            favBtn.textContent = res.favorited ? '⭐' : '☆';
+          } catch {}
+        };
       }
       ul.appendChild(li);
     }
@@ -3372,7 +3387,7 @@ document.getElementById('profileSheet').addEventListener('click', (e) => {
 
 // 화면 톤 (색 테마)
 function applyScheme(scheme) {
-  const s = ['light','dark','darkgray','sepia'].includes(scheme) ? scheme : 'auto';
+  const s = ['light','dark','darkgray','sepia','hc'].includes(scheme) ? scheme : 'auto';
   const root = document.documentElement;
   if (s === 'auto') root.removeAttribute('data-scheme');
   else root.setAttribute('data-scheme', s);
@@ -3440,6 +3455,31 @@ $('noticeHistSheet').addEventListener('click', (e) => {
 });
 
 // ---------- 메모 삭제 실행 취소 토스트 ----------
+const MEMO_REACTION_EMOJIS = ['👍','❤️','🎉','👏'];
+function renderMemoReactions(row, memoId, reactions) {
+  row.innerHTML = '';
+  const map = new Map(reactions.map((r) => [r.emoji, r]));
+  for (const emoji of MEMO_REACTION_EMOJIS) {
+    const info = map.get(emoji);
+    const count = info?.count || 0;
+    const mine = !!info?.mine;
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'mr-btn' + (mine ? ' on' : '') + (count === 0 ? ' empty' : '');
+    btn.innerHTML = `<span>${emoji}</span>${count ? `<span class="mr-cnt">${count}</span>` : ''}`;
+    btn.onclick = async (e) => {
+      e.stopPropagation();
+      try {
+        const res = await api(`/api/memo/${memoId}/react`, {
+          method: 'POST', body: JSON.stringify({ emoji }),
+        });
+        renderMemoReactions(row, memoId, res.reactions || []);
+      } catch {}
+    };
+    row.appendChild(btn);
+  }
+}
+
 function showSimpleToast(msg) {
   const el = $('undoToast');
   if (!el) return;
