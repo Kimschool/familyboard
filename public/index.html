@@ -91,6 +91,31 @@
     <div class="hero-summary hidden" id="heroSummary"></div>
   </header>
 
+  <!-- 가족 투표 -->
+  <section class="card poll-card hidden" data-card-id="poll" id="pollCard">
+    <div class="card-head-row">
+      <p class="card-title">🗳️ 가족 투표</p>
+      <button type="button" class="poll-new-btn" id="pollNewBtn">＋ 새 투표</button>
+    </div>
+    <div class="poll-body" id="pollBody"></div>
+  </section>
+
+  <!-- 투표 만들기 시트 -->
+  <div id="pollCreateSheet" class="sheet-backdrop hidden" role="dialog">
+    <div class="sheet" role="document">
+      <div class="sheet-handle"></div>
+      <h2 class="sheet-title">🗳️ 새 투표</h2>
+      <input id="pollTitle" class="auth-input" type="text" placeholder="예: 오늘 저녁 뭐 먹을까요?" maxlength="200" style="text-align:left" />
+      <div id="pollOptionsWrap">
+        <input class="auth-input poll-opt-input" type="text" placeholder="선택지 1 (예: 비빔밥)" maxlength="60" style="text-align:left" />
+        <input class="auth-input poll-opt-input" type="text" placeholder="선택지 2 (예: 삼겹살)" maxlength="60" style="text-align:left" />
+      </div>
+      <button type="button" id="pollAddOpt" class="ufi-btn" style="width:100%;margin-bottom:10px">＋ 선택지 추가</button>
+      <button type="button" id="pollCreate" class="auth-btn">투표 만들기</button>
+      <button class="sheet-close" id="pollCreateClose">취소</button>
+    </div>
+  </div>
+
   <!-- 가족 공지 (관리자가 남긴 메시지) -->
   <section class="card notice-card hidden" data-card-id="notice" id="noticeCard">
     <div class="notice-head">
@@ -101,6 +126,7 @@
       <button class="tts-btn" data-tts="notice" aria-label="읽어주기">🔊</button>
     </div>
     <p class="notice-text" id="noticeText"></p>
+    <div class="notice-react-row" id="noticeReactRow"></div>
     <div class="notice-reads hidden" id="noticeReads"></div>
     <button type="button" class="notice-history-btn" id="noticeHistoryBtn">지난 공지 보기</button>
   </section>
@@ -266,6 +292,13 @@
       <span class="chip"><span class="chip-k">미세</span><b id="aPm10">--</b><i class="lvl" id="aPm10L"></i></span>
       <span class="chip"><span class="chip-k">초미세</span><b id="aPm25">--</b><i class="lvl" id="aPm25L"></i></span>
       <span class="chip"><span class="chip-k">꽃가루</span><b id="aPol">--</b><i class="lvl" id="aPolL"></i></span>
+    </div>
+    <div class="outing-score hidden" id="outingScore">
+      <span class="os-emoji" id="osEmoji">🌤️</span>
+      <div class="os-text">
+        <div class="os-grade" id="osGrade">—</div>
+        <div class="os-detail" id="osDetail">—</div>
+      </div>
     </div>
     <div class="hourly hidden" id="hourlyBlock"></div>
     <div class="tomorrow hidden" id="tomorrowBlock">

@@ -588,9 +588,10 @@ app.get('/api/family', requireAuth, async (req, res) => {
   const r = rows[0];
   if (!r) return res.json({});
 
-  // 현재 공지 ID (가장 최근 notice_history row) + 읽음 상태
+  // 현재 공지 ID (가장 최근 notice_history row) + 읽음 상태 + 반응
   let noticeId = null;
   let reads = [];
+  let reactions = [];
   if (r.notice) {
     const [n] = await getPool().query(
       `SELECT id FROM notice_history WHERE family_id = ? ORDER BY created_at DESC LIMIT 1`,
@@ -605,6 +606,12 @@ app.get('/api/family', requireAuth, async (req, res) => {
         [noticeId]
       );
       reads = rr;
+      const [agg] = await getPool().query(
+        `SELECT emoji, COUNT(*) AS c, SUM(user_id = ?) AS mine
+           FROM notice_reactions WHERE notice_id = ? GROUP BY emoji`,
+        [req.user.id, noticeId]
+      );
+      reactions = agg.map((x) => ({ emoji: x.emoji, count: Number(x.c), mine: Number(x.mine) > 0 }));
     }
   }
 
@@ -616,7 +623,140 @@ app.get('/api/family', requireAuth, async (req, res) => {
     noticeUpdatedAt: r.notice_updated_at,
     noticeBy: r.notice_by_name ? { name: r.notice_by_name, icon: r.notice_by_icon } : null,
     noticeReads: reads.map((r) => ({ userId: r.user_id, name: r.display_name, icon: r.icon })),
+    noticeReactions: reactions,
   });
+});
+
+// ---------- 가족 투표 ----------
+app.get('/api/poll/active', requireAuth, async (req, res) => {
+  try {
+    const [polls] = await getPool().query(
+      `SELECT p.id, p.title, p.options, p.author_id, p.created_at,
+              u.display_name AS author_name, u.icon AS author_icon
+         FROM family_polls p JOIN users u ON u.id = p.author_id
+        WHERE p.family_id = ? AND p.closed = 0
+        ORDER BY p.created_at DESC LIMIT 1`,
+      [req.user.family_id]
+    );
+    if (!polls.length) return res.json(null);
+    const p = polls[0];
+    const [votes] = await getPool().query(
+      `SELECT pv.option_index, pv.user_id, u.display_name, u.icon
+         FROM poll_votes pv JOIN users u ON u.id = pv.user_id
+        WHERE pv.poll_id = ?`, [p.id]
+    );
+    const options = (typeof p.options === 'string' ? JSON.parse(p.options) : p.options);
+    const myVote = votes.find((v) => v.user_id === req.user.id);
+    res.json({
+      id: p.id,
+      title: p.title,
+      options,
+      author: { id: p.author_id, name: p.author_name, icon: p.author_icon },
+      createdAt: p.created_at,
+      myVote: myVote ? myVote.option_index : null,
+      votes: votes.map((v) => ({ optionIndex: v.option_index, name: v.display_name, icon: v.icon })),
+    });
+  } catch (e) { res.status(500).json({ error: 'internal', message: e.message }); }
+});
+
+app.post('/api/poll', requireAuth, async (req, res) => {
+  try {
+    const title = (req.body?.title || '').toString().trim().slice(0, 200);
+    const options = Array.isArray(req.body?.options)
+      ? req.body.options.map((x) => String(x).trim()).filter(Boolean).slice(0, 8) : [];
+    if (!title) return res.status(400).json({ error: 'title-required' });
+    if (options.length < 2) return res.status(400).json({ error: 'need-2-options' });
+    // 기존 active 투표 모두 닫기
+    await getPool().query(
+      'UPDATE family_polls SET closed = 1 WHERE family_id = ? AND closed = 0',
+      [req.user.family_id]
+    );
+    const [r] = await getPool().query(
+      `INSERT INTO family_polls (family_id, author_id, title, options) VALUES (?, ?, ?, ?)`,
+      [req.user.family_id, req.user.id, title, JSON.stringify(options)]
+    );
+    res.json({ ok: true, id: r.insertId });
+  } catch (e) { res.status(500).json({ error: 'internal', message: e.message }); }
+});
+
+app.post('/api/poll/:id/vote', requireAuth, async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const idx = Number(req.body?.optionIndex);
+    if (!Number.isInteger(id) || !Number.isInteger(idx)) return res.status(400).json({ error: 'bad-input' });
+    const [p] = await getPool().query(
+      `SELECT options FROM family_polls WHERE id = ? AND family_id = ? AND closed = 0 LIMIT 1`,
+      [id, req.user.family_id]
+    );
+    if (!p.length) return res.status(404).json({ error: 'not-found-or-closed' });
+    const options = (typeof p[0].options === 'string' ? JSON.parse(p[0].options) : p[0].options);
+    if (idx < 0 || idx >= options.length) return res.status(400).json({ error: 'bad-option' });
+
+    await getPool().query(
+      `INSERT INTO poll_votes (poll_id, user_id, option_index) VALUES (?, ?, ?)
+       ON DUPLICATE KEY UPDATE option_index = VALUES(option_index), voted_at = CURRENT_TIMESTAMP`,
+      [id, req.user.id, idx]
+    );
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: 'internal', message: e.message }); }
+});
+
+app.post('/api/poll/:id/close', requireAuth, async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'bad-id' });
+  // 작성자 또는 admin
+  const [p] = await getPool().query(
+    'SELECT author_id FROM family_polls WHERE id = ? AND family_id = ? LIMIT 1',
+    [id, req.user.family_id]
+  );
+  if (!p.length) return res.status(404).json({ error: 'not-found' });
+  if (p[0].author_id !== req.user.id && req.user.role !== 'admin') {
+    return res.status(403).json({ error: 'forbidden' });
+  }
+  await getPool().query('UPDATE family_polls SET closed = 1 WHERE id = ?', [id]);
+  res.json({ ok: true });
+});
+
+// ---------- 공지 이모지 반응 ----------
+app.post('/api/notice/:id/react', requireAuth, async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id)) return res.status(400).json({ error: 'bad-id' });
+    const emoji = (req.body?.emoji || '').toString().slice(0, 10);
+    if (!emoji) return res.status(400).json({ error: 'empty' });
+
+    // 같은 가족 공지인지
+    const [ok] = await getPool().query(
+      'SELECT 1 FROM notice_history WHERE id = ? AND family_id = ? LIMIT 1',
+      [id, req.user.family_id]
+    );
+    if (!ok.length) return res.status(404).json({ error: 'not-found' });
+
+    const [existing] = await getPool().query(
+      'SELECT 1 FROM notice_reactions WHERE notice_id = ? AND user_id = ? AND emoji = ? LIMIT 1',
+      [id, req.user.id, emoji]
+    );
+    if (existing.length) {
+      await getPool().query(
+        'DELETE FROM notice_reactions WHERE notice_id = ? AND user_id = ? AND emoji = ?',
+        [id, req.user.id, emoji]
+      );
+    } else {
+      await getPool().query(
+        'INSERT INTO notice_reactions (notice_id, user_id, emoji) VALUES (?, ?, ?)',
+        [id, req.user.id, emoji]
+      );
+    }
+    const [agg] = await getPool().query(
+      `SELECT emoji, COUNT(*) AS c, SUM(user_id = ?) AS mine
+         FROM notice_reactions WHERE notice_id = ? GROUP BY emoji`,
+      [req.user.id, id]
+    );
+    res.json({
+      ok: true,
+      reactions: agg.map((r) => ({ emoji: r.emoji, count: Number(r.c), mine: Number(r.mine) > 0 })),
+    });
+  } catch (e) { res.status(500).json({ error: 'internal', message: e.message }); }
 });
 
 app.post('/api/notice/:id/read', requireAuth, async (req, res) => {

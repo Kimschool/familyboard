@@ -302,6 +302,7 @@ function enterApp() {
   renderDailyQuote();
   setupTtsAuto();
   setupTtsRate();
+  loadPoll();
 
   // 관리자 UI — 설정 화면으로 이동 (계정 카드의 '가족 관리' 버튼으로 열림)
   try {
@@ -661,6 +662,104 @@ $('medAddBtn').addEventListener('click', async () => {
     $('medName').value = '';
     loadMeds();
   } catch { alert('추가 실패'); }
+});
+
+// ---------- 가족 투표 ----------
+async function loadPoll() {
+  try {
+    const p = await api('/api/poll/active');
+    const card = $('pollCard');
+    const body = $('pollBody');
+    if (!p) { card.classList.add('hidden'); return; }
+    card.classList.remove('hidden');
+    body.innerHTML = '';
+
+    const title = document.createElement('div');
+    title.className = 'poll-title';
+    title.textContent = p.title;
+    body.appendChild(title);
+
+    const sub = document.createElement('div');
+    sub.className = 'poll-sub';
+    sub.innerHTML = `${iconEmoji(p.author.icon)} <b></b>님 · ${p.votes.length}명 참여`;
+    sub.querySelector('b').textContent = p.author.name;
+    body.appendChild(sub);
+
+    const opts = document.createElement('ul');
+    opts.className = 'poll-options';
+    const total = p.votes.length || 1;
+    p.options.forEach((opt, i) => {
+      const count = p.votes.filter((v) => v.optionIndex === i).length;
+      const pct = Math.round((count / total) * 100);
+      const li = document.createElement('li');
+      li.className = 'poll-option' + (p.myVote === i ? ' chosen' : '');
+      li.innerHTML = `
+        <div class="po-bar" style="width:${p.votes.length ? pct : 0}%"></div>
+        <div class="po-content">
+          <span class="po-text"></span>
+          <span class="po-stats">${count}명 ${p.votes.length ? `(${pct}%)` : ''}</span>
+        </div>`;
+      li.querySelector('.po-text').textContent = opt;
+      li.onclick = async () => {
+        try {
+          await api(`/api/poll/${p.id}/vote`, {
+            method: 'POST', body: JSON.stringify({ optionIndex: i }),
+          });
+          loadPoll();
+        } catch { alert('투표 실패'); }
+      };
+      opts.appendChild(li);
+    });
+    body.appendChild(opts);
+
+    // 작성자 또는 관리자는 닫기 버튼
+    if (p.author.id === ME.id || ME.role === 'admin') {
+      const close = document.createElement('button');
+      close.type = 'button';
+      close.className = 'poll-close-btn';
+      close.textContent = '투표 종료';
+      close.onclick = async () => {
+        if (!confirm('이 투표를 종료할까요?')) return;
+        await api(`/api/poll/${p.id}/close`, { method: 'POST' });
+        loadPoll();
+      };
+      body.appendChild(close);
+    }
+  } catch {}
+}
+
+$('pollNewBtn').addEventListener('click', () => $('pollCreateSheet').classList.remove('hidden'));
+$('pollCreateClose').addEventListener('click', () => $('pollCreateSheet').classList.add('hidden'));
+$('pollCreateSheet').addEventListener('click', (e) => {
+  if (e.target.id === 'pollCreateSheet') $('pollCreateSheet').classList.add('hidden');
+});
+$('pollAddOpt').addEventListener('click', () => {
+  const wrap = $('pollOptionsWrap');
+  if (wrap.querySelectorAll('.poll-opt-input').length >= 6) return;
+  const input = document.createElement('input');
+  input.className = 'auth-input poll-opt-input';
+  input.type = 'text';
+  input.maxLength = 60;
+  input.style.textAlign = 'left';
+  input.placeholder = `선택지 ${wrap.querySelectorAll('.poll-opt-input').length + 1}`;
+  wrap.appendChild(input);
+});
+$('pollCreate').addEventListener('click', async () => {
+  const title = $('pollTitle').value.trim();
+  const options = Array.from($('pollOptionsWrap').querySelectorAll('.poll-opt-input'))
+    .map((i) => i.value.trim()).filter(Boolean);
+  if (!title) { alert('질문을 입력해 주세요'); return; }
+  if (options.length < 2) { alert('선택지를 최소 2개 입력해 주세요'); return; }
+  try {
+    await api('/api/poll', { method: 'POST', body: JSON.stringify({ title, options }) });
+    $('pollTitle').value = '';
+    $('pollOptionsWrap').querySelectorAll('.poll-opt-input').forEach((i, idx) => {
+      if (idx < 2) i.value = '';
+      else i.remove();
+    });
+    $('pollCreateSheet').classList.add('hidden');
+    loadPoll();
+  } catch { alert('생성 실패'); }
 });
 
 // ---------- 오늘의 한 마디 ----------
@@ -1491,6 +1590,53 @@ async function loadWeatherAndAir() {
   }
 
   renderTips(w, a);
+  renderOutingScore(w, a);
+}
+
+function renderOutingScore(w, a) {
+  const box = $('outingScore');
+  if (!box || !w) { box?.classList.add('hidden'); return; }
+  // 점수 계산: 기온 적정 30, 비 확률 20, 공기질 30, 꽃가루 10, 풍속 10
+  let score = 0;
+  // 기온
+  if (w.temp >= 15 && w.temp <= 25) score += 30;
+  else if (w.temp >= 10 && w.temp <= 28) score += 22;
+  else if (w.temp >= 5 && w.temp <= 32) score += 12;
+  else score += 4;
+  // 비
+  if ((w.rainProb || 0) < 20) score += 20;
+  else if ((w.rainProb || 0) < 50) score += 12;
+  else if ((w.rainProb || 0) < 75) score += 4;
+  // 공기질
+  if (a) {
+    const p25 = a.pm25Level, p10 = a.pm10Level;
+    if (p25 === 'good' && p10 === 'good') score += 30;
+    else if (p25 === 'normal' || p10 === 'normal') score += 20;
+    else if (p25 === 'bad' || p10 === 'bad') score += 8;
+    else score += 0;
+    // 꽃가루
+    if (a.pollenLevel === 'good') score += 10;
+    else if (a.pollenLevel === 'normal') score += 6;
+    else score += 0;
+  } else {
+    score += 20; // 데이터 없으면 중간값
+  }
+  // 풍속
+  if ((w.wind || 0) < 5) score += 10;
+  else if ((w.wind || 0) < 10) score += 5;
+
+  const grade = score >= 80 ? { emoji: '🌳', label: '외출하기 좋아요', tone: 'good' }
+              : score >= 60 ? { emoji: '🚶', label: '산책 정도 괜찮아요', tone: 'ok' }
+              : score >= 40 ? { emoji: '🧥', label: '짧게 다녀오세요', tone: 'warn' }
+                            : { emoji: '🏠', label: '실내가 더 좋아요', tone: 'bad' };
+  $('osEmoji').textContent = grade.emoji;
+  $('osGrade').textContent = grade.label;
+  const parts = [`기온 ${w.temp}°`];
+  if ((w.rainProb || 0) >= 30) parts.push(`비 ${w.rainProb}%`);
+  if (a?.pm25Level) parts.push(`공기 ${ {good:'좋음', normal:'보통', bad:'나쁨', worst:'매우 나쁨'}[a.pm25Level] || '' }`);
+  $('osDetail').textContent = parts.join(' · ');
+  box.className = 'outing-score tone-' + grade.tone;
+  box.classList.remove('hidden');
 }
 
 function renderHourly(hourly) {
@@ -2364,6 +2510,33 @@ async function loadFamilyInfo() {
   } catch {}
 }
 
+const NOTICE_REACTION_EMOJIS = ['👍','❤️','🙏','😊'];
+function renderNoticeReactions(noticeId, reactions) {
+  const row = $('noticeReactRow');
+  if (!row || !noticeId) return;
+  row.innerHTML = '';
+  const map = new Map(reactions.map((r) => [r.emoji, r]));
+  for (const emoji of NOTICE_REACTION_EMOJIS) {
+    const info = map.get(emoji);
+    const count = info?.count || 0;
+    const mine = !!info?.mine;
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'rx-btn' + (mine ? ' on' : '') + (count === 0 ? ' empty' : '');
+    btn.innerHTML = `<span class="rx-emoji">${emoji}</span>${count ? `<span class="rx-cnt">${count}</span>` : ''}`;
+    btn.onclick = async () => {
+      try {
+        const res = await api(`/api/notice/${noticeId}/react`, {
+          method: 'POST', body: JSON.stringify({ emoji }),
+        });
+        renderNoticeReactions(noticeId, res.reactions || []);
+        btn.classList.remove('pop'); void btn.offsetWidth; btn.classList.add('pop');
+      } catch {}
+    };
+    row.appendChild(btn);
+  }
+}
+
 function renderNoticeReads(noticeId, reads) {
   const el = $('noticeReads');
   if (!el || !noticeId) return;
@@ -2391,8 +2564,9 @@ async function loadFamilyNotice() {
     const f = await api('/api/family');
     if (f.notice) {
       $('noticeText').textContent = f.notice;
-      // 읽음 상태 렌더
+      // 읽음 상태 + 이모지 반응 렌더
       renderNoticeReads(f.noticeId, f.noticeReads || []);
+      renderNoticeReactions(f.noticeId, f.noticeReactions || []);
       if (f.noticeBy) {
         const date = f.noticeUpdatedAt ? new Date(f.noticeUpdatedAt) : null;
         const when = date ? relativeTime(date) : '';

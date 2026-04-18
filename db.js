@@ -130,6 +130,39 @@ async function ensureSchema() {
   `);
 
   await p.query(`
+    CREATE TABLE IF NOT EXISTS family_polls (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      family_id INT NOT NULL,
+      author_id INT NOT NULL,
+      title VARCHAR(200) NOT NULL,
+      options JSON NOT NULL,
+      closed TINYINT(1) NOT NULL DEFAULT 0,
+      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      INDEX idx_family_active (family_id, closed, created_at)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  `);
+  await p.query(`
+    CREATE TABLE IF NOT EXISTS poll_votes (
+      poll_id INT NOT NULL,
+      user_id INT NOT NULL,
+      option_index INT NOT NULL,
+      voted_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (poll_id, user_id),
+      INDEX idx_poll (poll_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  `);
+  await p.query(`
+    CREATE TABLE IF NOT EXISTS notice_reactions (
+      notice_id INT NOT NULL,
+      user_id INT NOT NULL,
+      emoji VARCHAR(10) NOT NULL,
+      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (notice_id, user_id, emoji),
+      INDEX idx_notice (notice_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  `);
+
+  await p.query(`
     CREATE TABLE IF NOT EXISTS notice_reads (
       notice_id INT NOT NULL,
       user_id INT NOT NULL,
