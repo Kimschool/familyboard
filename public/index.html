@@ -175,7 +175,7 @@
     </div>
   </div>
 
-  <section id="birthdayBanner" class="banner hidden" data-card-id="birthday">
+  <section id="birthdayBanner" class="banner hidden" data-card-id="birthday" style="cursor:pointer">
     <span class="banner-emoji" id="bdEmoji">🎂</span>
     <div class="banner-body">
       <p class="banner-title" id="bdTitle">—</p>
@@ -241,6 +241,25 @@
       <button id="qHistoryBtn" type="button" class="question-action-btn">지난 질문 모아보기</button>
     </div>
   </section>
+
+  <!-- 생일 축하 메시지 바텀시트 -->
+  <div id="bdaySheet" class="sheet-backdrop hidden" role="dialog">
+    <div class="sheet sheet-tall" role="document">
+      <div class="sheet-handle"></div>
+      <div class="bday-head">
+        <div class="bday-target-emoji" id="bdayTargetEmoji">🎂</div>
+        <h2 class="sheet-title" id="bdayTargetTitle">—</h2>
+        <p class="sheet-sub" id="bdayTargetSub"></p>
+      </div>
+      <ul class="bday-msg-list" id="bdayMsgList"></ul>
+      <div id="bdayFormWrap" class="bday-form-wrap">
+        <label class="admin-label">축하 메시지 남기기</label>
+        <textarea id="bdayMsgInput" class="question-input" placeholder="따뜻한 한 마디를 적어 주세요" maxlength="500"></textarea>
+        <button id="bdayMsgSubmit" type="button" class="question-submit">메시지 남기기</button>
+      </div>
+      <button class="sheet-close" id="bdayClose">닫기</button>
+    </div>
+  </div>
 
   <!-- 도움말 바텀시트 -->
   <div id="helpSheet" class="sheet-backdrop hidden" role="dialog">
@@ -379,6 +398,14 @@
       <span class="memo-done-chev">▾</span>
     </button>
     <ul class="memo-list memo-done-list hidden" id="memoDoneList"></ul>
+    <div class="memo-cats" id="memoCats">
+      <button type="button" class="memo-cat" data-emoji="🛒">🛒 장보기</button>
+      <button type="button" class="memo-cat" data-emoji="💊">💊 약</button>
+      <button type="button" class="memo-cat" data-emoji="🏥">🏥 병원</button>
+      <button type="button" class="memo-cat" data-emoji="🎁">🎁 선물</button>
+      <button type="button" class="memo-cat" data-emoji="📞">📞 연락</button>
+      <button type="button" class="memo-cat" data-emoji="🍱">🍱 식사</button>
+    </div>
     <form id="memoForm" class="memo-form">
       <input id="memoInput" class="memo-input" type="text" placeholder="오늘 기억할 일을 적어 주세요" maxlength="500" />
       <button class="memo-mic" type="button" id="memoMic" aria-label="음성 입력" title="음성으로 말하기">🎤</button>

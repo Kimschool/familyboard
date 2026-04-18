@@ -614,21 +614,24 @@ function closeProfileSheet() {
 }
 
 // ---------- 생일 + 이번 주 기념일 ----------
+let TODAY_BIRTHDAY_USER = null;
 async function loadBirthday() {
   try {
     const r = await api('/api/birthdays/soon');
     renderUpcomingCard(r);
     const el = $('birthdayBanner');
     el.classList.remove('today');
+    TODAY_BIRTHDAY_USER = null;
     if (r.today) {
-      const isMe = ME && r.today.display_name === ME.displayName;
+      const isMe = ME && r.today.id === ME.id;
+      TODAY_BIRTHDAY_USER = r.today;
       $('bdEmoji').textContent = isMe ? '🎉' : iconEmoji(r.today.icon);
       $('bdTitle').textContent = isMe
         ? `${ME.displayName}님, 생일 축하드려요!`
         : `오늘은 ${r.today.display_name}님 생일이에요`;
       $('bdSub').textContent = isMe
-        ? '가족 모두가 함께 축하하고 있어요 🎂'
-        : '따뜻한 축하 한마디 전해보세요 🌷';
+        ? '가족들이 남긴 축하 메시지를 확인해 보세요 🎂'
+        : '탭해서 축하 메시지를 남겨보세요 🌷';
       el.classList.add('today');
       el.classList.remove('hidden');
     } else if (r.upcoming?.length) {
@@ -640,6 +643,81 @@ async function loadBirthday() {
     }
   } catch {}
 }
+
+// 배너 탭하면 축하 시트 열기
+$('birthdayBanner').addEventListener('click', () => {
+  if (TODAY_BIRTHDAY_USER) openBirthdaySheet(TODAY_BIRTHDAY_USER);
+});
+
+async function openBirthdaySheet(target) {
+  try {
+    const data = await api(`/api/birthday/${target.id}/messages`);
+    const isMe = ME.id === target.id;
+    $('bdayTargetEmoji').textContent = iconEmoji(target.icon);
+    $('bdayTargetTitle').textContent = isMe
+      ? `🎂 ${target.display_name}님 생일 축하드려요`
+      : `🎂 오늘은 ${target.display_name}님 생일`;
+    $('bdayTargetSub').textContent = isMe
+      ? `가족들이 남긴 축하 메시지 ${data.messages.length}개`
+      : `지금까지 ${data.messages.length}개의 축하 메시지`;
+
+    const list = $('bdayMsgList');
+    list.innerHTML = '';
+    if (!data.messages.length) {
+      list.innerHTML = `<li class="empty-state">
+        <span class="empty-state-emoji">💌</span>
+        <span class="empty-state-text">${isMe ? '아직 메시지가 없어요' : '첫 번째 메시지의 주인공이 되어주세요'}</span>
+      </li>`;
+    } else {
+      for (const m of data.messages) {
+        const li = document.createElement('li');
+        li.className = 'bday-msg';
+        li.innerHTML = `
+          <span class="reveal-emoji">${iconEmoji(m.author_icon)}</span>
+          <div class="reveal-body">
+            <div class="reveal-name"></div>
+            <div class="reveal-answer"></div>
+          </div>
+          ${m.author_user_id === ME.id ? '<button class="bday-msg-del" title="내 메시지 삭제">✕</button>' : ''}`;
+        li.querySelector('.reveal-name').textContent = m.author_name + '님';
+        li.querySelector('.reveal-answer').textContent = m.message;
+        const del = li.querySelector('.bday-msg-del');
+        if (del) del.onclick = async () => {
+          if (!confirm('내 축하 메시지를 삭제할까요?')) return;
+          await api(`/api/birthday/${target.id}/message`, { method: 'DELETE' });
+          openBirthdaySheet(target);
+        };
+        list.appendChild(li);
+      }
+    }
+
+    // 본인 생일이면 폼 숨김, 아니면 폼 표시 (내 메시지 있으면 prefill)
+    const formWrap = $('bdayFormWrap');
+    if (isMe) {
+      formWrap.classList.add('hidden');
+    } else {
+      formWrap.classList.remove('hidden');
+      const mine = data.messages.find((m) => m.author_user_id === ME.id);
+      $('bdayMsgInput').value = mine?.message || '';
+      $('bdayMsgSubmit').textContent = mine ? '메시지 수정' : '메시지 남기기';
+      $('bdayMsgSubmit').onclick = async () => {
+        const text = $('bdayMsgInput').value.trim();
+        if (!text) { alert('한 마디 적어주세요'); return; }
+        try {
+          await api(`/api/birthday/${target.id}/message`, {
+            method: 'POST', body: JSON.stringify({ text }),
+          });
+          openBirthdaySheet(target);
+        } catch { alert('저장 실패'); }
+      };
+    }
+    $('bdaySheet').classList.remove('hidden');
+  } catch (e) { console.warn('[bday sheet]', e); }
+}
+$('bdayClose').addEventListener('click', () => $('bdaySheet').classList.add('hidden'));
+$('bdaySheet').addEventListener('click', (e) => {
+  if (e.target.id === 'bdaySheet') $('bdaySheet').classList.add('hidden');
+});
 
 function renderUpcomingCard(r) {
   const list = [];
@@ -978,6 +1056,28 @@ function startMemoEdit(span, memo) {
   });
 }
 
+// 메모 카테고리 빠른 입력
+document.querySelectorAll('.memo-cat').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    const input = $('memoInput');
+    const emoji = btn.dataset.emoji;
+    const existing = input.value.trim();
+    // 이미 이모지로 시작하면 교체
+    const startsEmoji = /^[\p{Emoji_Presentation}\p{Extended_Pictographic}]/u.test(existing);
+    if (startsEmoji) {
+      input.value = existing.replace(/^[\p{Emoji_Presentation}\p{Extended_Pictographic}]+\s*/u, emoji + ' ');
+    } else if (existing) {
+      input.value = emoji + ' ' + existing;
+    } else {
+      input.value = emoji + ' ';
+    }
+    input.focus();
+    // 커서 끝으로
+    const n = input.value.length;
+    input.setSelectionRange(n, n);
+  });
+});
+
 $('memoDoneToggle').addEventListener('click', () => {
   const list = $('memoDoneList');
   list.classList.toggle('hidden');
@@ -993,6 +1093,23 @@ $('memoForm').addEventListener('submit', async (e) => {
 });
 
 // ---------- 띠별 운세 ----------
+const TODAY_ACTIVITIES = [
+  '가벼운 산책이 좋아요',
+  '따뜻한 차 한 잔 어떠세요',
+  '오랜 친구에게 연락해 보세요',
+  '가족과 통화 한 번',
+  '천천히 식사하기',
+  '좋아하는 노래 듣기',
+  '옛 사진첩 꺼내 보기',
+  '창밖 풍경 감상',
+  '책 한 장 넘기기',
+  '좋아하는 영화 한 편',
+  '가벼운 스트레칭',
+  '따뜻한 목욕',
+  '산책길에 꽃 구경',
+  '시장 한 바퀴',
+  '맛있는 간식 준비',
+];
 const LUCKY_COLORS = [
   { name: '파랑',   hex: '#0A84FF' },
   { name: '초록',   hex: '#34C759' },
@@ -1030,6 +1147,7 @@ async function loadZodiac() {
       const dir   = LUCKY_DIR[seed % LUCKY_DIR.length];
       const num   = (seed % 9) + 1;
       const li = document.createElement('li');
+      const activity = TODAY_ACTIVITIES[seed % TODAY_ACTIVITIES.length];
       li.innerHTML = `
         <span class="zodiac-emoji">${iconEmoji(z.icon)}</span>
         <div class="zodiac-body">
@@ -1038,6 +1156,7 @@ async function loadZodiac() {
             <span class="zodiac-tag"></span>
           </div>
           <div class="zodiac-fortune"></div>
+          <div class="zodiac-activity">🌿 오늘 추천 · <span class="activity-txt"></span></div>
           <div class="zodiac-lucky">
             <span class="lucky-chip"><span class="lucky-dot" style="background:${color.hex}"></span>${color.name}</span>
             <span class="lucky-chip">🧭 ${dir}</span>
@@ -1047,6 +1166,7 @@ async function loadZodiac() {
       li.querySelector('.zodiac-name').textContent = z.name;
       li.querySelector('.zodiac-tag').textContent = `${z.zodiac}띠`;
       li.querySelector('.zodiac-fortune').textContent = z.fortune;
+      li.querySelector('.activity-txt').textContent = activity;
       ul.appendChild(li);
     }
   } catch {}

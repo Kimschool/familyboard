@@ -90,6 +90,22 @@ async function ensureSchema() {
   await ensureColumn('families', 'notice_updated_by', 'INT NULL');
 
   await p.query(`
+    CREATE TABLE IF NOT EXISTS birthday_messages (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      family_id INT NOT NULL,
+      target_user_id INT NOT NULL,
+      author_user_id INT NOT NULL,
+      message VARCHAR(500) NOT NULL,
+      year INT NOT NULL,
+      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      UNIQUE KEY uq_year_target_author (year, target_user_id, author_user_id),
+      INDEX idx_target_year (target_user_id, year),
+      INDEX idx_family (family_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  `);
+
+  await p.query(`
     CREATE TABLE IF NOT EXISTS emergency_contacts (
       id INT AUTO_INCREMENT PRIMARY KEY,
       family_id INT NOT NULL,

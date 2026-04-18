@@ -786,6 +786,69 @@ app.get('/api/zodiac', requireAuth, async (req, res) => {
   }));
 });
 
+// ---------- 생일 축하 메시지 ----------
+app.get('/api/birthday/:userId/messages', requireAuth, async (req, res) => {
+  try {
+    const userId = Number(req.params.userId);
+    if (!Number.isInteger(userId)) return res.status(400).json({ error: 'bad-id' });
+    const year = Number(req.query.year) || new Date().getFullYear();
+    // 같은 가족 확인
+    const [check] = await getPool().query(
+      'SELECT id, display_name, icon FROM users WHERE id = ? AND family_id = ? LIMIT 1',
+      [userId, req.user.family_id]
+    );
+    if (!check.length) return res.status(404).json({ error: 'not-found' });
+    const [rows] = await getPool().query(
+      `SELECT m.id, m.message, m.year, m.created_at, m.author_user_id,
+              u.display_name AS author_name, u.icon AS author_icon
+         FROM birthday_messages m
+         JOIN users u ON u.id = m.author_user_id
+        WHERE m.target_user_id = ? AND m.year = ? AND m.family_id = ?
+        ORDER BY m.created_at ASC`,
+      [userId, year, req.user.family_id]
+    );
+    res.json({ target: check[0], year, messages: rows });
+  } catch (e) { res.status(500).json({ error: 'internal', message: e.message }); }
+});
+
+app.post('/api/birthday/:userId/message', requireAuth, async (req, res) => {
+  try {
+    const targetId = Number(req.params.userId);
+    if (!Number.isInteger(targetId)) return res.status(400).json({ error: 'bad-id' });
+    if (targetId === req.user.id) return res.status(400).json({ error: 'self-not-allowed' });
+    const text = (req.body?.text || '').toString().trim();
+    if (!text) return res.status(400).json({ error: 'empty' });
+    if (text.length > 500) return res.status(400).json({ error: 'too-long' });
+    const year = Number(req.body?.year) || new Date().getFullYear();
+
+    const [check] = await getPool().query(
+      'SELECT id FROM users WHERE id = ? AND family_id = ? LIMIT 1',
+      [targetId, req.user.family_id]
+    );
+    if (!check.length) return res.status(404).json({ error: 'not-found' });
+
+    await getPool().query(
+      `INSERT INTO birthday_messages (family_id, target_user_id, author_user_id, message, year)
+       VALUES (?, ?, ?, ?, ?)
+       ON DUPLICATE KEY UPDATE message = VALUES(message)`,
+      [req.user.family_id, targetId, req.user.id, text, year]
+    );
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: 'internal', message: e.message }); }
+});
+
+app.delete('/api/birthday/:userId/message', requireAuth, async (req, res) => {
+  const targetId = Number(req.params.userId);
+  if (!Number.isInteger(targetId)) return res.status(400).json({ error: 'bad-id' });
+  const year = Number(req.query.year) || new Date().getFullYear();
+  await getPool().query(
+    `DELETE FROM birthday_messages
+      WHERE target_user_id = ? AND author_user_id = ? AND year = ? AND family_id = ?`,
+    [targetId, req.user.id, year, req.user.family_id]
+  );
+  res.json({ ok: true });
+});
+
 // ---------- 곧 다가오는 생일 ----------
 app.get('/api/birthdays/soon', requireAuth, async (req, res) => {
   const [rows] = await getPool().query(
