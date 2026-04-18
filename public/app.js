@@ -284,13 +284,22 @@ async function loadBirthday() {
   try {
     const r = await api('/api/birthdays/soon');
     const el = $('birthdayBanner');
+    el.classList.remove('today');
     if (r.today) {
-      $('bdTitle').textContent = `오늘은 ${r.today.display_name}님 생일이에요`;
-      $('bdSub').textContent = '따뜻한 하루 보내세요 🌷';
+      const isMe = ME && r.today.display_name === ME.displayName;
+      $('bdEmoji').textContent = isMe ? '🎉' : iconEmoji(r.today.icon);
+      $('bdTitle').textContent = isMe
+        ? `${ME.displayName}님, 생신 축하드려요!`
+        : `오늘은 ${r.today.display_name}님 생신이에요`;
+      $('bdSub').textContent = isMe
+        ? '가족 모두가 함께 축하하고 있어요 🎂'
+        : '따뜻한 축하 한마디 전해보세요 🌷';
+      el.classList.add('today');
       el.classList.remove('hidden');
     } else if (r.upcoming?.length) {
       const u = r.upcoming[0];
-      $('bdTitle').textContent = `${u.daysLeft}일 뒤 ${u.display_name}님 생일`;
+      $('bdEmoji').textContent = iconEmoji(u.icon);
+      $('bdTitle').textContent = `${u.daysLeft}일 뒤 ${u.display_name}님 생신`;
       $('bdSub').textContent = `${u.birth_month}월 ${u.birth_day}일${u.is_lunar ? ' (음력)' : ''}`;
       el.classList.remove('hidden');
     }
@@ -404,6 +413,12 @@ async function loadFx() {
 ['calcAmt','calcFrom','calcTo'].forEach((id) => {
   $(id).addEventListener('input', calcUpdate);
   $(id).addEventListener('change', calcUpdate);
+});
+document.querySelectorAll('.calc-preset').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    $('calcAmt').value = btn.dataset.amt;
+    calcUpdate();
+  });
 });
 function calcUpdate() {
   const amt = parseFloat($('calcAmt').value);

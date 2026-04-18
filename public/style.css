@@ -258,18 +258,39 @@ body.tod-night .hero-date, body.tod-night .hero-greeting { color: #F2F2F7; }
 /* ========== 생일 배너 ========== */
 .banner {
   display: flex;
-  gap: 14px;
+  gap: 16px;
   align-items: center;
   background: linear-gradient(135deg, #FFE9EC 0%, #FFF5E1 100%);
   color: #3A2A2A;
   border-radius: var(--r-md);
-  padding: 14px 16px;
+  padding: 18px 20px;
   margin-bottom: 14px;
   box-shadow: var(--shadow-sm);
+  position: relative;
+  overflow: hidden;
 }
-.banner-emoji { font-size: 30px; }
-.banner-title { margin: 0; font-weight: 700; font-size: 17px; }
-.banner-sub   { margin: 2px 0 0; color: #6B5A5A; font-size: 14px; }
+.banner::before {
+  content: '';
+  position: absolute;
+  top: -30px; right: -20px;
+  width: 120px; height: 120px;
+  background: radial-gradient(circle, rgba(255,255,255,.6), transparent 70%);
+  pointer-events: none;
+}
+.banner.today {
+  background: linear-gradient(135deg, #FFB3BA 0%, #FFD9A8 50%, #FFE97F 100%);
+  animation: banner-pulse 3s ease-in-out infinite;
+}
+@keyframes banner-pulse {
+  0%, 100% { box-shadow: var(--shadow-sm); }
+  50% { box-shadow: 0 4px 20px rgba(255,100,100,.25); }
+}
+.banner-emoji { font-size: 48px; line-height: 1; flex-shrink: 0; }
+.banner.today .banner-emoji { font-size: 56px; }
+.banner-body { flex: 1; min-width: 0; }
+.banner-title { margin: 0; font-weight: 700; font-size: 19px; line-height: 1.25; }
+.banner.today .banner-title { font-size: 22px; }
+.banner-sub   { margin: 4px 0 0; color: #6B5A5A; font-size: 15px; line-height: 1.4; }
 
 /* ========== 카드 공통 ========== */
 .card {
@@ -298,15 +319,15 @@ body.tod-night .hero-date, body.tod-night .hero-greeting { color: #F2F2F7; }
 .weather-range { color: var(--sub); font-size: 16px; margin-top: 12px; }
 .weather-range b   { color: var(--text); font-weight: 600; }
 .weather-range .dot { margin: 0 6px; color: var(--line); }
-.chip-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+.chip-row { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
 .chip {
-  display: inline-flex; align-items: center; gap: 6px;
-  background: var(--bg); padding: 7px 12px; border-radius: 999px;
-  font-size: 13px; color: var(--text);
+  display: inline-flex; align-items: center; gap: 8px;
+  background: var(--bg); padding: 10px 16px; border-radius: 999px;
+  font-size: 15px; color: var(--text);
 }
-.chip-k { color: var(--sub); }
-.chip b { font-weight: 600; }
-.chip .lvl { width: 8px; height: 8px; border-radius: 50%; display: inline-block; background: var(--line); }
+.chip-k { color: var(--sub); font-weight: 500; }
+.chip b { font-weight: 700; }
+.chip .lvl { width: 10px; height: 10px; border-radius: 50%; display: inline-block; background: var(--line); }
 .lvl.good   { background: var(--good); }
 .lvl.normal { background: var(--normal); }
 .lvl.bad    { background: var(--bad); }
@@ -361,29 +382,40 @@ body.tod-night .hero-date, body.tod-night .hero-greeting { color: #F2F2F7; }
 .fx-list { list-style: none; margin: 0; padding: 0; }
 .fx-list li {
   display: flex; justify-content: space-between; align-items: baseline;
-  padding: 10px 0; border-bottom: 1px solid var(--line);
+  padding: 14px 0; border-bottom: 1px solid var(--line);
 }
 .fx-list li:last-child { border-bottom: none; }
-.fx-label { color: var(--sub); font-size: 15px; }
-.fx-val   { font-size: 22px; font-weight: 600; letter-spacing: -0.4px; }
+.fx-label { color: var(--sub); font-size: 16px; }
+.fx-val   { font-size: 30px; font-weight: 700; letter-spacing: -0.6px; color: var(--text); }
 
 /* ========== 계산기 ========== */
 .calc-row { display: flex; gap: 10px; align-items: stretch; }
 .calc-input, .calc-sel {
-  height: 56px; border-radius: var(--r-sm);
-  border: 1px solid var(--line); background: var(--bg); color: var(--text);
-  font-size: 20px; padding: 0 14px; outline: none;
+  height: 64px; border-radius: var(--r-sm);
+  border: 1.5px solid var(--line); background: var(--bg); color: var(--text);
+  font-size: 22px; padding: 0 16px; outline: none;
 }
 .calc-input { flex: 1; font-weight: 600; }
 .calc-input:focus { border-color: var(--primary); background: var(--card); }
-.calc-sel { width: 96px; font-size: 17px; }
-.calc-arrow { text-align: center; color: var(--sub); font-size: 20px; margin: 8px 0; }
+.calc-sel { width: 104px; font-size: 18px; font-weight: 600; }
+.calc-arrow { text-align: center; color: var(--sub); font-size: 24px; margin: 10px 0; }
 .calc-result {
   flex: 1; display: flex; align-items: center; justify-content: flex-end;
-  padding: 0 14px; height: 56px; border-radius: var(--r-sm); background: var(--bg);
-  font-size: 28px; font-weight: 700; letter-spacing: -0.5px;
+  padding: 0 16px; height: 64px; border-radius: var(--r-sm); background: var(--bg);
+  font-size: 40px; font-weight: 800; letter-spacing: -0.8px;
   color: var(--primary); overflow: hidden;
 }
+.calc-presets {
+  display: flex; gap: 8px; flex-wrap: wrap;
+  margin-top: 12px;
+}
+.calc-preset {
+  flex: 1; min-width: 0;
+  height: 44px; border: 1px solid var(--line); border-radius: var(--r-sm);
+  background: var(--card); color: var(--text); font-size: 14px; font-weight: 600;
+  cursor: pointer; padding: 0 8px;
+}
+.calc-preset:active { transform: scale(.97); background: var(--bg); }
 
 /* ========== 메모 ========== */
 .memo-list { list-style: none; margin: 0 0 10px; padding: 0; }

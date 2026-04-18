@@ -84,8 +84,8 @@
   </section>
 
   <section id="birthdayBanner" class="banner hidden">
-    <span class="banner-emoji">🎂</span>
-    <div>
+    <span class="banner-emoji" id="bdEmoji">🎂</span>
+    <div class="banner-body">
       <p class="banner-title" id="bdTitle">—</p>
       <p class="banner-sub" id="bdSub"></p>
     </div>
@@ -156,6 +156,12 @@
       <select id="calcTo" class="calc-sel">
         <option value="KRW">원</option><option value="JPY">엔</option><option value="USD">달러</option>
       </select>
+    </div>
+    <div class="calc-presets" id="calcPresets">
+      <button type="button" class="calc-preset" data-amt="1000">1,000</button>
+      <button type="button" class="calc-preset" data-amt="10000">1만</button>
+      <button type="button" class="calc-preset" data-amt="100000">10만</button>
+      <button type="button" class="calc-preset" data-amt="1000000">100만</button>
     </div>
   </section>
 
