@@ -665,8 +665,11 @@ body.tod-night .hero-weather { color: rgba(242,242,247,.8); }
   font-weight: 700;
   color: var(--sub);
   text-align: center;
-  margin-bottom: 4px;
-  padding: 0 2px;
+  margin-bottom: 6px;
+  padding: 8px 0;
+  background: var(--bg);
+  border-radius: 10px 10px 0 0;
+  border-bottom: 2px solid var(--line);
 }
 .cal-weekdays span:first-child { color: var(--bad); }
 .cal-weekdays span:last-child  { color: var(--primary); }
@@ -674,46 +677,54 @@ body.tod-night .hero-weather { color: rgba(242,242,247,.8); }
 .cal-grid {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
-  gap: 2px;
+  gap: 4px;
+  padding: 4px;
+  background: var(--bg);
+  border-radius: 0 0 10px 10px;
 }
 .cal-cell {
-  min-height: 52px;
-  background: var(--bg);
+  aspect-ratio: 1 / 1;
+  min-height: 44px;
+  background: var(--card);
   border-radius: 8px;
-  padding: 4px 6px 6px;
+  padding: 4px;
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
-  justify-content: space-between;
+  align-items: center;
+  justify-content: center;
   font-size: 13px;
   color: var(--text);
   position: relative;
   cursor: default;
-  transition: background .12s;
+  transition: transform .12s, background .12s;
+  box-shadow: 0 1px 2px rgba(0,0,0,.03);
 }
-.cal-cell.empty { background: transparent; }
-.cal-day { font-weight: 600; }
+.cal-cell.empty { background: transparent; box-shadow: none; }
+.cal-day { font-weight: 700; font-size: 14px; }
 .cal-cell.is-today {
   background: var(--primary);
   color: #fff;
+  box-shadow: 0 3px 10px rgba(10,132,255,.3);
 }
-.cal-cell.is-today .cal-day { font-weight: 800; }
+.cal-cell.is-today .cal-day { font-weight: 800; font-size: 15px; }
 .cal-cell.is-birthday {
   cursor: pointer;
   background: linear-gradient(135deg, #FFE9EC 0%, #FFF5E1 100%);
+  box-shadow: 0 2px 8px rgba(255,100,100,.15);
 }
 @media (prefers-color-scheme: dark) {
+  .cal-cell { background: rgba(255,255,255,.05); }
   .cal-cell.is-birthday { background: linear-gradient(135deg, #3A2A2A 0%, #3A3020 100%); }
 }
 .cal-cell.is-birthday.is-today {
   background: linear-gradient(135deg, #FFB3BA 0%, #FFD9A8 100%);
   color: #3A2A2A;
 }
+.cal-cell.is-birthday:active { transform: scale(.94); }
 .cal-bd {
-  font-size: 14px;
+  font-size: 12px;
   line-height: 1;
-  align-self: stretch;
-  text-align: right;
+  margin-top: 2px;
   overflow: hidden;
   white-space: nowrap;
 }
@@ -859,19 +870,37 @@ body.tod-night .hero-weather { color: rgba(242,242,247,.8); }
   position: fixed;
   left: 12px; right: 12px;
   bottom: calc(12px + env(safe-area-inset-bottom));
-  background: var(--card);
-  border: 1.5px solid var(--line);
-  border-radius: 16px;
-  padding: 14px 14px;
+  background: linear-gradient(135deg, #EAF3FF 0%, #FFF4E0 100%);
+  border: 1.5px solid rgba(10,132,255,.25);
+  border-radius: 18px;
+  padding: 14px 14px 14px 16px;
   display: flex;
   align-items: center;
   gap: 12px;
-  box-shadow: 0 8px 32px rgba(0,0,0,.18);
+  box-shadow: 0 10px 32px rgba(10,132,255,.2), 0 2px 6px rgba(0,0,0,.06);
   z-index: 950;
   max-width: 560px;
   margin: 0 auto;
   animation: install-up .4s cubic-bezier(.22,.61,.36,1);
 }
+@media (prefers-color-scheme: dark) {
+  .install-banner {
+    background: linear-gradient(135deg, #1E2A3A 0%, #2A2419 100%);
+    border-color: rgba(10,132,255,.35);
+  }
+}
+.install-emoji {
+  background: #fff;
+  border-radius: 50%;
+  width: 44px; height: 44px;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 2px 6px rgba(0,0,0,.1);
+}
+@media (prefers-color-scheme: dark) {
+  .install-emoji { background: rgba(255,255,255,.1); }
+}
+.install-title { color: var(--text); }
+.install-sub { color: var(--sub); }
 @keyframes install-up {
   from { transform: translateY(120%); opacity: 0; }
   to { transform: translateY(0); opacity: 1; }
@@ -1337,25 +1366,51 @@ body.tod-night .hero-weather { color: rgba(242,242,247,.8); }
   margin: 0 0 14px;
   word-break: keep-all;
 }
+.question-input-wrap {
+  position: relative;
+  margin-top: 4px;
+}
+.question-input-wrap::before {
+  content: '✍️';
+  position: absolute;
+  top: 12px; left: 14px;
+  font-size: 18px;
+  pointer-events: none;
+  opacity: .7;
+}
 .question-input {
   width: 100%;
-  min-height: 80px;
-  max-height: 200px;
-  padding: 14px 16px;
-  border: 1.5px solid rgba(0,0,0,.1);
-  border-radius: var(--r-sm);
-  background: rgba(255,255,255,.75);
+  min-height: 100px;
+  max-height: 240px;
+  padding: 14px 16px 14px 44px;
+  border: 2px solid transparent;
+  border-radius: 16px;
+  background:
+    linear-gradient(var(--card), var(--card)) padding-box,
+    linear-gradient(135deg, rgba(154,91,66,.35), rgba(233,185,122,.35)) border-box;
   color: var(--text);
   font-family: inherit;
-  font-size: 16px;
-  line-height: 1.5;
+  font-size: 17px;
+  line-height: 1.6;
   resize: vertical;
   outline: none;
+  box-shadow: 0 2px 8px rgba(0,0,0,.04);
+  transition: box-shadow .2s, border-color .2s;
 }
 @media (prefers-color-scheme: dark) {
-  .question-input { background: rgba(255,255,255,.05); border-color: rgba(255,255,255,.12); }
+  .question-input {
+    background:
+      linear-gradient(#2A2419, #2A2419) padding-box,
+      linear-gradient(135deg, rgba(233,185,122,.4), rgba(154,91,66,.3)) border-box;
+  }
 }
-.question-input:focus { border-color: var(--primary); }
+.question-input:focus {
+  background:
+    linear-gradient(var(--card), var(--card)) padding-box,
+    linear-gradient(135deg, var(--primary), #5AC8FA) border-box;
+  box-shadow: 0 4px 14px rgba(10,132,255,.18);
+}
+.question-input::placeholder { color: var(--sub); opacity: .8; }
 .question-submit {
   width: 100%; height: 52px;
   margin-top: 10px;
@@ -1610,36 +1665,37 @@ body.tod-night .hero-weather { color: rgba(242,242,247,.8); }
 .weather-range { color: var(--sub); font-size: 16px; margin-top: 12px; }
 .weather-range b   { color: var(--text); font-weight: 600; }
 .weather-range .dot { margin: 0 6px; color: var(--line); }
-/* 시간별 미니 그래프 */
+/* 시간별 미니 그래프 — 12포인트 좁게 */
 .hourly {
   display: flex;
-  gap: 6px;
+  gap: 2px;
   margin-top: 14px;
-  padding: 12px 8px;
+  padding: 10px 6px;
   background: var(--bg);
   border-radius: var(--r-sm);
   overflow-x: auto;
+  scrollbar-width: thin;
 }
 .hr-col {
   flex: 1 1 0;
-  min-width: 48px;
+  min-width: 34px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
-  font-size: 12px;
+  gap: 3px;
+  font-size: 11px;
 }
-.hr-icon { font-size: 22px; line-height: 1; }
-.hr-temp { font-size: 14px; font-weight: 700; color: var(--text); }
-.hr-bar-wrap { height: 64px; display: flex; align-items: flex-end; }
+.hr-icon { font-size: 16px; line-height: 1; }
+.hr-temp { font-size: 12px; font-weight: 700; color: var(--text); }
+.hr-bar-wrap { height: 50px; display: flex; align-items: flex-end; }
 .hr-bar {
-  width: 8px;
-  border-radius: 4px 4px 0 0;
+  width: 6px;
+  border-radius: 3px 3px 0 0;
   background: linear-gradient(180deg, var(--primary), rgba(10, 132, 255, .4));
   transition: height .35s ease;
 }
 .hr-col.rain .hr-bar { background: linear-gradient(180deg, #5AC8FA, #0A84FF); }
-.hr-label { color: var(--sub); font-size: 11px; text-align: center; line-height: 1.2; }
+.hr-label { color: var(--sub); font-size: 10px; text-align: center; line-height: 1.2; white-space: nowrap; }
 
 .tomorrow {
   display: flex;
@@ -1826,10 +1882,16 @@ body.tod-night .hero-weather { color: rgba(242,242,247,.8); }
   overflow: hidden;
   min-width: 0;
 }
+@media (max-width: 440px) {
+  .calc-sel { flex: 0 0 82px; width: 82px; font-size: 15px; padding: 0 8px 0 10px; padding-right: 24px; background-position: right 6px center; }
+  .calc-input { font-size: 18px; padding: 0 10px; min-width: 0; }
+  .calc-result { font-size: 24px; padding: 0 10px; min-width: 0; }
+}
 @media (max-width: 360px) {
-  .calc-sel { flex: 0 0 84px; width: 84px; font-size: 16px; }
-  .calc-input { font-size: 20px; padding: 0 10px; }
-  .calc-result { font-size: 26px; padding: 0 10px; }
+  .calc-sel { flex: 0 0 72px; width: 72px; font-size: 14px; padding-right: 20px; background-position: right 4px center; }
+  .calc-input { font-size: 16px; padding: 0 8px; }
+  .calc-result { font-size: 20px; padding: 0 8px; }
+  .calc-row { gap: 6px; }
 }
 .calc-swap {
   display: block;

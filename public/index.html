@@ -72,7 +72,7 @@
 <section id="settings" class="screen settings-screen hidden">
   <div class="settings-head">
     <button class="auth-back" id="settingsBack">← 돌아가기</button>
-    <h1 class="settings-title">가족 관리 · 설정</h1>
+    <h1 class="settings-title">가족 관리 설정</h1>
   </div>
   <div id="settingsBody"></div>
 </section>
@@ -257,7 +257,7 @@
       <span class="tomorrow-label">내일</span>
       <span class="tomorrow-icon" id="tmIcon">🌤️</span>
       <span class="tomorrow-range">
-        최고 <b id="tmMax">--°</b> · 최저 <b id="tmMin">--°</b>
+        최고 <b id="tmMax">--°</b> 최저 <b id="tmMin">--°</b>
       </span>
       <span class="tomorrow-rain hidden" id="tmRain">☔ 비 확률 높음</span>
     </div>
@@ -281,7 +281,9 @@
       <span class="done-badge hidden" id="qDoneBadge">✓ 저장됨</span>
     </div>
     <p class="question-text" id="questionText">—</p>
-    <textarea id="questionAnswer" class="question-input" placeholder="답변을 적어 주세요 (가족에겐 내일 공개돼요)"></textarea>
+    <div class="question-input-wrap">
+      <textarea id="questionAnswer" class="question-input" placeholder="답변을 적어 주세요&#10;가족에겐 내일 공개돼요"></textarea>
+    </div>
     <div class="question-actions-row">
       <button id="questionSubmit" type="button" class="question-submit">답변 저장</button>
       <button id="questionSkip" type="button" class="question-skip">오늘은 건너뛸게요</button>
@@ -365,11 +367,11 @@
         </div>
         <div class="help-item">
           <span class="help-emoji">📝</span>
-          <div><b>메모</b><p>글자 탭 → 수정 · 별 탭 → 중요 표시 · 마이크 탭 → 음성으로 입력. ✕ 는 확인 후 삭제.</p></div>
+          <div><b>메모</b><p>글자 탭 → 수정. 별 탭 → 중요 표시. 마이크 탭 → 음성으로 입력. ✕ 는 확인 후 삭제.</p></div>
         </div>
         <div class="help-item">
           <span class="help-emoji">💱</span>
-          <div><b>환율 · 계산기</b><p>엔·원·달러·유로·위안 5개 통화. 아래 계산기로 원하는 금액 바로 환산.</p></div>
+          <div><b>환율 계산기</b><p>엔, 원, 달러, 유로, 위안 5개 통화. 아래 계산기로 원하는 금액 바로 환산.</p></div>
         </div>
         <div class="help-item">
           <span class="help-emoji">📞</span>
@@ -672,13 +674,13 @@
     <div class="account-menu">
       <button id="helpBtn" type="button" class="account-menu-btn">❓ 도움말</button>
       <button id="reorderToggleBtn" type="button" class="account-menu-btn">🧩 카드 순서·표시 편집</button>
-      <button id="openSettingsBtn" type="button" class="account-menu-btn hidden">⚙️ 가족 관리 · 설정</button>
+      <button id="openSettingsBtn" type="button" class="account-menu-btn hidden">⚙️ 가족 관리 설정</button>
       <button id="logoutBtn" class="account-menu-btn danger">로그아웃</button>
     </div>
   </section>
 
   <footer class="foot">
-    <p class="foot-ver">familyboard · 부모님을 위한 하루 안내</p>
+    <p class="foot-ver">familyboard — 부모님을 위한 하루 안내</p>
   </footer>
 </main>
 

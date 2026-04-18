@@ -398,7 +398,7 @@ function renderHero() {
 function renderAccount() {
   $('accountAvatar').textContent = iconEmoji(ME.icon);
   $('accountName').textContent = `${ME.displayName}님으로 로그인 중`;
-  $('accountMeta').textContent = `${ME.familyName || ''} · ${ME.role === 'admin' ? '관리자' : '가족'}`;
+  $('accountMeta').textContent = `${ME.familyName || ''} (${ME.role === 'admin' ? '관리자' : '가족'})`;
 }
 
 $('logoutBtn').addEventListener('click', async () => {
@@ -1226,7 +1226,7 @@ async function loadWeatherAndAir() {
   const [w, a] = await Promise.all([wP, aP]);
 
   if (w) {
-    $('wCity').textContent = `${w.city} · 오늘`;
+    $('wCity').textContent = `${w.city} 오늘`;
     $('wDesc').textContent = WMO[w.code] || '';
     $('wIcon').textContent = WMO_ICON[w.code] || '🌤️';
     $('wIcon').classList.remove('skel');
@@ -1269,9 +1269,9 @@ function renderHourly(hourly) {
   block.innerHTML = hourly.map((h) => {
     const d = new Date(h.time);
     const hour = d.getHours();
-    const label = hour === 0 ? '자정' : hour === 12 ? '정오' : hour < 12 ? `오전 ${hour}` : `오후 ${hour - 12}`;
+    const label = `${hour}시`;
     const icon = WMO_ICON[h.code] || '🌤️';
-    const barH = 18 + ((h.temp - tMin) / range) * 42;
+    const barH = 14 + ((h.temp - tMin) / range) * 34;
     const rain = h.rainProb >= 50;
     return `
       <div class="hr-col ${rain ? 'rain' : ''}">
@@ -1293,7 +1293,7 @@ function renderTips(w, a) {
     else if (w.temp <= 15) dress = `${name}님, 얇은 니트에 겉옷 한 벌이 딱 좋아요`;
     else if (w.temp <= 21) dress = `${name}님, 가벼운 겉옷이면 적당해요`;
     else if (w.temp <= 26) dress = `${name}님, 얇은 긴소매나 반팔이 좋아요`;
-    else                   dress = `${name}님, 오늘은 반팔 · 시원한 옷을 추천해요`;
+    else                   dress = `${name}님, 오늘은 반팔이나 시원한 옷을 추천해요`;
     if (w.rainProb >= 60) dress += ' (우산 꼭 챙기세요)';
   }
   $('tipDress').textContent = dress;
@@ -1730,7 +1730,7 @@ async function loadZodiac() {
             <span class="zodiac-tag"></span>
           </div>
           <div class="zodiac-fortune"></div>
-          <div class="zodiac-activity">🌿 오늘 추천 · <span class="activity-txt"></span></div>
+          <div class="zodiac-activity">🌿 오늘 추천 <span class="activity-txt"></span></div>
           <div class="zodiac-lucky">
             <span class="lucky-chip"><span class="lucky-dot" style="background:${color.hex}"></span>${color.name}</span>
             <span class="lucky-chip">🧭 ${dir}</span>
@@ -1904,7 +1904,7 @@ async function loadFamilyNotice() {
       if (f.noticeBy) {
         const date = f.noticeUpdatedAt ? new Date(f.noticeUpdatedAt) : null;
         const when = date ? relativeTime(date) : '';
-        $('noticeMeta').textContent = `${iconEmoji(f.noticeBy.icon)} ${f.noticeBy.name}${when ? ' · ' + when : ''}`;
+        $('noticeMeta').textContent = `${iconEmoji(f.noticeBy.icon)} ${f.noticeBy.name}${when ? ' ' + when : ''}`;
       } else { $('noticeMeta').textContent = ''; }
       // NEW 배지: 마지막으로 본 시각보다 최신이면 표시
       const updatedAt = f.noticeUpdatedAt ? new Date(f.noticeUpdatedAt).getTime() : 0;
@@ -1984,7 +1984,7 @@ async function loadUsers() {
     for (const u of users) {
       const li = document.createElement('li');
       const dob = u.birthYear ? `${u.birthYear}.${u.birthMonth || '-'}.${u.birthDay || '-'}${u.isLunar ? ' 음' : ''}` : '생일 미등록';
-      const status = u.activated ? '' : ' · <span class="pending-dot">초대 대기</span>';
+      const status = u.activated ? '' : ' <span class="pending-dot">· 초대 대기</span>';
       li.innerHTML = `
         <span class="user-emoji">${iconEmoji(u.icon)}</span>
         <div class="user-main">
@@ -2185,7 +2185,7 @@ async function loadTodayQuestion() {
     $('questionText').textContent = q.question;
     $('questionAnswer').value = q.myAnswer || '';
     $('questionMeta').textContent =
-      `${q.answeredCount} / ${q.memberCount}명이 답했어요 · 모든 답변은 내일 공개돼요`;
+      `${q.answeredCount} / ${q.memberCount}명이 답했어요. 모든 답변은 내일 공개돼요`;
     const hasAnswer = !!q.myAnswer;
     const isSkip = !!q.mySkipped;
     $('qPendingBadge').classList.toggle('hidden', hasAnswer || isSkip);
@@ -2325,7 +2325,7 @@ function showStickerNudge() {
   sessionStorage.setItem('fb_nudge_shown', '1');
   const el = $('undoToast');
   if (!el) return;
-  el.querySelector('.undo-msg').textContent = '답변 저장됨 · 가족에게 응원 스티커도 어때요?';
+  el.querySelector('.undo-msg').textContent = '답변 저장됨! 가족에게 응원 스티커도 어때요?';
   const btn = $('undoBtn');
   btn.textContent = '스티커 💖';
   btn.onclick = () => {

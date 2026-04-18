@@ -672,11 +672,11 @@ app.get('/api/weather', async (_req, res) => {
         rainProb: j.daily.precipitation_probability_max?.[1] ?? 0,
       } : null,
     };
-    // 시간별 — 현재 시각부터 다음 12시간 (짝수 시각만 6 포인트)
+    // 시간별 — 현재 시각부터 다음 12시간 (1시간 간격 12포인트)
     if (j.hourly?.time?.length) {
       const nowIdx = j.hourly.time.findIndex((t) => new Date(t) >= new Date()) || 0;
       const picks = [];
-      for (let i = Math.max(0, nowIdx); i < j.hourly.time.length && picks.length < 6; i += 2) {
+      for (let i = Math.max(0, nowIdx); i < j.hourly.time.length && picks.length < 12; i += 1) {
         picks.push({
           time: j.hourly.time[i],
           temp: Math.round(j.hourly.temperature_2m[i]),
