@@ -244,6 +244,11 @@ function renderHero() {
     : h < 22 ? '편안한 저녁이에요' : '푹 주무세요';
   $('greeting').textContent = `${ME.displayName}님, ${phase}`;
   $('heroAvatar').textContent = iconEmoji(ME.icon);
+
+  // 시간대별 배경 톤
+  const tod = h < 5 ? 'night' : h < 11 ? 'morning' : h < 17 ? 'noon' : h < 20 ? 'evening' : 'night';
+  document.body.classList.remove('tod-morning','tod-noon','tod-evening','tod-night');
+  document.body.classList.add('tod-' + tod);
 }
 
 $('logoutBtn').addEventListener('click', async () => {

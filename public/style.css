@@ -166,7 +166,25 @@ body {
 }
 
 /* ========== Hero ========== */
-.hero { padding: 8px 4px 18px; }
+.hero {
+  padding: 18px 16px 20px;
+  margin: 0 -16px 14px;
+  border-radius: 0 0 28px 28px;
+  background: var(--hero-bg, linear-gradient(180deg, #FFF5E6 0%, var(--bg) 100%));
+  transition: background .6s ease;
+}
+body.tod-morning { --hero-bg: linear-gradient(180deg, #FFF1DB 0%, #FFE8E1 60%, var(--bg) 100%); }
+body.tod-noon    { --hero-bg: linear-gradient(180deg, #DDEEFF 0%, #F0F7FF 60%, var(--bg) 100%); }
+body.tod-evening { --hero-bg: linear-gradient(180deg, #FFD8C4 0%, #E8D1E9 60%, var(--bg) 100%); }
+body.tod-night   { --hero-bg: linear-gradient(180deg, #2E2B4B 0%, #1F1F2E 60%, var(--bg) 100%); }
+body.tod-night .hero-date, body.tod-night .hero-greeting { color: #F2F2F7; }
+
+@media (prefers-color-scheme: dark) {
+  body.tod-morning { --hero-bg: linear-gradient(180deg, #3A2B1E 0%, #2A2022 60%, var(--bg) 100%); }
+  body.tod-noon    { --hero-bg: linear-gradient(180deg, #1E2A3A 0%, #20242E 60%, var(--bg) 100%); }
+  body.tod-evening { --hero-bg: linear-gradient(180deg, #3A2030 0%, #2A1E2E 60%, var(--bg) 100%); }
+  body.tod-night   { --hero-bg: linear-gradient(180deg, #141428 0%, #0A0A14 60%, var(--bg) 100%); }
+}
 .hero-row { display: flex; align-items: center; gap: 14px; }
 .hero-avatar {
   flex-shrink: 0;
@@ -294,35 +312,50 @@ body {
 .lvl.bad    { background: var(--bad); }
 .lvl.worst  { background: var(--worst); }
 
-/* ========== 건강 조언 ========== */
-.tips-card .card-title { font-size: 16px; color: var(--text); font-weight: 600; }
+/* ========== 건강 조언 (핵심 컨텐츠) ========== */
+.tips-card { padding: 20px 18px 18px; }
+.tips-card .card-title { font-size: 17px; color: var(--text); font-weight: 700; margin-bottom: 14px; }
 .tips { list-style: none; margin: 0; padding: 0; }
-.tips li { display: flex; align-items: flex-start; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--line); }
-.tips li:last-child { border-bottom: none; }
-.tip-ico  { font-size: 22px; line-height: 1.2; flex-shrink: 0; }
-.tip-text { font-size: 16px; line-height: 1.5; color: var(--text); }
+.tips li {
+  display: flex; align-items: flex-start; gap: 16px;
+  padding: 16px 0; border-bottom: 1px solid var(--line);
+}
+.tips li:last-child { border-bottom: none; padding-bottom: 4px; }
+.tips li:first-child { padding-top: 4px; }
+.tip-ico  {
+  font-size: 32px; line-height: 1.15; flex-shrink: 0;
+  width: 42px; text-align: center;
+}
+.tip-text { font-size: 19px; line-height: 1.55; color: var(--text); font-weight: 500; }
 
-/* ========== 띠별 운세 ========== */
+/* ========== 띠별 운세 (감정 포인트) ========== */
 .zodiac-list { list-style: none; margin: 0; padding: 0; }
-.zodiac-list li { display: flex; gap: 14px; align-items: flex-start; padding: 12px 0; border-bottom: 1px solid var(--line); }
-.zodiac-list li:last-child { border-bottom: none; }
+.zodiac-list li {
+  display: flex; gap: 16px; align-items: flex-start;
+  padding: 16px 0; border-bottom: 1px solid var(--line);
+}
+.zodiac-list li:last-child { border-bottom: none; padding-bottom: 4px; }
+.zodiac-list li:first-child { padding-top: 4px; }
 .zodiac-empty {
   display: block !important;
   color: var(--sub);
-  font-size: 14px;
+  font-size: 15px;
   text-align: center;
-  padding: 14px 0 !important;
+  padding: 18px 0 !important;
   border: none !important;
 }
-.zodiac-emoji { font-size: 30px; line-height: 1; flex-shrink: 0; }
-.zodiac-body { flex: 1; }
-.zodiac-top { display: flex; gap: 8px; align-items: baseline; }
-.zodiac-name { font-size: 16px; font-weight: 600; }
-.zodiac-tag {
-  font-size: 12px; color: var(--sub);
-  background: var(--bg); border-radius: 999px; padding: 2px 8px;
+.zodiac-emoji {
+  font-size: 44px; line-height: 1; flex-shrink: 0;
+  width: 54px; text-align: center;
 }
-.zodiac-fortune { font-size: 15px; color: var(--text); margin-top: 4px; line-height: 1.45; }
+.zodiac-body { flex: 1; }
+.zodiac-top { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
+.zodiac-name { font-size: 18px; font-weight: 700; }
+.zodiac-tag {
+  font-size: 13px; color: var(--sub);
+  background: var(--bg); border-radius: 999px; padding: 3px 10px;
+}
+.zodiac-fortune { font-size: 17px; color: var(--text); margin-top: 6px; line-height: 1.5; }
 
 /* ========== 환율 ========== */
 .fx-list { list-style: none; margin: 0; padding: 0; }
