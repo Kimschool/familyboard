@@ -123,10 +123,20 @@ echo '[logs]'
 sudo docker logs --tail 5 familyboard 2>&1
 "@
 
-# Windows CRLF → LF 변환 후 ssh 로 전달 (bash 가 \r 을 리다이렉션 토큰에 섞어 '::ambiguous redirect' 내는 것 방지)
+# PowerShell pipe 가 CRLF·BOM 섞어 보내는 문제 회피:
+# 임시 .sh 파일에 LF + UTF-8 (BOM 없음) 으로 저장 → scp 로 NAS 전송 → bash 실행
 $remote = $remote -replace "`r`n", "`n"
-$remote | & ssh -p $NasPort "${NasUser}@${NasHost}" 'bash -s'
-if ($LASTEXITCODE -ne 0) { Fail "remote deploy failed" }
+$tmpLocal = Join-Path $env:TEMP ("fb-remote-{0}.sh" -f ([guid]::NewGuid().ToString("N").Substring(0,8)))
+$noBomUtf8 = New-Object System.Text.UTF8Encoding($false)
+[System.IO.File]::WriteAllText($tmpLocal, $remote, $noBomUtf8)
+
+& scp -O -P $NasPort -o StrictHostKeyChecking=accept-new $tmpLocal "${NasUser}@${NasHost}:/tmp/fb-deploy.sh"
+if ($LASTEXITCODE -ne 0) { Remove-Item $tmpLocal -Force; Fail "remote script upload failed" }
+
+& ssh -p $NasPort "${NasUser}@${NasHost}" "bash /tmp/fb-deploy.sh; rc=`$?; rm -f /tmp/fb-deploy.sh; exit `$rc"
+$sshRc = $LASTEXITCODE
+Remove-Item $tmpLocal -Force
+if ($sshRc -ne 0) { Fail "remote deploy failed (rc=$sshRc)" }
 
 # ---- cleanup local tarball -------------------------------------------------
 if (Test-Path $TarOut) { Remove-Item $TarOut -Force }
