@@ -2856,6 +2856,85 @@ function moveCard(el, dir) {
 }
 $('reorderToggleBtn').addEventListener('click', () => setReorderMode(!REORDER_MODE));
 
+// 즐겨찾은 답변 시트
+$('favoritesBtn').addEventListener('click', async () => {
+  try {
+    const list = await api('/api/favorites/answers');
+    const ul = $('favoritesList');
+    ul.innerHTML = '';
+    if (!list.length) {
+      ul.innerHTML = '<li class="empty-state-text" style="padding:24px 0;text-align:center">아직 즐겨찾은 답변이 없어요.<br>어제 답변에 ⭐ 탭하면 여기에 쌓여요</li>';
+    } else {
+      for (const a of list) {
+        const d = new Date(a.question_date);
+        const li = document.createElement('li');
+        li.className = 'fav-item';
+        li.innerHTML = `
+          <div class="fav-head">
+            <span class="fav-date">${d.getMonth() + 1}월 ${d.getDate()}일</span>
+            <span class="fav-author">${iconEmoji(a.icon)} ${escapeHtml(a.display_name)}님</span>
+          </div>
+          <div class="fav-question"></div>
+          <div class="fav-answer"></div>
+          <button class="fav-remove" data-aid="${a.answer_id}">★ 해제</button>`;
+        li.querySelector('.fav-question').textContent = a.question_text;
+        li.querySelector('.fav-answer').textContent = a.answer_text;
+        li.querySelector('.fav-remove').onclick = async () => {
+          try {
+            await api(`/api/answer/${a.answer_id}/favorite`, { method: 'POST' });
+            li.remove();
+            if (!ul.children.length) ul.innerHTML = '<li class="empty-state-text" style="padding:24px 0;text-align:center">모두 해제됐어요</li>';
+          } catch {}
+        };
+        ul.appendChild(li);
+      }
+    }
+    $('favoritesSheet').classList.remove('hidden');
+  } catch { alert('불러오기 실패'); }
+});
+$('favoritesClose').addEventListener('click', () => $('favoritesSheet').classList.add('hidden'));
+$('favoritesSheet').addEventListener('click', (e) => {
+  if (e.target.id === 'favoritesSheet') $('favoritesSheet').classList.add('hidden');
+});
+
+// 퀵 메모 FAB
+$('quickMemoFab').addEventListener('click', () => {
+  $('quickMemoInput').value = '';
+  $('quickMemoSheet').classList.remove('hidden');
+  setTimeout(() => $('quickMemoInput').focus(), 100);
+});
+$('quickMemoClose').addEventListener('click', () => $('quickMemoSheet').classList.add('hidden'));
+$('quickMemoSheet').addEventListener('click', (e) => {
+  if (e.target.id === 'quickMemoSheet') $('quickMemoSheet').classList.add('hidden');
+});
+document.querySelectorAll('.quick-memo-cats button').forEach((b) => {
+  b.addEventListener('click', () => {
+    const emoji = b.dataset.emoji;
+    const input = $('quickMemoInput');
+    const existing = input.value.trim();
+    const startsEmoji = /^[\p{Emoji_Presentation}\p{Extended_Pictographic}]/u.test(existing);
+    if (startsEmoji) input.value = existing.replace(/^[\p{Emoji_Presentation}\p{Extended_Pictographic}]+\s*/u, emoji + ' ');
+    else if (existing) input.value = emoji + ' ' + existing;
+    else input.value = emoji + ' ';
+    input.focus();
+  });
+});
+async function quickAddMemo() {
+  const v = $('quickMemoInput').value.trim();
+  if (!v) return;
+  try {
+    await api('/api/memos', { method: 'POST', body: JSON.stringify({ content: v }) });
+    $('quickMemoInput').value = '';
+    $('quickMemoSheet').classList.add('hidden');
+    loadMemos();
+    showSimpleToast('메모가 추가됐어요');
+  } catch { alert('추가 실패'); }
+}
+$('quickMemoAdd').addEventListener('click', quickAddMemo);
+$('quickMemoInput').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') quickAddMemo();
+});
+
 // 도움말 시트
 $('helpBtn').addEventListener('click', () => $('helpSheet').classList.remove('hidden'));
 $('helpClose').addEventListener('click', () => $('helpSheet').classList.add('hidden'));
@@ -3681,10 +3760,16 @@ function renderHistory() {
     return;
   }
   for (const item of list) {
-    const answers = HISTORY_FILTER === 'mine'
-      ? item.answers.filter((a) => a.display_name === ME.displayName)
-      : item.answers;
-    if (HISTORY_FILTER === 'mine' && !answers.length) continue;
+    let answers;
+    if (HISTORY_FILTER === 'mine') {
+      answers = item.answers.filter((a) => a.display_name === ME.displayName);
+    } else if (HISTORY_FILTER && HISTORY_FILTER.startsWith('member:')) {
+      const target = HISTORY_FILTER.slice('member:'.length);
+      answers = item.answers.filter((a) => a.display_name === target);
+    } else {
+      answers = item.answers;
+    }
+    if (HISTORY_FILTER !== 'all' && !answers.length) continue;
     renderHistoryItem(el, item, answers);
   }
   if (el.children.length === 0) {
@@ -3727,6 +3812,8 @@ $('qHistoryBtn').addEventListener('click', async () => {
   try {
     const list = await api('/api/question/history?limit=30');
     HISTORY_CACHE = list;
+    // 가족별 필터 버튼 동적 생성
+    buildHistoryFamilyFilters(list);
     const el = $('historyList');
     el.innerHTML = '';
     if (!list.length) {
@@ -3738,6 +3825,37 @@ $('qHistoryBtn').addEventListener('click', async () => {
     return;
   } catch { alert('기록 불러오기 실패'); return; }
 });
+
+function buildHistoryFamilyFilters(list) {
+  // 기존 전체/내 답변 버튼 외에 가족별 필터 추가
+  const row = $('historyFilterRow');
+  if (!row) return;
+  // 기존 추가된 멤버 필터만 제거
+  row.querySelectorAll('.hf-btn[data-member]').forEach((b) => b.remove());
+  // 고유 멤버 수집
+  const seen = new Map();
+  for (const item of list) {
+    for (const a of item.answers) {
+      if (!seen.has(a.display_name)) seen.set(a.display_name, a.icon);
+    }
+  }
+  for (const [name, icon] of seen) {
+    if (name === ME.displayName) continue;
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'hf-btn';
+    b.dataset.filter = 'member:' + name;
+    b.dataset.member = name;
+    b.innerHTML = `${iconEmoji(icon)} ${escapeHtml(name)}`;
+    b.addEventListener('click', () => {
+      row.querySelectorAll('.hf-btn').forEach((x) => x.classList.remove('active'));
+      b.classList.add('active');
+      HISTORY_FILTER = b.dataset.filter;
+      renderHistory();
+    });
+    row.appendChild(b);
+  }
+}
 
 $('historyClose').addEventListener('click', () => $('historySheet').classList.add('hidden'));
 $('historySheet').addEventListener('click', (e) => {

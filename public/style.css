@@ -3710,6 +3710,82 @@ li.memo-important .memo-text { font-weight: 700; }
 }
 .heart-ico { font-size: 16px; line-height: 1; }
 
+/* ========== 퀵 메모 FAB ========== */
+.quick-memo-fab {
+  position: fixed;
+  left: 18px;
+  bottom: calc(18px + env(safe-area-inset-bottom));
+  width: 60px; height: 60px;
+  border-radius: 50%;
+  border: none;
+  background: linear-gradient(135deg, var(--primary), #5AC8FA);
+  color: #fff;
+  font-size: 34px;
+  font-weight: 300;
+  cursor: pointer;
+  box-shadow: 0 6px 20px rgba(10,132,255,.4);
+  z-index: 920;
+  transition: transform .15s;
+}
+.quick-memo-fab:active { transform: scale(.92); }
+body.reorder-mode .quick-memo-fab { display: none; }
+
+.quick-memo-cats {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  margin: 12px 0;
+}
+.quick-memo-cats button {
+  width: 44px; height: 44px;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: var(--bg);
+  font-size: 22px;
+  cursor: pointer;
+  font-family: inherit;
+}
+.quick-memo-cats button:active { transform: scale(.9); background: var(--card); }
+
+/* ========== 즐겨찾은 답변 시트 ========== */
+.favorites-list { list-style: none; padding: 0; margin: 0 0 14px; max-height: 60vh; overflow-y: auto; }
+.fav-item {
+  padding: 14px;
+  background: var(--bg);
+  border-radius: 12px;
+  margin-bottom: 10px;
+  position: relative;
+  border-left: 3px solid #FFCC00;
+}
+.fav-head { display: flex; justify-content: space-between; font-size: 12px; color: var(--sub); margin-bottom: 6px; }
+.fav-date { font-weight: 800; letter-spacing: 1px; }
+.fav-author { font-weight: 700; }
+.fav-question {
+  font-size: 14px;
+  color: var(--sub);
+  font-style: italic;
+  margin-bottom: 6px;
+  word-break: keep-all;
+}
+.fav-answer {
+  font-size: 15px;
+  color: var(--text);
+  line-height: 1.5;
+  word-break: keep-all;
+  white-space: pre-wrap;
+}
+.fav-remove {
+  margin-top: 10px;
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 4px 12px;
+  font-size: 12px;
+  color: var(--sub);
+  cursor: pointer;
+  font-family: inherit;
+}
+
 /* ========== 맨 위로 FAB ========== */
 .to-top-fab {
   position: fixed;

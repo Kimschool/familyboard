@@ -426,6 +426,16 @@
     </div>
   </div>
 
+  <!-- 즐겨찾은 답변 시트 -->
+  <div id="favoritesSheet" class="sheet-backdrop hidden" role="dialog">
+    <div class="sheet sheet-tall" role="document">
+      <div class="sheet-handle"></div>
+      <h2 class="sheet-title">⭐ 내 즐겨찾은 답변</h2>
+      <ul class="favorites-list" id="favoritesList"></ul>
+      <button class="sheet-close" id="favoritesClose">닫기</button>
+    </div>
+  </div>
+
   <!-- 내 정보 편집 시트 -->
   <div id="myProfileSheet" class="sheet-backdrop hidden" role="dialog">
     <div class="sheet sheet-tall" role="document">
@@ -543,7 +553,7 @@
     <div class="sheet sheet-tall" role="document">
       <div class="sheet-handle"></div>
       <h2 class="sheet-title">지난 질문 모아보기</h2>
-      <div class="history-filter">
+      <div class="history-filter" id="historyFilterRow">
         <button type="button" class="hf-btn active" data-filter="all">전체 답변</button>
         <button type="button" class="hf-btn" data-filter="mine">내 답변만</button>
       </div>
@@ -915,6 +925,7 @@
     </div>
     <div class="account-menu">
       <button id="myProfileBtn" type="button" class="account-menu-btn">👤 내 정보 편집</button>
+      <button id="favoritesBtn" type="button" class="account-menu-btn">⭐ 즐겨찾은 답변</button>
       <button id="helpBtn" type="button" class="account-menu-btn">❓ 도움말</button>
       <button id="reorderToggleBtn" type="button" class="account-menu-btn">🧩 카드 순서·표시 편집</button>
       <button id="openSettingsBtn" type="button" class="account-menu-btn hidden">⚙️ 가족 관리 설정</button>
@@ -956,6 +967,28 @@
 <div id="undoToast" class="undo-toast hidden" role="status">
   <span class="undo-msg">메모를 삭제했어요</span>
   <button id="undoBtn" class="undo-btn">되돌리기</button>
+</div>
+
+<!-- 메모 퀵 추가 FAB -->
+<button id="quickMemoFab" class="quick-memo-fab" aria-label="메모 빠른 추가">＋</button>
+
+<!-- 퀵 메모 미니 입력 -->
+<div id="quickMemoSheet" class="sheet-backdrop hidden" role="dialog">
+  <div class="sheet" role="document">
+    <div class="sheet-handle"></div>
+    <h2 class="sheet-title">＋ 메모 빠르게 추가</h2>
+    <input id="quickMemoInput" class="auth-input" type="text" placeholder="무엇을 기억해둘까요?" maxlength="500" />
+    <div class="quick-memo-cats">
+      <button type="button" data-emoji="🛒">🛒</button>
+      <button type="button" data-emoji="💊">💊</button>
+      <button type="button" data-emoji="🏥">🏥</button>
+      <button type="button" data-emoji="📞">📞</button>
+      <button type="button" data-emoji="🍱">🍱</button>
+      <button type="button" data-emoji="🎁">🎁</button>
+    </div>
+    <button id="quickMemoAdd" type="button" class="auth-btn">추가</button>
+    <button class="sheet-close" id="quickMemoClose">취소</button>
+  </div>
 </div>
 
 <!-- 맨 위로 가기 FAB -->
