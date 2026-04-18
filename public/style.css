@@ -251,6 +251,51 @@ body.tod-night .hero-date, body.tod-night .hero-greeting { color: #F2F2F7; }
   line-height: 1.2;
   word-break: keep-all;
 }
+
+/* 오늘 요약 칩 */
+.hero-summary {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 16px;
+}
+.hero-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  background: rgba(255,255,255,.72);
+  color: var(--text);
+  border: none;
+  border-radius: 999px;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  backdrop-filter: blur(6px);
+  transition: transform .15s, background .15s;
+}
+@media (prefers-color-scheme: dark) {
+  .hero-chip { background: rgba(255,255,255,.1); }
+}
+.hero-chip:active { transform: scale(.95); }
+.hero-chip.tone-good {
+  background: rgba(52,199,89,.18);
+  color: #1F7A3A;
+}
+.hero-chip.tone-warn {
+  background: rgba(255,59,48,.14);
+  color: #C22A1F;
+  animation: hero-warn-pulse 2s ease-in-out infinite;
+}
+@media (prefers-color-scheme: dark) {
+  .hero-chip.tone-good { color: #6EE0A0; background: rgba(52,199,89,.2); }
+  .hero-chip.tone-warn { color: #FF8A7A; }
+}
+@keyframes hero-warn-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.04); }
+}
 .hero-weather {
   margin: 6px 0 0;
   font-size: 15px;
@@ -1399,6 +1444,27 @@ body.reorder-mode #app #birthdayBanner { padding-top: 28px; }
   background: var(--primary); color: #fff;
   font-size: 17px; font-weight: 600; cursor: pointer;
 }
+
+/* 메모 완료 축하 배너 */
+.memo-celebrate {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  margin-bottom: 12px;
+  border-radius: var(--r-sm);
+  background: linear-gradient(135deg, #FFF4D5 0%, #FFE3E8 100%);
+}
+@media (prefers-color-scheme: dark) {
+  .memo-celebrate { background: linear-gradient(135deg, #2A2419 0%, #2A1E22 100%); }
+}
+.celebrate-emoji { font-size: 28px; animation: celebrate-bounce 1s ease-in-out infinite alternate; }
+@keyframes celebrate-bounce {
+  from { transform: translateY(0) rotate(-5deg); }
+  to   { transform: translateY(-4px) rotate(8deg); }
+}
+.celebrate-text { font-size: 16px; font-weight: 700; color: #8A6B2E; }
+@media (prefers-color-scheme: dark) { .celebrate-text { color: #E9C97A; } }
 
 /* 메모 진행률 표시 */
 .memo-progress {

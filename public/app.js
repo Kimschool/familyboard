@@ -245,6 +245,7 @@ function enterApp() {
   showOnly('app');
   try { renderHero(); } catch (e) { console.warn('[hero]', e); }
   try { $('tipsTitle').textContent = `${ME.displayName}님을 위한 오늘의 안내`; } catch {}
+  setTimeout(renderHeroSummary, 500); // 데이터 로드 후 한 번 더
   try { renderAccount(); } catch {}
 
   // 가족 공통 데이터 — 하나 실패해도 다른 카드는 로드되게
@@ -287,6 +288,48 @@ function migrateAdminToSettings() {
 }
 
 // ---------- Hero ----------
+function renderHeroSummary() {
+  const el = $('heroSummary');
+  if (!el) return;
+  const chips = [];
+
+  // 메모 active 개수
+  const activeMemos = (MEMO_CACHE || []).filter((m) => !m.done).length;
+  if (activeMemos > 0) {
+    chips.push({ emoji: '📝', text: `메모 ${activeMemos}개`, target: 'memo' });
+  }
+
+  // 답변 상태
+  const myAnswered = (QUESTION_ANSWERERS_CACHE || []).some((a) => a.user_id === ME.id);
+  chips.push({
+    emoji: myAnswered ? '✅' : '❓',
+    text: myAnswered ? '답변 완료' : '답변 대기',
+    target: 'question',
+    tone: myAnswered ? 'good' : 'warn',
+  });
+
+  // 공지 유무
+  if (!$('noticeCard').classList.contains('hidden')) {
+    chips.push({ emoji: '📌', text: '가족 공지', target: 'notice' });
+  }
+
+  el.innerHTML = '';
+  if (!chips.length) { el.classList.add('hidden'); return; }
+  for (const c of chips) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'hero-chip' + (c.tone ? ' tone-' + c.tone : '');
+    b.innerHTML = `<span>${c.emoji}</span><span class="hero-chip-text"></span>`;
+    b.querySelector('.hero-chip-text').textContent = c.text;
+    b.onclick = () => {
+      const card = document.querySelector(`[data-card-id="${c.target}"]`);
+      if (card) card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    };
+    el.appendChild(b);
+  }
+  el.classList.remove('hidden');
+}
+
 function renderHero() {
   const now = new Date();
   const weekday = ['일','월','화','수','목','금','토'][now.getDay()];
@@ -646,6 +689,8 @@ async function loadFx() {
     $('fxJpyKrw').textContent = fmt.format(Math.round(r.jpyKrw)) + '원';
     $('fxUsdJpy').textContent = r.usdJpy.toFixed(2) + '엔';
     $('fxUsdKrw').textContent = fmt.format(r.usdKrw) + '원';
+    if (r.rates?.EUR) $('fxEurKrw').textContent = fmt.format(Math.round(r.rates.KRW / r.rates.EUR)) + '원';
+    if (r.rates?.CNY) $('fxCnyKrw').textContent = fmt.format(Math.round(r.rates.KRW / r.rates.CNY)) + '원';
     $('fxHeadline').textContent = `오늘 100엔은 약 ${fmt.format(Math.round(r.jpyKrw))}원이에요`;
     const ts = new Date(r.ts);
     $('fxTs').textContent = `기준: ${ts.getMonth() + 1}월 ${ts.getDate()}일 ${String(ts.getHours()).padStart(2,'0')}시`;
@@ -714,6 +759,10 @@ function renderMemos(list) {
     progress.textContent = '';
   }
 
+  // 모든 메모 완료 축하 배너
+  const celebrate = $('memoCelebrate');
+  if (celebrate) celebrate.classList.toggle('hidden', !(list.length > 0 && active.length === 0));
+
   if (!list.length) {
     ul.innerHTML = `<li class="empty-state">
       <span class="empty-state-emoji">📝</span>
@@ -724,9 +773,8 @@ function renderMemos(list) {
     return;
   }
   if (!active.length) {
-    ul.innerHTML = `<li class="empty-state">
-      <span class="empty-state-emoji">✨</span>
-      <span class="empty-state-text">오늘의 할 일을 모두 끝내셨어요!</span>
+    ul.innerHTML = `<li class="empty-state" style="padding:12px 0!important">
+      <span class="empty-state-text" style="color:var(--good);font-weight:700">전부 완료! 가족에게 뿌듯한 하루예요</span>
     </li>`;
   }
   // 완료된 메모 토글

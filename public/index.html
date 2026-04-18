@@ -88,6 +88,7 @@
         <h1 class="hero-greeting" id="greeting">안녕하세요</h1>
       </div>
     </div>
+    <div class="hero-summary hidden" id="heroSummary"></div>
   </header>
 
   <!-- 가족 공지 (관리자가 남긴 메시지) -->
@@ -283,6 +284,8 @@
       <li><span class="fx-label">100엔 → 원</span><span class="fx-val" id="fxJpyKrw">—</span></li>
       <li><span class="fx-label">1달러 → 엔</span><span class="fx-val" id="fxUsdJpy">—</span></li>
       <li><span class="fx-label">1달러 → 원</span><span class="fx-val" id="fxUsdKrw">—</span></li>
+      <li><span class="fx-label">1유로 → 원</span><span class="fx-val" id="fxEurKrw">—</span></li>
+      <li><span class="fx-label">1위안 → 원</span><span class="fx-val" id="fxCnyKrw">—</span></li>
     </ul>
     <p class="card-foot" id="fxTs">—</p>
   </section>
@@ -295,6 +298,8 @@
         <option value="JPY">엔</option>
         <option value="KRW">원</option>
         <option value="USD">달러</option>
+        <option value="EUR">유로</option>
+        <option value="CNY">위안</option>
       </select>
     </div>
     <button type="button" class="calc-swap" id="calcSwap" aria-label="통화 바꾸기">⇅</button>
@@ -304,6 +309,8 @@
         <option value="KRW">원</option>
         <option value="JPY">엔</option>
         <option value="USD">달러</option>
+        <option value="EUR">유로</option>
+        <option value="CNY">위안</option>
       </select>
     </div>
     <div class="calc-presets" id="calcPresets">
@@ -318,6 +325,10 @@
     <div class="card-head-row">
       <p class="card-title">오늘의 메모</p>
       <span class="memo-progress" id="memoProgress"></span>
+    </div>
+    <div class="memo-celebrate hidden" id="memoCelebrate">
+      <span class="celebrate-emoji">🎉</span>
+      <span class="celebrate-text">오늘 할 일을 모두 끝내셨어요!</span>
     </div>
     <ul class="memo-list" id="memoList"></ul>
     <button type="button" class="memo-done-toggle hidden" id="memoDoneToggle">
