@@ -3524,11 +3524,39 @@ body.reorder-mode #app #birthdayBanner { padding-top: 28px; }
 .memo-done-list { margin-top: 8px; opacity: .75; }
 
 /* ========== 메모 기한 (due date) ========== */
+.memo-options {
+  margin-top: 10px;
+  border: 1px dashed var(--line);
+  border-radius: var(--r-sm);
+  padding: 2px 12px;
+  background: transparent;
+}
+.memo-options[open] { padding: 10px 12px 12px; border-style: solid; }
+.memo-options-head {
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--sub);
+  padding: 8px 0;
+  user-select: none;
+  list-style: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.memo-options-head::-webkit-details-marker { display: none; }
+.memo-options-head::before {
+  content: '▸';
+  display: inline-block;
+  margin-right: 8px;
+  transition: transform .15s;
+  color: var(--sub);
+}
+.memo-options[open] > .memo-options-head::before { transform: rotate(90deg); }
+.memo-options[open] > .memo-options-head { color: var(--text); }
 .memo-due-row {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  margin-top: 10px;
+  margin-top: 0;
   align-items: center;
 }
 .memo-due-label {

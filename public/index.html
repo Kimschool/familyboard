@@ -726,20 +726,23 @@
         <button type="button" class="ufi-btn" id="mtAddBtn">추가</button>
       </div>
     </details>
-    <div class="memo-due-row" id="memoDueRow">
-      <span class="memo-due-label">기한:</span>
-      <button type="button" class="due-btn" data-days="none">없음</button>
-      <button type="button" class="due-btn" data-days="0">오늘</button>
-      <button type="button" class="due-btn" data-days="1">내일</button>
-      <button type="button" class="due-btn" data-days="7">이번 주</button>
-      <button type="button" class="due-btn" data-days="30">이번 달</button>
-    </div>
-    <div class="memo-recur-row">
-      <span class="memo-due-label">반복:</span>
-      <button type="button" class="recur-btn active" data-recur="none">안 함</button>
-      <button type="button" class="recur-btn" data-recur="daily">매일</button>
-      <button type="button" class="recur-btn" data-recur="weekly">매주</button>
-    </div>
+    <details class="memo-options">
+      <summary class="memo-options-head">⏰ 기한 · 🔁 반복 설정</summary>
+      <div class="memo-due-row" id="memoDueRow">
+        <span class="memo-due-label">기한:</span>
+        <button type="button" class="due-btn" data-days="none">없음</button>
+        <button type="button" class="due-btn" data-days="0">오늘</button>
+        <button type="button" class="due-btn" data-days="1">내일</button>
+        <button type="button" class="due-btn" data-days="7">이번 주</button>
+        <button type="button" class="due-btn" data-days="30">이번 달</button>
+      </div>
+      <div class="memo-recur-row">
+        <span class="memo-due-label">반복:</span>
+        <button type="button" class="recur-btn active" data-recur="none">안 함</button>
+        <button type="button" class="recur-btn" data-recur="daily">매일</button>
+        <button type="button" class="recur-btn" data-recur="weekly">매주</button>
+      </div>
+    </details>
     <form id="memoForm" class="memo-form">
       <input id="memoInput" class="memo-input" type="text" placeholder="오늘 기억할 일을 적어 주세요" maxlength="500" />
       <button class="memo-mic" type="button" id="memoMic" aria-label="음성 입력" title="음성으로 말하기">🎤</button>
@@ -1117,6 +1120,6 @@
     caches.keys().then((ks) => ks.forEach((k) => caches.delete(k))).catch(() => {});
   }
 </script>
-<script src="/app.js?v=26" defer></script>
+<script src="/app.js?v=27" defer></script>
 </body>
 </html>
