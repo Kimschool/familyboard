@@ -2846,24 +2846,26 @@ body.tod-night .hero-weather { color: rgba(242,242,247,.8); }
   display: flex;
   gap: 6px;
   flex-wrap: wrap;
-  margin-top: 14px;
+  margin-top: 10px;
   margin-bottom: -4px;
 }
 .memo-cat {
   flex: 0 0 auto;
-  background: var(--bg);
-  border: 1px solid var(--line);
+  background: transparent;
+  border: 1px dashed var(--line);
   border-radius: 999px;
-  padding: 8px 12px;
-  font-size: 13px;
+  padding: 5px 10px;
+  font-size: 12.5px;
   font-weight: 600;
-  color: var(--text);
+  color: var(--sub);
   font-family: inherit;
   cursor: pointer;
-  transition: transform .1s, background .12s, border-color .12s;
+  transition: transform .1s, background .12s, border-color .12s, color .12s;
+  -webkit-tap-highlight-color: transparent;
 }
-.memo-cat:hover { border-color: var(--primary); }
-.memo-cat:active { transform: scale(.94); background: var(--card); }
+.memo-cat:hover,
+.memo-cat:focus-visible { border-color: var(--primary); color: var(--text); border-style: solid; }
+.memo-cat:active { transform: scale(.94); background: var(--bg); }
 
 .memo-form { display: flex; gap: 10px; margin-top: 14px; }
 .memo-input {
