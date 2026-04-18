@@ -93,6 +93,8 @@ async function ensureSchema() {
   await ensureColumn('families', 'notice', 'VARCHAR(500) NULL');
   await ensureColumn('families', 'notice_updated_at', 'DATETIME NULL');
   await ensureColumn('families', 'notice_updated_by', 'INT NULL');
+  await ensureColumn('families', 'photo_url', 'VARCHAR(500) NULL');
+  await ensureColumn('daily_answers', 'image_url', 'VARCHAR(500) NULL');
 
   await p.query(`
     CREATE TABLE IF NOT EXISTS notice_history (

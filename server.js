@@ -655,7 +655,7 @@ app.delete('/api/emergency/:id', requireAdmin, async (req, res) => {
 // ---------- 가족 정보 (관리자: 별칭 수정) ----------
 app.get('/api/family', requireAuth, async (req, res) => {
   const [rows] = await getPool().query(
-    `SELECT f.alias, f.display_name, f.notice, f.notice_updated_at,
+    `SELECT f.alias, f.display_name, f.notice, f.notice_updated_at, f.photo_url,
             u.display_name AS notice_by_name, u.icon AS notice_by_icon
        FROM families f
        LEFT JOIN users u ON u.id = f.notice_updated_by
@@ -695,6 +695,7 @@ app.get('/api/family', requireAuth, async (req, res) => {
   res.json({
     alias: r.alias,
     displayName: r.display_name,
+    photoUrl: r.photo_url || null,
     notice: r.notice || null,
     noticeId,
     noticeUpdatedAt: r.notice_updated_at,
@@ -848,10 +849,14 @@ app.post('/api/notice/:id/read', requireAuth, async (req, res) => {
 
 app.patch('/api/family', requireAdmin, async (req, res) => {
   try {
-    const { alias, displayName, notice } = req.body || {};
+    const { alias, displayName, notice, photoUrl } = req.body || {};
     const upd = [], args = [];
     if (alias !== undefined) { upd.push('alias = ?'); args.push(String(alias).trim()); }
     if (displayName !== undefined) { upd.push('display_name = ?'); args.push(String(displayName).trim()); }
+    if (photoUrl !== undefined) {
+      const p = String(photoUrl).trim().slice(0, 500);
+      upd.push('photo_url = ?'); args.push(p || null);
+    }
     if (notice !== undefined) {
       const n = String(notice).trim();
       upd.push('notice = ?'); args.push(n || null);
@@ -1524,12 +1529,13 @@ app.post('/api/question/today/answer', requireAuth, async (req, res) => {
     const answer = (req.body?.answer || '').toString().trim();
     if (!answer) return res.status(400).json({ error: 'empty' });
     if (answer.length > 1000) return res.status(400).json({ error: 'too-long' });
+    const imageUrl = req.body?.imageUrl ? String(req.body.imageUrl).trim().slice(0, 500) : null;
     const today = todayLocal();
     const q = await getOrCreateQuestion(req.user.family_id, today);
     await getPool().query(
-      `INSERT INTO daily_answers (question_id, user_id, answer_text, is_skip) VALUES (?, ?, ?, 0)
-       ON DUPLICATE KEY UPDATE answer_text = VALUES(answer_text), is_skip = 0`,
-      [q.id, req.user.id, answer]
+      `INSERT INTO daily_answers (question_id, user_id, answer_text, is_skip, image_url) VALUES (?, ?, ?, 0, ?)
+       ON DUPLICATE KEY UPDATE answer_text = VALUES(answer_text), is_skip = 0, image_url = VALUES(image_url)`,
+      [q.id, req.user.id, answer, imageUrl]
     );
     res.json({ ok: true });
   } catch (e) { res.status(500).json({ error: 'internal', message: e.message }); }
@@ -1615,7 +1621,7 @@ app.get('/api/question/yesterday', requireAuth, async (req, res) => {
     if (!qrows.length) return res.json({ date: y, question: null, answers: [] });
     const q = qrows[0];
     const [ans] = await getPool().query(
-      `SELECT a.id AS answer_id, a.answer_text, a.is_skip, a.user_id,
+      `SELECT a.id AS answer_id, a.answer_text, a.is_skip, a.user_id, a.image_url,
               a.created_at, a.updated_at,
               u.display_name, u.icon,
               EXISTS (SELECT 1 FROM answer_favorites f WHERE f.user_id = ? AND f.answer_id = a.id) AS my_favorite

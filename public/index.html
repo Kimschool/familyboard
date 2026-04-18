@@ -80,7 +80,8 @@
 <!-- 메인 -->
 <main id="app" class="screen hidden">
 
-  <header class="hero">
+  <header class="hero" id="heroEl">
+    <div class="hero-photo-overlay" id="heroPhotoOverlay"></div>
     <div class="hero-row">
       <div class="hero-avatar" id="heroAvatar">✨</div>
       <div class="hero-text">
@@ -364,6 +365,10 @@
     <p class="question-text" id="questionText">—</p>
     <div class="question-input-wrap">
       <textarea id="questionAnswer" class="question-input" placeholder="답변을 적어 주세요&#10;가족에겐 내일 공개돼요"></textarea>
+    <details class="q-image-details">
+      <summary>🖼️ 답변과 함께 사진 붙이기 (선택)</summary>
+      <input id="questionImageUrl" class="ufi" type="url" placeholder="사진 URL (https://...)" style="margin-top:6px" />
+    </details>
     </div>
     <div class="question-actions-row">
       <button id="questionSubmit" type="button" class="question-submit">답변 저장</button>
@@ -705,6 +710,11 @@
         <div class="admin-inline">
           <input id="famName" class="ufi" type="text" />
           <button id="famNameSave" class="ufi-btn">저장</button>
+        </div>
+        <label class="admin-label" style="margin-top:10px">가족 사진 URL (배경으로 사용)</label>
+        <div class="admin-inline">
+          <input id="famPhoto" class="ufi" type="url" placeholder="https://... (선택)" />
+          <button id="famPhotoSave" class="ufi-btn">저장</button>
         </div>
         <label class="admin-label" style="margin-top:10px">가족 공지 (모두에게 상단에 표시)</label>
         <textarea id="famNotice" class="ufi" style="height: 80px; padding: 10px 12px; font-family: inherit; font-size: 15px;" maxlength="500" placeholder="예: 오늘 저녁 7시에 모여요"></textarea>

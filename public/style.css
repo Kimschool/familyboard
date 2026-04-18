@@ -213,7 +213,27 @@ img, video, iframe, svg { max-width: 100%; }
   border-radius: 0 0 28px 28px;
   background: var(--hero-bg, linear-gradient(180deg, #FFF5E6 0%, var(--bg) 100%));
   transition: background .6s ease;
+  position: relative;
+  overflow: hidden;
 }
+.hero-photo-overlay {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: center;
+  opacity: 0;
+  transition: opacity .3s;
+  pointer-events: none;
+  border-radius: inherit;
+}
+.hero-photo-overlay.active { opacity: 0.28; }
+.hero-photo-overlay.active::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, transparent 30%, var(--bg) 100%);
+}
+.hero-row { position: relative; z-index: 1; }
 body.tod-morning { --hero-bg: linear-gradient(180deg, #FFF1DB 0%, #FFE8E1 60%, var(--bg) 100%); }
 body.tod-noon    { --hero-bg: linear-gradient(180deg, #DDEEFF 0%, #F0F7FF 60%, var(--bg) 100%); }
 body.tod-evening { --hero-bg: linear-gradient(180deg, #FFD8C4 0%, #E8D1E9 60%, var(--bg) 100%); }
@@ -840,6 +860,66 @@ body.tod-night .hero-weather { color: rgba(242,242,247,.8); }
   color: var(--text);
 }
 .wk-top b { color: var(--primary); font-weight: 700; }
+
+/* 답변 이미지 */
+.reveal-image {
+  margin-top: 10px;
+  max-width: 100%;
+  max-height: 280px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  display: block;
+  object-fit: cover;
+}
+
+/* 답변 작성 시 사진 URL 펼치기 */
+.q-image-details {
+  margin-top: 8px;
+  padding: 0 6px;
+}
+.q-image-details summary {
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--sub);
+  font-weight: 600;
+  padding: 4px 0;
+}
+
+/* 이번 주 MVP 배너 */
+.mvp-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  margin-bottom: 12px;
+  background: linear-gradient(135deg, #FFE4A0 0%, #FFC080 100%);
+  border-radius: 12px;
+  border: none !important;
+  position: relative;
+  overflow: hidden;
+}
+.mvp-banner::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 20% 20%, rgba(255,255,255,.6), transparent 60%);
+  pointer-events: none;
+}
+.mvp-crown { font-size: 34px; line-height: 1; filter: drop-shadow(0 2px 4px rgba(0,0,0,.2)); }
+.mvp-body { flex: 1; position: relative; }
+.mvp-label { font-size: 11px; font-weight: 800; color: #7A5220; letter-spacing: 2px; }
+.mvp-name { font-size: 17px; font-weight: 800; color: #4A2E0E; margin-top: 2px; }
+.mvp-icon { font-size: 20px; }
+.mvp-score {
+  background: #fff;
+  padding: 4px 12px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 800;
+  color: #8A5B2E;
+  box-shadow: 0 2px 4px rgba(0,0,0,.08);
+  position: relative;
+}
 
 /* 어제 답변 작성 시각 */
 .reveal-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }

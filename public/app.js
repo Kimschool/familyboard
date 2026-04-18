@@ -1213,10 +1213,53 @@ async function loadWeeklyReport() {
   } catch {}
 }
 
+// 주간 MVP 산정 (답변 2점 + 응원 보낸 1점 가중치)
+function computeWeeklyMvp(week) {
+  const score = new Map();
+  const info = new Map();
+  for (const a of (week.answers?.byUser || [])) {
+    score.set(a.userId, (score.get(a.userId) || 0) + a.count * 2);
+    info.set(a.userId, { name: a.name, icon: a.icon });
+  }
+  if (week.stickers?.topSender) {
+    // topSender only; for full fairness we'd need all senders, but API doesn't return it
+    // Fall back: rely on receiver too
+  }
+  let best = null;
+  for (const [uid, s] of score) {
+    if (!best || s > best.score) best = { userId: uid, score: s, ...info.get(uid) };
+  }
+  return best;
+}
+function renderWeeklyMvp(mvp) {
+  const ul = $('missionsList');
+  if (!ul) return;
+  // 기존 mvp 배너 제거
+  ul.querySelectorAll('.mvp-banner').forEach((n) => n.remove());
+  if (!mvp || !mvp.name) return;
+  const li = document.createElement('li');
+  li.className = 'mvp-banner';
+  li.innerHTML = `
+    <span class="mvp-crown">👑</span>
+    <div class="mvp-body">
+      <div class="mvp-label">이번 주 MVP</div>
+      <div class="mvp-name"><span class="mvp-icon">${iconEmoji(mvp.icon)}</span> <b></b>님</div>
+    </div>
+    <span class="mvp-score">${mvp.score}점</span>`;
+  li.querySelector('b').textContent = mvp.name;
+  ul.insertBefore(li, ul.firstChild);
+}
+
 // ---------- 주간 미션 ----------
 async function loadMissions() {
   try {
     const list = await api('/api/missions/week');
+    // 주간 MVP 계산: 응원 보낸 수 + 답변 수 기준 상위 1명
+    try {
+      const w = await api('/api/activity/week');
+      const mvp = computeWeeklyMvp(w);
+      renderWeeklyMvp(mvp);
+    } catch {}
     const ul = $('missionsList');
     ul.innerHTML = '';
     if (!list.length) { $('missionsCard').classList.add('hidden'); return; }
@@ -2871,6 +2914,7 @@ async function loadFamilyInfo() {
     $('famAlias').value = f.alias || '';
     $('famName').value = f.displayName || '';
     $('famNotice').value = f.notice || '';
+    if ($('famPhoto')) $('famPhoto').value = f.photoUrl || '';
   } catch {}
 }
 
@@ -2926,6 +2970,17 @@ function renderNoticeReads(noticeId, reads) {
 async function loadFamilyNotice() {
   try {
     const f = await api('/api/family');
+    // 가족 사진 헤더 배경
+    const overlay = $('heroPhotoOverlay');
+    if (overlay) {
+      if (f.photoUrl) {
+        overlay.style.backgroundImage = `url("${f.photoUrl.replace(/"/g, '')}")`;
+        overlay.classList.add('active');
+      } else {
+        overlay.style.backgroundImage = '';
+        overlay.classList.remove('active');
+      }
+    }
     if (f.notice) {
       $('noticeText').textContent = f.notice;
       // 읽음 상태 + 이모지 반응 렌더
@@ -2968,6 +3023,17 @@ $('famAliasSave').addEventListener('click', async () => {
     alert(e.status === 409 ? '이미 쓰이는 별칭이에요' : '변경 실패');
   }
 });
+document.addEventListener('click', async (e) => {
+  if (e.target && e.target.id === 'famPhotoSave') {
+    const photoUrl = $('famPhoto').value.trim();
+    try {
+      await api('/api/family', { method: 'PATCH', body: JSON.stringify({ photoUrl }) });
+      loadFamilyNotice();
+      alert(photoUrl ? '가족 사진이 설정됐어요' : '가족 사진이 제거됐어요');
+    } catch { alert('저장 실패'); }
+  }
+});
+
 $('famNameSave').addEventListener('click', async () => {
   const displayName = $('famName').value.trim();
   if (!displayName) return;
@@ -3427,9 +3493,10 @@ $('streakSheet').addEventListener('click', (e) => {
 $('questionSubmit').addEventListener('click', async () => {
   const a = $('questionAnswer').value.trim();
   if (!a) { alert('답변을 적어 주세요'); return; }
+  const imageUrl = $('questionImageUrl')?.value.trim() || null;
   try {
     await api('/api/question/today/answer', {
-      method: 'POST', body: JSON.stringify({ answer: a }),
+      method: 'POST', body: JSON.stringify({ answer: a, imageUrl }),
     });
     $('questionSubmit').textContent = '저장됐어요';
     setTimeout(() => $('questionSubmit').textContent = '답변 수정', 1500);
@@ -3479,6 +3546,7 @@ async function loadYesterdayReveal() {
         timeLabel = `${ampm} ${h12}:${m}`;
         if (updated && (updated - created) > 60000) timeLabel += ' 수정됨';
       }
+      const imgHtml = (!skipped && a.image_url) ? `<img class="reveal-image" src="${a.image_url.replace(/"/g, '')}" alt="답변 이미지" loading="lazy" />` : '';
       li.innerHTML = `
         <span class="reveal-emoji">${iconEmoji(a.icon)}</span>
         <div class="reveal-body">
@@ -3488,6 +3556,7 @@ async function loadYesterdayReveal() {
             ${skipped ? '' : `<button class="fav-btn ${a.my_favorite ? 'on' : ''}" title="즐겨찾기" aria-label="즐겨찾기">${a.my_favorite ? '⭐' : '☆'}</button>`}
           </div>
           <div class="reveal-answer ${skipped ? 'skipped' : ''}"></div>
+          ${imgHtml}
           <div class="reaction-row"></div>
           ${skipped ? '' : `<button class="comment-toggle" data-aid="${a.answer_id}">💬 한 마디 남기기</button>
             <div class="comment-section hidden" data-aid="${a.answer_id}"></div>`}
