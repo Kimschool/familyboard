@@ -243,6 +243,7 @@ function renderHero() {
     : h < 18 ? '좋은 오후에요'
     : h < 22 ? '편안한 저녁이에요' : '푹 주무세요';
   $('greeting').textContent = `${ME.displayName}님, ${phase}`;
+  $('heroAvatar').textContent = iconEmoji(ME.icon);
 }
 
 $('logoutBtn').addEventListener('click', async () => {
