@@ -556,9 +556,25 @@ async function loadMeds() {
       for (const m of meds) {
         const li = document.createElement('li');
         li.className = 'med-item' + (m.done_today ? ' done' : '');
+        const last7 = m.last7 || [];
+        const heatmapHtml = last7.length ? `
+          <div class="med-heatmap" title="최근 7일">
+            ${last7.map((d, i) => {
+              const dObj = new Date(d.date);
+              const isToday = i === last7.length - 1;
+              const label = ['일','월','화','수','목','금','토'][dObj.getDay()];
+              return `<div class="hm-col${d.done ? ' done' : ''}${isToday ? ' today' : ''}" title="${d.date}">
+                        <div class="hm-dot"></div>
+                        <div class="hm-d">${label}</div>
+                      </div>`;
+            }).join('')}
+          </div>` : '';
         li.innerHTML = `
           <button class="med-check ${m.done_today ? 'done' : ''}" aria-label="복용 체크"></button>
-          <span class="med-name"></span>
+          <div class="med-main">
+            <span class="med-name"></span>
+            ${heatmapHtml}
+          </div>
           <button class="med-del" aria-label="삭제">✕</button>`;
         li.querySelector('.med-name').textContent = m.name;
         li.querySelector('.med-check').onclick = async () => {
@@ -1305,6 +1321,7 @@ function calcUpdate() {
 // ---------- 메모 ----------
 let MEMO_CACHE = [];
 let MEMO_QUERY = '';
+let MEMO_SORT = localStorage.getItem('fb_memo_sort') || 'default';
 async function loadMemos() {
   try {
     const list = await api('/api/memos');
@@ -1317,6 +1334,25 @@ $('memoSearch').addEventListener('input', (e) => {
   MEMO_QUERY = e.target.value.trim().toLowerCase();
   renderMemos(MEMO_CACHE);
 });
+if ($('memoSort')) {
+  $('memoSort').value = MEMO_SORT;
+  $('memoSort').addEventListener('change', (e) => {
+    MEMO_SORT = e.target.value;
+    localStorage.setItem('fb_memo_sort', MEMO_SORT);
+    renderMemos(MEMO_CACHE);
+  });
+}
+
+function sortMemos(list) {
+  const copy = list.slice();
+  const toTime = (m) => m.created_at ? new Date(m.created_at).getTime() : 0;
+  switch (MEMO_SORT) {
+    case 'recent': return copy.sort((a, b) => toTime(b) - toTime(a));
+    case 'oldest': return copy.sort((a, b) => toTime(a) - toTime(b));
+    case 'author': return copy.sort((a, b) => (a.created_by_name || '').localeCompare(b.created_by_name || '', 'ko'));
+    default: return copy;
+  }
+}
 function renderMemos(list) {
   const ul = $('memoList');
   const doneUl = $('memoDoneList');
@@ -1330,7 +1366,9 @@ function renderMemos(list) {
   else searchEl.classList.add('hidden');
 
   const q = MEMO_QUERY;
-  const filtered = q ? list.filter((m) => (m.content || '').toLowerCase().includes(q)) : list;
+  let filtered = q ? list.filter((m) => (m.content || '').toLowerCase().includes(q)) : list;
+  // 정렬 (완료/미완료 분리는 기존대로 유지하지만 각 섹션 내부에서 정렬 적용)
+  filtered = sortMemos(filtered);
 
   const active = filtered.filter((m) => !m.done);
   const done = filtered.filter((m) => m.done);
@@ -2198,47 +2236,83 @@ function renderReactionRow(row, answerId, reactions) {
   }
 }
 
+let HISTORY_CACHE = [];
+let HISTORY_FILTER = 'all';
+
+document.querySelectorAll('.hf-btn').forEach((b) => {
+  b.addEventListener('click', () => {
+    document.querySelectorAll('.hf-btn').forEach((x) => x.classList.remove('active'));
+    b.classList.add('active');
+    HISTORY_FILTER = b.dataset.filter;
+    renderHistory();
+  });
+});
+
+function renderHistory() {
+  const el = $('historyList');
+  el.innerHTML = '';
+  const list = HISTORY_CACHE;
+  if (!list.length) {
+    el.innerHTML = '<p class="empty-state-text" style="text-align:center;padding:30px 0">아직 지난 기록이 없어요</p>';
+    return;
+  }
+  for (const item of list) {
+    const answers = HISTORY_FILTER === 'mine'
+      ? item.answers.filter((a) => a.display_name === ME.displayName)
+      : item.answers;
+    if (HISTORY_FILTER === 'mine' && !answers.length) continue;
+    renderHistoryItem(el, item, answers);
+  }
+  if (el.children.length === 0) {
+    el.innerHTML = '<p class="empty-state-text" style="text-align:center;padding:30px 0">해당되는 기록이 없어요</p>';
+  }
+}
+
+function renderHistoryItem(el, item, answers) {
+  const d = new Date(item.date);
+  const div = document.createElement('div');
+  div.className = 'history-item';
+  div.innerHTML = `
+    <div class="history-date">${d.getMonth() + 1}월 ${d.getDate()}일</div>
+    <div class="history-q"></div>
+    <ul class="reveal-list history-answers"></ul>`;
+  div.querySelector('.history-q').textContent = item.question;
+  const ul = div.querySelector('.history-answers');
+  if (answers.length) {
+    for (const a of answers) {
+      const li = document.createElement('li');
+      li.innerHTML = `
+        <span class="reveal-emoji">${iconEmoji(a.icon)}</span>
+        <div class="reveal-body">
+          <div class="reveal-name"></div>
+          <div class="reveal-answer"></div>
+        </div>`;
+      li.querySelector('.reveal-name').textContent = a.display_name + '님';
+      li.querySelector('.reveal-answer').textContent = a.answer_text;
+      ul.appendChild(li);
+    }
+  } else {
+    const li = document.createElement('li');
+    li.innerHTML = '<div class="reveal-body"><div class="reveal-answer" style="color:var(--sub)">답변 기록 없음</div></div>';
+    ul.appendChild(li);
+  }
+  el.appendChild(div);
+}
+
 $('qHistoryBtn').addEventListener('click', async () => {
   try {
     const list = await api('/api/question/history?limit=30');
+    HISTORY_CACHE = list;
     const el = $('historyList');
     el.innerHTML = '';
     if (!list.length) {
       el.innerHTML = '<p class="empty-state-text" style="text-align:center;padding:30px 0">아직 지난 기록이 없어요</p>';
     } else {
-      for (const item of list) {
-        const d = new Date(item.date);
-        const div = document.createElement('div');
-        div.className = 'history-item';
-        div.innerHTML = `
-          <div class="history-date">${d.getMonth() + 1}월 ${d.getDate()}일</div>
-          <div class="history-q"></div>
-          <ul class="reveal-list history-answers"></ul>`;
-        div.querySelector('.history-q').textContent = item.question;
-        const ul = div.querySelector('.history-answers');
-        if (item.answers.length) {
-          for (const a of item.answers) {
-            const li = document.createElement('li');
-            li.innerHTML = `
-              <span class="reveal-emoji">${iconEmoji(a.icon)}</span>
-              <div class="reveal-body">
-                <div class="reveal-name"></div>
-                <div class="reveal-answer"></div>
-              </div>`;
-            li.querySelector('.reveal-name').textContent = a.display_name + '님';
-            li.querySelector('.reveal-answer').textContent = a.answer_text;
-            ul.appendChild(li);
-          }
-        } else {
-          const li = document.createElement('li');
-          li.innerHTML = '<div class="reveal-body"><div class="reveal-answer" style="color:var(--sub)">답변 기록 없음</div></div>';
-          ul.appendChild(li);
-        }
-        el.appendChild(div);
-      }
+      renderHistory();
     }
     $('historySheet').classList.remove('hidden');
-  } catch { alert('기록 불러오기 실패'); }
+    return;
+  } catch { alert('기록 불러오기 실패'); return; }
 });
 
 $('historyClose').addEventListener('click', () => $('historySheet').classList.add('hidden'));

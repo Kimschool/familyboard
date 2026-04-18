@@ -360,6 +360,10 @@
     <div class="sheet sheet-tall" role="document">
       <div class="sheet-handle"></div>
       <h2 class="sheet-title">지난 질문 모아보기</h2>
+      <div class="history-filter">
+        <button type="button" class="hf-btn active" data-filter="all">전체 답변</button>
+        <button type="button" class="hf-btn" data-filter="mine">내 답변만</button>
+      </div>
       <div class="history-list" id="historyList"></div>
       <button class="sheet-close" id="historyClose">닫기</button>
     </div>
@@ -438,6 +442,12 @@
     <div class="card-head-row">
       <p class="card-title">오늘의 메모</p>
       <span class="memo-progress" id="memoProgress"></span>
+      <select id="memoSort" class="memo-sort" aria-label="정렬">
+        <option value="default">기본 순서</option>
+        <option value="recent">최근 작성순</option>
+        <option value="oldest">오래된 순</option>
+        <option value="author">작성자별</option>
+      </select>
     </div>
     <div class="memo-celebrate hidden" id="memoCelebrate">
       <span class="celebrate-emoji">🎉</span>

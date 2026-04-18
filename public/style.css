@@ -524,8 +524,72 @@ body.tod-night .hero-weather { color: rgba(242,242,247,.8); }
   background-position: center;
   background-repeat: no-repeat;
 }
-.med-name { flex: 1; font-size: 16px; font-weight: 600; color: var(--text); word-break: break-word; }
+.med-main { flex: 1; min-width: 0; }
+.med-name { font-size: 16px; font-weight: 600; color: var(--text); word-break: break-word; }
 .med-item.done .med-name { text-decoration: line-through; color: var(--sub); }
+.med-heatmap {
+  display: flex;
+  gap: 4px;
+  margin-top: 6px;
+}
+.hm-col {
+  flex: 1 1 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+}
+.hm-dot {
+  width: 16px; height: 16px;
+  border-radius: 4px;
+  background: var(--line);
+}
+.hm-col.done .hm-dot { background: var(--good); }
+.hm-col.today .hm-dot { outline: 2px solid var(--primary); outline-offset: 1px; }
+.hm-d { font-size: 10px; color: var(--sub); font-weight: 600; }
+.hm-col.today .hm-d { color: var(--primary); font-weight: 800; }
+
+/* 히스토리 필터 탭 */
+.history-filter {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+.hf-btn {
+  flex: 1;
+  height: 40px;
+  border: 1.5px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--card);
+  color: var(--sub);
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all .12s;
+}
+.hf-btn.active {
+  background: var(--primary);
+  color: #fff;
+  border-color: var(--primary);
+}
+
+/* 메모 정렬 select */
+.memo-sort {
+  height: 32px;
+  padding: 0 26px 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--card) url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 12 12'><path fill='none' stroke='%236E6E73' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' d='M3 4.5l3 3 3-3'/></svg>") no-repeat right 8px center;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  font-family: inherit;
+  appearance: none;
+  -webkit-appearance: none;
+  cursor: pointer;
+}
 .med-del {
   background: none;
   border: none;

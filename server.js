@@ -316,7 +316,33 @@ app.get('/api/meds', requireAuth, async (req, res) => {
         WHERE m.user_id = ? ORDER BY FIELD(m.schedule,'morning','lunch','evening','night'), m.sort_order, m.id`,
       [today, req.user.id]
     );
-    res.json(rows.map((r) => ({ ...r, done_today: !!r.done_today })));
+    if (!rows.length) return res.json([]);
+    // 최근 7일 체크 내역
+    const ids = rows.map((r) => r.id);
+    const [checks] = await getPool().query(
+      `SELECT med_id, DATE_FORMAT(check_date, '%Y-%m-%d') AS d
+         FROM med_checks
+        WHERE med_id IN (?) AND check_date >= DATE_SUB(?, INTERVAL 6 DAY)`,
+      [ids, today]
+    );
+    const byMed = new Map();
+    for (const c of checks) {
+      const set = byMed.get(c.med_id) || new Set();
+      set.add(c.d);
+      byMed.set(c.med_id, set);
+    }
+    // 7일 날짜 배열 (오래된 → 오늘)
+    const days = [];
+    const t = new Date(today);
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(t.getFullYear(), t.getMonth(), t.getDate() - i);
+      days.push(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`);
+    }
+    res.json(rows.map((r) => ({
+      ...r,
+      done_today: !!r.done_today,
+      last7: days.map((d) => ({ date: d, done: (byMed.get(r.id) || new Set()).has(d) })),
+    })));
   } catch (e) { res.status(500).json({ error: 'internal', message: e.message }); }
 });
 
