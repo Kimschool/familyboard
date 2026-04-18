@@ -680,21 +680,41 @@ app.get('/api/question/yesterday', requireAuth, async (req, res) => {
     if (!qrows.length) return res.json({ date: y, question: null, answers: [] });
     const q = qrows[0];
     const [ans] = await getPool().query(
-      `SELECT a.id AS answer_id, a.answer_text, a.user_id, u.display_name, u.icon,
-              (SELECT COUNT(*) FROM answer_reactions r WHERE r.answer_id = a.id) AS heart_count,
-              (SELECT COUNT(*) FROM answer_reactions r WHERE r.answer_id = a.id AND r.user_id = ?) AS my_heart
+      `SELECT a.id AS answer_id, a.answer_text, a.user_id, u.display_name, u.icon
          FROM daily_answers a JOIN users u ON u.id = a.user_id
         WHERE a.question_id = ? ORDER BY a.created_at ASC`,
-      [req.user.id, q.id]
+      [q.id]
     );
+    const ids = ans.map((a) => a.answer_id);
+    let reactions = [];
+    if (ids.length) {
+      const [rx] = await getPool().query(
+        `SELECT answer_id, emoji, user_id FROM answer_reactions WHERE answer_id IN (?)`,
+        [ids]
+      );
+      reactions = rx;
+    }
+    // Group per answer
+    for (const a of ans) {
+      const list = reactions.filter((r) => r.answer_id === a.answer_id);
+      const byEmoji = new Map();
+      for (const r of list) {
+        const e = byEmoji.get(r.emoji) || { emoji: r.emoji, count: 0, mine: false };
+        e.count += 1;
+        if (r.user_id === req.user.id) e.mine = true;
+        byEmoji.set(r.emoji, e);
+      }
+      a.reactions = [...byEmoji.values()];
+    }
     res.json({ date: y, question: q.question_text, answers: ans });
   } catch (e) { res.status(500).json({ error: 'internal', message: e.message }); }
 });
 
-app.post('/api/answer/:id/heart', requireAuth, async (req, res) => {
+app.post('/api/answer/:id/react', requireAuth, async (req, res) => {
   try {
     const id = Number(req.params.id);
     if (!Number.isInteger(id)) return res.status(400).json({ error: 'bad-id' });
+    const emoji = (req.body?.emoji || '❤️').toString().slice(0, 10);
     // 같은 가족의 답변만 반응 가능
     const [check] = await getPool().query(
       `SELECT a.id FROM daily_answers a
@@ -705,21 +725,26 @@ app.post('/api/answer/:id/heart', requireAuth, async (req, res) => {
     if (!check.length) return res.status(404).json({ error: 'not-found' });
 
     const [existing] = await getPool().query(
-      'SELECT id FROM answer_reactions WHERE answer_id = ? AND user_id = ? LIMIT 1',
-      [id, req.user.id]
+      'SELECT id FROM answer_reactions WHERE answer_id = ? AND user_id = ? AND emoji = ? LIMIT 1',
+      [id, req.user.id, emoji]
     );
     if (existing.length) {
       await getPool().query('DELETE FROM answer_reactions WHERE id = ?', [existing[0].id]);
     } else {
       await getPool().query(
-        'INSERT INTO answer_reactions (answer_id, user_id) VALUES (?, ?)',
-        [id, req.user.id]
+        'INSERT INTO answer_reactions (answer_id, user_id, emoji) VALUES (?, ?, ?)',
+        [id, req.user.id, emoji]
       );
     }
-    const [cnt] = await getPool().query(
-      'SELECT COUNT(*) AS c FROM answer_reactions WHERE answer_id = ?', [id]
+    // 집계
+    const [agg] = await getPool().query(
+      'SELECT emoji, COUNT(*) AS c, SUM(user_id = ?) AS mine FROM answer_reactions WHERE answer_id = ? GROUP BY emoji',
+      [req.user.id, id]
     );
-    res.json({ ok: true, myHeart: existing.length ? 0 : 1, count: cnt[0].c });
+    res.json({
+      ok: true,
+      reactions: agg.map((r) => ({ emoji: r.emoji, count: Number(r.c), mine: Number(r.mine) > 0 })),
+    });
   } catch (e) { res.status(500).json({ error: 'internal', message: e.message }); }
 });
 

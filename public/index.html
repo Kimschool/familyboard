@@ -109,6 +109,12 @@
   </section>
 
   <!-- 우리 가족 요약 -->
+  <!-- 오늘 가족 활동 타임라인 -->
+  <section class="card timeline-card hidden" data-card-id="timeline" id="timelineCard">
+    <p class="card-title">오늘 우리 가족</p>
+    <ul class="timeline-list" id="timelineList"></ul>
+  </section>
+
   <!-- 오늘 가족 기분 -->
   <section class="card mood-card" data-card-id="mood" id="moodCard">
     <p class="card-title">오늘 우리 가족 기분</p>
@@ -392,6 +398,7 @@
       <span class="celebrate-emoji">🎉</span>
       <span class="celebrate-text">오늘 할 일을 모두 끝내셨어요!</span>
     </div>
+    <input id="memoSearch" class="memo-search hidden" type="search" placeholder="🔍 메모 검색" autocomplete="off" />
     <ul class="memo-list" id="memoList"></ul>
     <button type="button" class="memo-done-toggle hidden" id="memoDoneToggle">
       <span id="memoDoneLabel">완료된 메모 0개</span>

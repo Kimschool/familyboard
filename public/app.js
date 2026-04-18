@@ -446,6 +446,68 @@ function renderSosIconPicker() {
 // 관리자 설정 진입 시 1회 세팅
 const _origMigrateAdmin = typeof migrateAdminToSettings === 'function' ? migrateAdminToSettings : null;
 
+// ---------- 오늘 가족 타임라인 ----------
+function renderTimeline() {
+  try {
+    const card = $('timelineCard');
+    const ul = $('timelineList');
+    if (!ul) return;
+    const items = [];
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const today = new Intl.DateTimeFormat('sv-SE', { timeZone: tz, year:'numeric', month:'2-digit', day:'2-digit' }).format(new Date());
+
+    // 오늘 메모 (작성자·시간)
+    for (const m of (MEMO_CACHE || [])) {
+      if (!m.created_at || !m.created_by_name) continue;
+      const d = new Date(m.created_at);
+      const ymd = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+      if (ymd !== today) continue;
+      items.push({
+        ts: d.getTime(),
+        icon: m.created_by_icon,
+        text: `${m.created_by_name}님이 메모를 남겼어요`,
+        detail: m.content,
+      });
+    }
+    // 오늘 답변자
+    for (const a of (QUESTION_ANSWERERS_CACHE || [])) {
+      items.push({
+        ts: Date.now() - 1000, // 실제 시간은 모름 → 최근으로
+        icon: a.icon,
+        text: `${a.display_name}님이 오늘 질문에 답했어요`,
+      });
+    }
+    // 오늘 기분
+    for (const m of (FAMILY_CACHE || [])) {
+      if (!m.mood) continue;
+      items.push({
+        ts: Date.now() - 500,
+        icon: m.icon,
+        text: `${m.displayName}님이 오늘 기분을 남겼어요`,
+        detail: m.mood,
+      });
+    }
+
+    if (!items.length) { card.classList.add('hidden'); return; }
+    items.sort((a, b) => b.ts - a.ts);
+
+    ul.innerHTML = '';
+    for (const it of items.slice(0, 10)) {
+      const li = document.createElement('li');
+      li.innerHTML = `
+        <span class="tl-emoji">${iconEmoji(it.icon)}</span>
+        <div class="tl-body">
+          <div class="tl-text"></div>
+          ${it.detail ? '<div class="tl-detail"></div>' : ''}
+        </div>`;
+      li.querySelector('.tl-text').textContent = it.text;
+      if (it.detail) li.querySelector('.tl-detail').textContent = it.detail;
+      ul.appendChild(li);
+    }
+    card.classList.remove('hidden');
+  } catch {}
+}
+
 // ---------- 오늘 기분 ----------
 const MOODS = [
   { code: '😊', label: '좋아요' },
@@ -462,8 +524,10 @@ async function loadMoodCard() {
     const alias = ME?.familyAlias;
     if (!alias) return;
     const r = await fetch(`/api/family/${encodeURIComponent(alias)}`).then((r) => r.json());
+    FAMILY_CACHE = r.members; // 타임라인용 최신 반영
     renderMoodPicker(r.members.find((m) => m.id === ME.id)?.mood);
     renderMoodFamily(r.members);
+    renderTimeline();
   } catch {}
 }
 function renderMoodPicker(currentMood) {
@@ -894,22 +958,36 @@ function calcUpdate() {
 
 // ---------- 메모 ----------
 let MEMO_CACHE = [];
+let MEMO_QUERY = '';
 async function loadMemos() {
   try {
     const list = await api('/api/memos');
     MEMO_CACHE = list;
     renderMemos(list);
+    renderTimeline();
   } catch { renderMemos([]); }
 }
+$('memoSearch').addEventListener('input', (e) => {
+  MEMO_QUERY = e.target.value.trim().toLowerCase();
+  renderMemos(MEMO_CACHE);
+});
 function renderMemos(list) {
   const ul = $('memoList');
   const doneUl = $('memoDoneList');
   const toggleBtn = $('memoDoneToggle');
   const progress = $('memoProgress');
+  const searchEl = $('memoSearch');
   ul.innerHTML = ''; doneUl.innerHTML = '';
 
-  const active = list.filter((m) => !m.done);
-  const done = list.filter((m) => m.done);
+  // 검색창은 메모 5개 이상일 때만 표시
+  if (list.length >= 5) searchEl.classList.remove('hidden');
+  else searchEl.classList.add('hidden');
+
+  const q = MEMO_QUERY;
+  const filtered = q ? list.filter((m) => (m.content || '').toLowerCase().includes(q)) : list;
+
+  const active = filtered.filter((m) => !m.done);
+  const done = filtered.filter((m) => m.done);
 
   // 진행률
   if (list.length) {
@@ -1636,6 +1714,7 @@ $('questionSubmit').addEventListener('click', async () => {
   } catch { alert('저장 실패'); }
 });
 
+const REACTION_EMOJIS = ['❤️', '😂', '🥹', '👏', '🙏'];
 async function loadYesterdayReveal() {
   try {
     const r = await api('/api/question/yesterday');
@@ -1650,27 +1729,39 @@ async function loadYesterdayReveal() {
         <div class="reveal-body">
           <div class="reveal-name"></div>
           <div class="reveal-answer"></div>
-          <button class="heart-btn ${a.my_heart ? 'on' : ''}" aria-label="좋아요">
-            <span class="heart-ico">${a.my_heart ? '❤️' : '🤍'}</span>
-            <span class="heart-cnt">${a.heart_count || 0}</span>
-          </button>
+          <div class="reaction-row"></div>
         </div>`;
       li.querySelector('.reveal-name').textContent = a.display_name + '님';
       li.querySelector('.reveal-answer').textContent = a.answer_text;
-      const hb = li.querySelector('.heart-btn');
-      hb.onclick = async () => {
-        try {
-          const res = await api(`/api/answer/${a.answer_id}/heart`, { method: 'POST' });
-          hb.classList.toggle('on', !!res.myHeart);
-          hb.querySelector('.heart-ico').textContent = res.myHeart ? '❤️' : '🤍';
-          hb.querySelector('.heart-cnt').textContent = res.count;
-          hb.classList.remove('pop'); void hb.offsetWidth; hb.classList.add('pop');
-        } catch {}
-      };
+      renderReactionRow(li.querySelector('.reaction-row'), a.answer_id, a.reactions || []);
       ul.appendChild(li);
     }
     $('revealCard').classList.remove('hidden');
   } catch {}
+}
+
+function renderReactionRow(row, answerId, reactions) {
+  row.innerHTML = '';
+  const map = new Map(reactions.map((r) => [r.emoji, r]));
+  for (const emoji of REACTION_EMOJIS) {
+    const info = map.get(emoji);
+    const count = info?.count || 0;
+    const mine = !!info?.mine;
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'rx-btn' + (mine ? ' on' : '') + (count === 0 ? ' empty' : '');
+    btn.innerHTML = `<span class="rx-emoji">${emoji}</span>${count ? `<span class="rx-cnt">${count}</span>` : ''}`;
+    btn.onclick = async () => {
+      try {
+        const res = await api(`/api/answer/${answerId}/react`, {
+          method: 'POST', body: JSON.stringify({ emoji }),
+        });
+        renderReactionRow(row, answerId, res.reactions || []);
+        btn.classList.remove('pop'); void btn.offsetWidth; btn.classList.add('pop');
+      } catch {}
+    };
+    row.appendChild(btn);
+  }
 }
 
 $('qHistoryBtn').addEventListener('click', async () => {

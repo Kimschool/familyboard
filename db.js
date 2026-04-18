@@ -123,11 +123,15 @@ async function ensureSchema() {
       id INT AUTO_INCREMENT PRIMARY KEY,
       answer_id INT NOT NULL,
       user_id INT NOT NULL,
+      emoji VARCHAR(10) NOT NULL DEFAULT '❤️',
       created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      UNIQUE KEY uq_answer_user (answer_id, user_id),
       INDEX idx_answer (answer_id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   `);
+  // 기존 하트 전용 → 이모지 포함 버전 업그레이드
+  await ensureColumn('answer_reactions', 'emoji', "VARCHAR(10) NOT NULL DEFAULT '❤️'");
+  await dropIndexIfExists('answer_reactions', 'uq_answer_user');
+  await ensureUniqueIndex('answer_reactions', 'uq_ans_user_emoji', ['answer_id', 'user_id', 'emoji']);
 
   // 기본 가족 보장
   const [f] = await p.query('SELECT id FROM families LIMIT 1');

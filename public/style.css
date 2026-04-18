@@ -548,6 +548,36 @@ body.tod-night .hero-weather { color: rgba(242,242,247,.8); }
   background: linear-gradient(135deg, #FF3B30, #FF9500);
 }
 
+/* ========== 오늘 가족 타임라인 ========== */
+.timeline-card {
+  background: linear-gradient(180deg, var(--card) 0%, var(--bg) 100%);
+}
+.timeline-list { list-style: none; margin: 0; padding: 0; }
+.timeline-list li {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  padding: 10px 0;
+  border-top: 1px solid var(--line);
+}
+.timeline-list li:first-child { border-top: none; padding-top: 2px; }
+.tl-emoji {
+  font-size: 26px;
+  line-height: 1;
+  width: 40px;
+  text-align: center;
+  flex-shrink: 0;
+}
+.tl-body { flex: 1; min-width: 0; }
+.tl-text { font-size: 15px; color: var(--text); font-weight: 600; line-height: 1.4; }
+.tl-detail {
+  font-size: 13px;
+  color: var(--sub);
+  margin-top: 2px;
+  line-height: 1.4;
+  word-break: break-word;
+}
+
 /* ========== 오늘 기분 ========== */
 .mood-card {
   background: linear-gradient(135deg, #E8F4FF 0%, #FFE9F4 100%);
@@ -1132,6 +1162,21 @@ body.tod-night .hero-weather { color: rgba(242,242,247,.8); }
 .calc-preset:active { transform: scale(.97); background: var(--bg); }
 
 /* ========== 메모 ========== */
+.memo-search {
+  width: 100%;
+  height: 44px;
+  padding: 0 14px;
+  font-size: 15px;
+  border: 1.5px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--bg);
+  color: var(--text);
+  font-family: inherit;
+  outline: none;
+  margin-bottom: 10px;
+}
+.memo-search:focus { border-color: var(--primary); background: var(--card); }
+
 .memo-list { list-style: none; margin: 0 0 10px; padding: 0; }
 .memo-list li {
   display: flex; align-items: center; gap: 14px;
@@ -1675,7 +1720,46 @@ li.memo-important {
 }
 li.memo-important .memo-text { font-weight: 700; }
 
-/* ========== 어제 답변 좋아요 ========== */
+/* ========== 어제 답변 이모지 반응 ========== */
+.reaction-row {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+.rx-btn {
+  border: 1.5px solid var(--line);
+  background: var(--card);
+  border-radius: 999px;
+  padding: 6px 12px 6px 10px;
+  font-family: inherit;
+  font-size: 14px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: transform .12s, border-color .12s, background .12s;
+  color: var(--text);
+}
+.rx-btn.empty { opacity: .55; padding: 6px 10px; }
+.rx-btn.empty:hover { opacity: 1; }
+.rx-btn.on {
+  background: rgba(10, 132, 255, .12);
+  border-color: var(--primary);
+  opacity: 1;
+  font-weight: 700;
+}
+.rx-btn.pop { animation: rx-pop .35s ease-out; }
+@keyframes rx-pop {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.22); }
+  100% { transform: scale(1); }
+}
+.rx-btn:active { transform: scale(.92); }
+.rx-emoji { font-size: 16px; line-height: 1; }
+.rx-cnt { font-weight: 700; color: var(--text); font-size: 13px; }
+
+/* (기존 ❤️ 단독 버튼은 남겨둠 - 호환) */
 .heart-btn {
   margin-top: 8px;
   border: 1.5px solid var(--line);
