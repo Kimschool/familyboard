@@ -9,6 +9,6 @@ COPY server.js db.js auth.js ./
 COPY public ./public
 
 ENV NODE_ENV=production
-EXPOSE 3010
+EXPOSE 3003
 
 CMD ["node", "server.js"]

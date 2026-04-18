@@ -271,7 +271,7 @@ app.get('*', (_req, res) => {
 });
 
 // ---------- 부팅 ----------
-const PORT = Number(process.env.PORT || 3010);
+const PORT = Number(process.env.PORT || 3003);
 (async () => {
   try {
     await ensureSchema();
