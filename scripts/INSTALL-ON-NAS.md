@@ -7,25 +7,27 @@
 
 ---
 
-## 최초 1회 세팅 (PC에서 한 번만)
+## 최초 1회 세팅 (PC 또는 핸드폰에서)
 
-### 1) git 이 NAS 에 있는지 확인
+**git 불필요** — docker 가 GitHub URL 에서 직접 빌드합니다.
+
+### 방법 A: 핸드폰 SSH 한 번으로 (권장)
 ```bash
-ssh kimjh@192.168.11.31 "which git || sudo opkg install git || echo 'git 수동 설치 필요'"
+ssh kimjh@192.168.11.31
+curl -sL https://raw.githubusercontent.com/Kimschool/familyboard/main/scripts/nas-deploy.sh > ~/deploy-fb.sh
+chmod +x ~/deploy-fb.sh
+~/deploy-fb.sh
 ```
-> UGOS 앱스토어나 Entware 로 git 설치 가능. 없으면 nas-deploy.sh 에서 `git clone` 부분만 외부에서 복사하는 방식으로 대체 가능.
 
-### 2) 배포 스크립트를 NAS 에 배포
+### 방법 B: PC 에서 scp
 ```bash
 scp -O scripts/nas-deploy.sh kimjh@192.168.11.31:~/deploy-fb.sh
-ssh kimjh@192.168.11.31 "chmod +x ~/deploy-fb.sh"
+ssh kimjh@192.168.11.31 "chmod +x ~/deploy-fb.sh && ~/deploy-fb.sh"
 ```
 
-### 3) 최초 clone 확인 (스크립트가 알아서 해줌)
-```bash
-ssh kimjh@192.168.11.31 "~/deploy-fb.sh"
-```
-처음 실행되면 `/volume1/docker/familyboard/src` 에 repo clone, 빌드, compose up 까지 자동.
+### 필수 전제
+- `/volume1/docker/familyboard/.env` 가 이미 있어야 해요 (DB 비번 · JWT 시크릿). 이전 배포에서 이미 생성됨.
+- docker ≥ 20.10 (UGOS 내장 docker 는 26 이상).
 
 ---
 

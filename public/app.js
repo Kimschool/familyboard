@@ -337,6 +337,16 @@ function renderHeroSummary() {
     chips.push({ emoji: '💖', text: `응원 ${recvStickers}개`, target: 'stickers', tone: 'good' });
   }
 
+  // 다가오는 생일 (7일 이내)
+  if (window._NEXT_BIRTHDAY) {
+    const nb = window._NEXT_BIRTHDAY;
+    if (nb.daysLeft === 0) {
+      chips.push({ emoji: '🎂', text: `${nb.display_name}님 생일!`, target: 'birthday', tone: 'hot' });
+    } else if (nb.daysLeft <= 7) {
+      chips.push({ emoji: '🎂', text: `${nb.daysLeft}일 뒤 ${nb.display_name}님`, target: 'birthday' });
+    }
+  }
+
   // 공지 유무
   if (!$('noticeCard').classList.contains('hidden')) {
     const hasNew = !$('noticeNewBadge').classList.contains('hidden');
@@ -1013,6 +1023,15 @@ async function loadBirthday() {
   try {
     const r = await api('/api/birthdays/soon');
     renderUpcomingCard(r);
+    // Hero chip 에 쓸 다음 생일 기억
+    if (r.today) {
+      window._NEXT_BIRTHDAY = { ...r.today, daysLeft: 0 };
+    } else if (r.upcoming?.length) {
+      window._NEXT_BIRTHDAY = r.upcoming[0];
+    } else {
+      window._NEXT_BIRTHDAY = null;
+    }
+    renderHeroSummary();
     const el = $('birthdayBanner');
     el.classList.remove('today');
     TODAY_BIRTHDAY_USER = null;
@@ -2190,6 +2209,38 @@ async function loadMyStreak() {
   } catch {}
 }
 
+// 주간 응원 랭킹
+$('openRankingBtn').addEventListener('click', async () => {
+  try {
+    const r = await api('/api/stickers/week-ranking');
+    const renderList = (el, list) => {
+      el.innerHTML = '';
+      if (!list.length) {
+        el.innerHTML = '<li class="rank-empty">아직 기록이 없어요</li>';
+        return;
+      }
+      list.forEach((item, i) => {
+        const li = document.createElement('li');
+        li.className = 'rank-item' + (i === 0 ? ' gold' : i === 1 ? ' silver' : i === 2 ? ' bronze' : '');
+        li.innerHTML = `
+          <span class="rank-num">${i + 1}</span>
+          <span class="rank-emoji">${iconEmoji(item.icon)}</span>
+          <span class="rank-name"></span>
+          <span class="rank-count">${item.count}</span>`;
+        li.querySelector('.rank-name').textContent = item.name;
+        el.appendChild(li);
+      });
+    };
+    renderList($('rankSent'), r.sent || []);
+    renderList($('rankReceived'), r.received || []);
+    $('rankingSheet').classList.remove('hidden');
+  } catch { alert('랭킹 불러오기 실패'); }
+});
+$('rankingClose').addEventListener('click', () => $('rankingSheet').classList.add('hidden'));
+$('rankingSheet').addEventListener('click', (e) => {
+  if (e.target.id === 'rankingSheet') $('rankingSheet').classList.add('hidden');
+});
+
 $('openStreakSheet').addEventListener('click', () => {
   const r = window._STREAK;
   if (!r) return;
@@ -2222,8 +2273,27 @@ $('questionSubmit').addEventListener('click', async () => {
     setTimeout(() => $('questionSubmit').textContent = '답변 수정', 1500);
     loadTodayQuestion();
     loadMyStreak();
+    showStickerNudge();
   } catch { alert('저장 실패'); }
 });
+
+// 답변 저장 후 응원 스티커 유도 토스트 (1회)
+function showStickerNudge() {
+  if (sessionStorage.getItem('fb_nudge_shown')) return;
+  sessionStorage.setItem('fb_nudge_shown', '1');
+  const el = $('undoToast');
+  if (!el) return;
+  el.querySelector('.undo-msg').textContent = '답변 저장됨 · 가족에게 응원 스티커도 어때요?';
+  const btn = $('undoBtn');
+  btn.textContent = '스티커 💖';
+  btn.onclick = () => {
+    el.classList.add('hidden');
+    const card = document.querySelector('[data-card-id="family"]');
+    if (card) card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  };
+  el.classList.remove('hidden');
+  setTimeout(() => el.classList.add('hidden'), 6000);
+}
 
 const REACTION_EMOJIS = ['❤️', '😂', '🥹', '👏', '🙏'];
 async function loadYesterdayReveal() {

@@ -313,6 +313,24 @@
     </div>
   </div>
 
+  <!-- 주간 응원 랭킹 바텀시트 -->
+  <div id="rankingSheet" class="sheet-backdrop hidden" role="dialog">
+    <div class="sheet" role="document">
+      <div class="sheet-handle"></div>
+      <h2 class="sheet-title">🏆 이번 주 응원 랭킹</h2>
+      <p class="sheet-sub">최근 7일 집계</p>
+      <div class="rank-section">
+        <h3 class="rank-heading">💌 많이 보낸 사람</h3>
+        <ol class="rank-list" id="rankSent"></ol>
+      </div>
+      <div class="rank-section">
+        <h3 class="rank-heading">💖 많이 받은 사람</h3>
+        <ol class="rank-list" id="rankReceived"></ol>
+      </div>
+      <button class="sheet-close" id="rankingClose">닫기</button>
+    </div>
+  </div>
+
   <!-- 스트릭(연속 답변) 바텀시트 -->
   <div id="streakSheet" class="sheet-backdrop hidden" role="dialog">
     <div class="sheet" role="document">
@@ -610,7 +628,10 @@
 
   <!-- 오늘 받은·보낸 응원 -->
   <section class="card stickers-card hidden" data-card-id="stickers" id="stickersCard">
-    <p class="card-title">오늘의 응원</p>
+    <div class="card-head-row">
+      <p class="card-title">오늘의 응원</p>
+      <button type="button" class="ranking-btn" id="openRankingBtn">🏆 주간 랭킹</button>
+    </div>
     <div class="stickers-block hidden" id="stickersReceivedBlock">
       <p class="stickers-label">받은 응원</p>
       <div class="stickers-row" id="stickersReceivedRow"></div>

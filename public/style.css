@@ -744,6 +744,69 @@ body.tod-night .hero-weather { color: rgba(242,242,247,.8); }
   .hero-chip.tone-hot { color: #FFB08A; }
 }
 
+/* ========== 주간 응원 랭킹 ========== */
+.ranking-btn {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 5px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  cursor: pointer;
+  font-family: inherit;
+}
+.rank-section { margin-bottom: 18px; }
+.rank-section:last-of-type { margin-bottom: 6px; }
+.rank-heading {
+  margin: 0 0 10px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--sub);
+}
+.rank-list { list-style: none; padding: 0; margin: 0; }
+.rank-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  background: var(--bg);
+  border-radius: var(--r-sm);
+  margin-bottom: 6px;
+}
+.rank-item.gold { background: linear-gradient(90deg, rgba(255,204,0,.2), var(--bg)); }
+.rank-item.silver { background: linear-gradient(90deg, rgba(174,174,178,.2), var(--bg)); }
+.rank-item.bronze { background: linear-gradient(90deg, rgba(205,127,50,.18), var(--bg)); }
+.rank-num {
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  background: var(--card);
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 14px; font-weight: 800;
+  flex-shrink: 0;
+  border: 1px solid var(--line);
+}
+.rank-item.gold .rank-num { background: #FFCC00; color: #fff; border-color: #FFCC00; }
+.rank-item.silver .rank-num { background: #AEAEB2; color: #fff; border-color: #AEAEB2; }
+.rank-item.bronze .rank-num { background: #CD7F32; color: #fff; border-color: #CD7F32; }
+.rank-emoji { font-size: 28px; line-height: 1; flex-shrink: 0; }
+.rank-name { flex: 1; font-size: 16px; font-weight: 700; }
+.rank-count {
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--primary);
+  background: rgba(10,132,255,.12);
+  padding: 4px 12px;
+  border-radius: 999px;
+}
+.rank-empty {
+  text-align: center;
+  padding: 14px;
+  color: var(--sub);
+  font-size: 14px;
+  list-style: none;
+}
+
 /* ========== 오늘의 응원 (홈 카드) ========== */
 .stickers-card {
   background: linear-gradient(135deg, #FFF0F5 0%, #FFEDD8 100%);

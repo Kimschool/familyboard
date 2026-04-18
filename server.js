@@ -416,6 +416,34 @@ app.get('/api/stickers/today', requireAuth, async (req, res) => {
   } catch (e) { res.status(500).json({ error: 'internal', message: e.message }); }
 });
 
+app.get('/api/stickers/week-ranking', requireAuth, async (req, res) => {
+  try {
+    // 이번 주 (최근 7일) 보낸/받은 개수 집계
+    const [sent] = await getPool().query(
+      `SELECT s.sender_id AS user_id, COUNT(*) AS cnt,
+              u.display_name, u.icon
+         FROM family_stickers s
+         JOIN users u ON u.id = s.sender_id
+        WHERE s.family_id = ? AND s.sticker_date >= DATE_SUB(CURDATE(), INTERVAL 6 DAY)
+        GROUP BY s.sender_id ORDER BY cnt DESC`,
+      [req.user.family_id]
+    );
+    const [received] = await getPool().query(
+      `SELECT s.receiver_id AS user_id, COUNT(*) AS cnt,
+              u.display_name, u.icon
+         FROM family_stickers s
+         JOIN users u ON u.id = s.receiver_id
+        WHERE s.family_id = ? AND s.sticker_date >= DATE_SUB(CURDATE(), INTERVAL 6 DAY)
+        GROUP BY s.receiver_id ORDER BY cnt DESC`,
+      [req.user.family_id]
+    );
+    res.json({
+      sent: sent.map((r) => ({ userId: r.user_id, name: r.display_name, icon: r.icon, count: Number(r.cnt) })),
+      received: received.map((r) => ({ userId: r.user_id, name: r.display_name, icon: r.icon, count: Number(r.cnt) })),
+    });
+  } catch (e) { res.status(500).json({ error: 'internal', message: e.message }); }
+});
+
 app.post('/api/sticker', requireAuth, async (req, res) => {
   try {
     const receiverId = Number(req.body?.receiverId);
