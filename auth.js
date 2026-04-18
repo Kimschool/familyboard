@@ -1,5 +1,6 @@
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
 const { getPool } = require('./db');
 
 const TOKEN_TTL_DAYS = 30;
@@ -40,12 +41,16 @@ async function login(username, password) {
   const u = rows[0];
   if (!bcrypt.compareSync(password, u.password_hash)) return null;
 
-  const token = jwt.sign({ uid: u.id, un: u.username }, getSecret(), {
+  // jti 로 토큰 유일성 보장 (같은 초에 같은 사용자로 로그인해도 토큰 다름)
+  const jti = crypto.randomBytes(16).toString('hex');
+  const token = jwt.sign({ uid: u.id, un: u.username, jti }, getSecret(), {
     expiresIn: `${TOKEN_TTL_DAYS}d`,
   });
   const expires = new Date(Date.now() + TOKEN_TTL_DAYS * 86400_000);
+  // 방어: 혹시라도 토큰 충돌 시 crash 대신 expires 갱신
   await getPool().query(
-    'INSERT INTO sessions (token, user_id, expires_at) VALUES (?, ?, ?)',
+    'INSERT INTO sessions (token, user_id, expires_at) VALUES (?, ?, ?) ' +
+    'ON DUPLICATE KEY UPDATE expires_at = VALUES(expires_at)',
     [token, u.id, expires]
   );
   return { token, user: publicUser(u) };

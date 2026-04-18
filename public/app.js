@@ -37,12 +37,56 @@ async function boot() {
       ME = r.user;
       enterApp();
       return;
-    } catch {
-      document.body.innerHTML = '<pre style="padding:20px">자동 로그인 실패 — admin 비밀번호가 바뀐 듯합니다. app.js 의 AUTO_LOGIN_PASS 수정.</pre>';
+    } catch (e) {
+      showAutoLoginError(e);
       return;
     }
   }
   showLogin();
+}
+
+async function showAutoLoginError(err) {
+  let detail = err?.status ? `HTTP ${err.status}` : (err?.message || '네트워크 오류');
+  try {
+    const raw = await fetch('/api/login', {
+      method: 'POST', credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: AUTO_LOGIN_USER, password: AUTO_LOGIN_PASS }),
+    });
+    detail += ` · 재확인 HTTP ${raw.status} · ${await raw.text()}`;
+  } catch (e2) { detail += ` · 재시도 실패: ${e2.message}`; }
+
+  document.body.innerHTML = `
+    <div style="font-family:-apple-system,sans-serif;padding:28px;max-width:480px;margin:auto;color:#1C1C1E">
+      <h2 style="margin:0 0 6px">자동 로그인 실패</h2>
+      <p style="color:#6E6E73;margin:0 0 14px;font-size:14px">${detail}</p>
+      <button id="hardReset"
+        style="width:100%;height:52px;border:none;border-radius:12px;background:#0A84FF;color:#fff;font-size:16px;font-weight:600">
+        캐시 · 세션 완전 초기화 후 다시 시도
+      </button>
+      <button id="retry"
+        style="width:100%;height:44px;margin-top:10px;border:1px solid #E5E5EA;border-radius:12px;background:#fff;color:#1C1C1E;font-size:15px">
+        그냥 다시 시도
+      </button>
+    </div>`;
+  document.getElementById('retry').onclick = () => location.reload();
+  document.getElementById('hardReset').onclick = async () => {
+    try {
+      if ('serviceWorker' in navigator) {
+        const rs = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(rs.map((r) => r.unregister()));
+      }
+      if (window.caches) {
+        const ks = await caches.keys();
+        await Promise.all(ks.map((k) => caches.delete(k)));
+      }
+      document.cookie.split(';').forEach((c) => {
+        const n = c.split('=')[0].trim();
+        document.cookie = `${n}=; Path=/; Max-Age=0`;
+      });
+    } catch {}
+    location.reload();
+  };
 }
 
 function showLogin() {

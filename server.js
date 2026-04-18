@@ -12,6 +12,10 @@ const app = express();
 app.use(express.json({ limit: '200kb' }));
 app.use(express.urlencoded({ extended: false }));
 
+// async 라우트 에러 → 500 (미처리 거부로 프로세스 죽지 않도록)
+process.on('unhandledRejection', (e) => console.error('[unhandledRejection]', e));
+process.on('uncaughtException',  (e) => console.error('[uncaughtException]',  e));
+
 // ---------- 간단 쿠키 파서 ----------
 app.use((req, _res, next) => {
   const raw = req.headers.cookie || '';
@@ -39,11 +43,16 @@ app.get('/api/health', (_req, res) => res.json({ ok: true, ts: Date.now() }));
 
 // ---------- 인증 ----------
 app.post('/api/login', async (req, res) => {
-  const r = await login(req.body?.username, req.body?.password);
-  if (!r) return res.status(401).json({ error: 'invalid' });
-  res.setHeader('Set-Cookie',
-    `fb_token=${encodeURIComponent(r.token)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${30 * 86400}`);
-  res.json({ ok: true, user: r.user });
+  try {
+    const r = await login(req.body?.username, req.body?.password);
+    if (!r) return res.status(401).json({ error: 'invalid' });
+    res.setHeader('Set-Cookie',
+      `fb_token=${encodeURIComponent(r.token)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${30 * 86400}`);
+    res.json({ ok: true, user: r.user });
+  } catch (e) {
+    console.error('[login] error:', e.message);
+    res.status(500).json({ error: 'login-failed', message: e.message });
+  }
 });
 
 app.get('/api/me', async (req, res) => {
@@ -360,6 +369,13 @@ app.use(express.static(path.join(__dirname, 'public'), {
 
 app.get('*', (_req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+// Express 에러 미들웨어 (async 핸들러의 거부를 500 으로 변환)
+app.use((err, _req, res, _next) => {
+  console.error('[api error]', err);
+  if (res.headersSent) return;
+  res.status(500).json({ error: 'internal', message: err.message });
 });
 
 // ---------- 부팅 ----------
