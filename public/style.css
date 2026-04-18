@@ -2290,6 +2290,96 @@ body.reorder-mode #app #birthdayBanner { padding-top: 28px; }
 .memo-done-toggle.open .memo-done-chev { transform: rotate(180deg); }
 .memo-done-list { margin-top: 8px; opacity: .75; }
 
+/* ========== 메모 기한 (due date) ========== */
+.memo-due-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+  align-items: center;
+}
+.memo-due-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--sub);
+}
+.due-btn {
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  cursor: pointer;
+  font-family: inherit;
+}
+.due-btn.active {
+  background: var(--primary);
+  color: #fff;
+  border-color: var(--primary);
+}
+.memo-due-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--bg);
+  color: var(--sub);
+  margin-right: 6px;
+}
+.memo-due-badge.today { background: rgba(255, 204, 0, .18); color: #8A6B1E; }
+.memo-due-badge.soon { background: rgba(10, 132, 255, .12); color: var(--primary); }
+.memo-due-badge.overdue { background: rgba(255, 59, 48, .15); color: var(--bad); animation: due-pulse 2s ease-in-out infinite; }
+@keyframes due-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .65; } }
+@media (prefers-color-scheme: dark) {
+  .memo-due-badge.today { color: #E9C97A; }
+  .memo-due-badge.overdue { color: #FF8A7A; }
+}
+
+/* ========== 공지 히스토리 ========== */
+.notice-history-btn {
+  width: 100%;
+  margin-top: 10px;
+  background: transparent;
+  border: 1px solid rgba(0,0,0,.08);
+  border-radius: 999px;
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--sub);
+  cursor: pointer;
+  font-family: inherit;
+}
+@media (prefers-color-scheme: dark) {
+  .notice-history-btn { border-color: rgba(255,255,255,.1); }
+}
+.notice-hist-list { list-style: none; padding: 0; margin: 0 0 14px; }
+.notice-hist-item {
+  padding: 12px 0;
+  border-top: 1px solid var(--line);
+}
+.notice-hist-item:first-child { border-top: none; padding-top: 2px; }
+.nh-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 4px;
+  font-size: 12px;
+}
+.nh-author { color: var(--sub); font-weight: 600; }
+.nh-time { color: var(--sub); }
+.nh-text {
+  font-size: 15px;
+  color: var(--text);
+  line-height: 1.45;
+  word-break: keep-all;
+  white-space: pre-wrap;
+}
+
 /* ========== 메모 중요(별표) ========== */
 .memo-star {
   background: none;

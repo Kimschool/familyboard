@@ -82,6 +82,7 @@ async function ensureSchema() {
   await changeColumn('users', 'password_hash', 'VARCHAR(255) NULL'); // 초대대기 허용
   await ensureColumn('memos', 'family_id', 'INT NULL');
   await ensureColumn('memos', 'important', 'TINYINT(1) NOT NULL DEFAULT 0');
+  await ensureColumn('memos', 'due_date', 'DATE NULL');
   await ensureColumn('users', 'mood', 'VARCHAR(20) NULL');
   await ensureColumn('users', 'mood_date', 'DATE NULL');
   await ensureColumn('users', 'phone', 'VARCHAR(30) NULL');
@@ -90,6 +91,17 @@ async function ensureSchema() {
   await ensureColumn('families', 'notice', 'VARCHAR(500) NULL');
   await ensureColumn('families', 'notice_updated_at', 'DATETIME NULL');
   await ensureColumn('families', 'notice_updated_by', 'INT NULL');
+
+  await p.query(`
+    CREATE TABLE IF NOT EXISTS notice_history (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      family_id INT NOT NULL,
+      text VARCHAR(500) NOT NULL,
+      author_id INT NULL,
+      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      INDEX idx_family_time (family_id, created_at)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  `);
 
   await p.query(`
     CREATE TABLE IF NOT EXISTS meds (

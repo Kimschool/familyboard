@@ -537,6 +537,13 @@ app.patch('/api/family', requireAdmin, async (req, res) => {
       upd.push('notice = ?'); args.push(n || null);
       upd.push('notice_updated_at = ?'); args.push(n ? new Date() : null);
       upd.push('notice_updated_by = ?'); args.push(n ? req.user.id : null);
+      // 공지 히스토리 — 새 내용이면 append
+      if (n) {
+        await getPool().query(
+          'INSERT INTO notice_history (family_id, text, author_id) VALUES (?, ?, ?)',
+          [req.user.family_id, n.slice(0, 500), req.user.id]
+        );
+      }
     }
     if (!upd.length) return res.json({ ok: true });
     args.push(req.user.family_id);
@@ -546,6 +553,19 @@ app.patch('/api/family', requireAdmin, async (req, res) => {
     if (e.code === 'ER_DUP_ENTRY') return res.status(409).json({ error: 'alias-exists' });
     res.status(500).json({ error: 'internal', message: e.message });
   }
+});
+
+app.get('/api/notice/history', requireAuth, async (req, res) => {
+  const [rows] = await getPool().query(
+    `SELECT n.id, n.text, n.created_at,
+            u.display_name AS author_name, u.icon AS author_icon
+       FROM notice_history n
+       LEFT JOIN users u ON u.id = n.author_id
+      WHERE n.family_id = ?
+      ORDER BY n.created_at DESC LIMIT 30`,
+    [req.user.family_id]
+  );
+  res.json(rows);
 });
 
 // ---------- 날씨 / 대기질 / 환율 ----------
@@ -657,7 +677,7 @@ app.get('/api/fx', async (_req, res) => {
 // ---------- 메모 (가족 단위) ----------
 app.get('/api/memos', requireAuth, async (req, res) => {
   const [rows] = await getPool().query(
-    `SELECT m.id, m.content, m.done, m.important, m.created_at,
+    `SELECT m.id, m.content, m.done, m.important, m.due_date, m.created_at,
             COALESCE(u.display_name, '') AS created_by_name, u.icon AS created_by_icon
        FROM memos m LEFT JOIN users u ON u.id = m.created_by
       WHERE m.family_id = ?
@@ -671,11 +691,12 @@ app.post('/api/memos', requireAuth, async (req, res) => {
   const content = (req.body?.content || '').toString().trim();
   if (!content) return res.status(400).json({ error: 'content-required' });
   if (content.length > 500) return res.status(400).json({ error: 'too-long' });
+  const dueDate = req.body?.dueDate ? String(req.body.dueDate).slice(0, 10) : null;
   const [r] = await getPool().query(
-    'INSERT INTO memos (family_id, content, created_by) VALUES (?, ?, ?)',
-    [req.user.family_id, content, req.user.id]
+    'INSERT INTO memos (family_id, content, created_by, due_date) VALUES (?, ?, ?, ?)',
+    [req.user.family_id, content, req.user.id, dueDate]
   );
-  res.json({ id: r.insertId, content, done: 0,
+  res.json({ id: r.insertId, content, done: 0, due_date: dueDate,
             created_by_name: req.user.display_name, created_by_icon: req.user.icon });
 });
 
@@ -691,6 +712,10 @@ app.patch('/api/memos/:id', requireAuth, async (req, res) => {
     if (!c) return res.status(400).json({ error: 'content-required' });
     if (c.length > 500) return res.status(400).json({ error: 'too-long' });
     updates.push('content = ?'); args.push(c);
+  }
+  if (req.body?.dueDate !== undefined) {
+    const d = req.body.dueDate ? String(req.body.dueDate).slice(0, 10) : null;
+    updates.push('due_date = ?'); args.push(d);
   }
   if (!updates.length) return res.json({ ok: true });
   args.push(id, req.user.family_id);

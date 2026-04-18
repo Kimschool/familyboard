@@ -101,7 +101,18 @@
       <button class="tts-btn" data-tts="notice" aria-label="읽어주기">🔊</button>
     </div>
     <p class="notice-text" id="noticeText"></p>
+    <button type="button" class="notice-history-btn" id="noticeHistoryBtn">지난 공지 보기</button>
   </section>
+
+  <!-- 공지 히스토리 바텀시트 -->
+  <div id="noticeHistSheet" class="sheet-backdrop hidden" role="dialog">
+    <div class="sheet sheet-tall" role="document">
+      <div class="sheet-handle"></div>
+      <h2 class="sheet-title">📌 공지 기록</h2>
+      <ul class="notice-hist-list" id="noticeHistList"></ul>
+      <button class="sheet-close" id="noticeHistClose">닫기</button>
+    </div>
+  </div>
 
   <!-- 월간 가족 달력 -->
   <section class="card calendar-card" data-card-id="calendar" id="calendarCard">
@@ -481,6 +492,14 @@
         <button type="button" class="memo-template" data-text="🧺 빨래 돌리기">🧺 빨래</button>
       </div>
     </details>
+    <div class="memo-due-row" id="memoDueRow">
+      <span class="memo-due-label">기한:</span>
+      <button type="button" class="due-btn" data-days="none">없음</button>
+      <button type="button" class="due-btn" data-days="0">오늘</button>
+      <button type="button" class="due-btn" data-days="1">내일</button>
+      <button type="button" class="due-btn" data-days="7">이번 주</button>
+      <button type="button" class="due-btn" data-days="30">이번 달</button>
+    </div>
     <form id="memoForm" class="memo-form">
       <input id="memoInput" class="memo-input" type="text" placeholder="오늘 기억할 일을 적어 주세요" maxlength="500" />
       <button class="memo-mic" type="button" id="memoMic" aria-label="음성 입력" title="음성으로 말하기">🎤</button>

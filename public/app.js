@@ -1322,6 +1322,7 @@ function calcUpdate() {
 let MEMO_CACHE = [];
 let MEMO_QUERY = '';
 let MEMO_SORT = localStorage.getItem('fb_memo_sort') || 'default';
+let MEMO_DUE_DAYS = 'none'; // 'none' | '0' | '1' | '7' | '30'
 async function loadMemos() {
   try {
     const list = await api('/api/memos');
@@ -1429,6 +1430,23 @@ function renderMemos(list) {
     textEl.title = '탭해서 수정';
     textEl.style.cursor = 'pointer';
     textEl.onclick = () => startMemoEdit(textEl, m);
+    // 기한 뱃지
+    if (m.due_date) {
+      const due = new Date(m.due_date);
+      const todayMid = new Date();
+      todayMid.setHours(0, 0, 0, 0);
+      const diff = Math.round((due - todayMid) / 86400000);
+      const badge = document.createElement('span');
+      badge.className = 'memo-due-badge';
+      let label;
+      if (diff < 0) { label = `${-diff}일 지남`; badge.classList.add('overdue'); }
+      else if (diff === 0) { label = '오늘까지'; badge.classList.add('today'); }
+      else if (diff === 1) { label = '내일까지'; badge.classList.add('soon'); }
+      else if (diff <= 7) { label = `${diff}일 뒤`; badge.classList.add('soon'); }
+      else { label = `${due.getMonth() + 1}/${due.getDate()}`; }
+      badge.textContent = '📅 ' + label;
+      li.querySelector('.memo-author').prepend(badge);
+    }
     if (m.created_by_name) {
       li.querySelector('.memo-author-avatar').textContent = iconEmoji(m.created_by_icon);
       li.querySelector('.memo-author-name').textContent = m.created_by_name;
@@ -1557,11 +1575,33 @@ $('memoDoneToggle').addEventListener('click', () => {
   $('memoDoneToggle').classList.toggle('open');
 });
 
+document.querySelectorAll('.due-btn').forEach((b) => {
+  b.addEventListener('click', () => {
+    MEMO_DUE_DAYS = b.dataset.days;
+    document.querySelectorAll('.due-btn').forEach((x) => x.classList.remove('active'));
+    b.classList.add('active');
+  });
+});
+// 기본값 세팅
+document.querySelector('.due-btn[data-days="none"]')?.classList.add('active');
+
+function computeDueDate(days) {
+  if (days === 'none') return null;
+  const d = new Date();
+  d.setDate(d.getDate() + Number(days));
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+
 $('memoForm').addEventListener('submit', async (e) => {
   e.preventDefault();
   const v = $('memoInput').value.trim(); if (!v) return;
-  await api('/api/memos', { method: 'POST', body: JSON.stringify({ content: v }) });
+  const dueDate = computeDueDate(MEMO_DUE_DAYS);
+  await api('/api/memos', { method: 'POST', body: JSON.stringify({ content: v, dueDate }) });
   $('memoInput').value = '';
+  // 기한 리셋
+  MEMO_DUE_DAYS = 'none';
+  document.querySelectorAll('.due-btn').forEach((x) => x.classList.remove('active'));
+  document.querySelector('.due-btn[data-days="none"]')?.classList.add('active');
   loadMemos();
 });
 
@@ -2404,6 +2444,38 @@ document.querySelectorAll('.fs-btn').forEach((b) => {
 });
 // 초기값 로드 (enterApp 후 적용되도록 setTimeout)
 setTimeout(() => applyFontScale(localStorage.getItem('fb_font_scale') || 'md'), 0);
+
+// ---------- 공지 히스토리 ----------
+$('noticeHistoryBtn').addEventListener('click', async () => {
+  try {
+    const list = await api('/api/notice/history');
+    const ul = $('noticeHistList');
+    ul.innerHTML = '';
+    if (!list.length) {
+      ul.innerHTML = '<li class="empty-state" style="padding:20px 0!important;text-align:center"><span class="empty-state-text">지난 공지가 아직 없어요</span></li>';
+    } else {
+      for (const n of list) {
+        const li = document.createElement('li');
+        li.className = 'notice-hist-item';
+        const d = new Date(n.created_at);
+        const when = `${d.getMonth() + 1}월 ${d.getDate()}일 ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+        li.innerHTML = `
+          <div class="nh-head">
+            <span class="nh-author">${n.author_name ? iconEmoji(n.author_icon) + ' ' + n.author_name : '—'}</span>
+            <span class="nh-time">${when}</span>
+          </div>
+          <div class="nh-text"></div>`;
+        li.querySelector('.nh-text').textContent = n.text;
+        ul.appendChild(li);
+      }
+    }
+    $('noticeHistSheet').classList.remove('hidden');
+  } catch { alert('공지 기록 불러오기 실패'); }
+});
+$('noticeHistClose').addEventListener('click', () => $('noticeHistSheet').classList.add('hidden'));
+$('noticeHistSheet').addEventListener('click', (e) => {
+  if (e.target.id === 'noticeHistSheet') $('noticeHistSheet').classList.add('hidden');
+});
 
 // ---------- 메모 삭제 실행 취소 토스트 ----------
 let UNDO_TIMER = null;
