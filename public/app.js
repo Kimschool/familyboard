@@ -3154,8 +3154,8 @@ const DEFAULT_CARD_ORDER = [
   'question',
   // 3) 매일 새로움: 어제 답변 공개
   'reveal',
-  // 4) 소통·일정 묶음
-  'upcoming','family','chat','birthday',
+  // 4) 소통·일정 묶음 + 빠른 연락처(긴급 상황 빠른 접근)
+  'upcoming','family','sos','chat','birthday',
   // 5) 보조 정보
   'weather','tips','gallery',
   // 6) 엔터·유틸·메모 (아래로)
