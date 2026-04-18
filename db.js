@@ -173,6 +173,31 @@ async function ensureSchema() {
   `);
 
   await p.query(`
+    CREATE TABLE IF NOT EXISTS custom_questions (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      family_id INT NOT NULL,
+      author_id INT NOT NULL,
+      text VARCHAR(300) NOT NULL,
+      used_date DATE NULL,
+      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      INDEX idx_family_pending (family_id, used_date, created_at)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  `);
+
+  await p.query(`
+    CREATE TABLE IF NOT EXISTS personal_diary (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      user_id INT NOT NULL,
+      entry_date DATE NOT NULL,
+      text VARCHAR(500) NOT NULL,
+      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      UNIQUE KEY uq_user_date (user_id, entry_date),
+      INDEX idx_user_time (user_id, entry_date)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  `);
+
+  await p.query(`
     CREATE TABLE IF NOT EXISTS memo_reactions (
       memo_id INT NOT NULL,
       user_id INT NOT NULL,

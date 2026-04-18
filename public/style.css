@@ -363,6 +363,79 @@ body.tod-night .hero-weather { color: rgba(242,242,247,.8); }
   50% { transform: scale(1.06); }
 }
 
+/* ========== 개인 일기 ========== */
+.diary-card {
+  background: linear-gradient(135deg, #FFF9F0 0%, #FFF3F5 100%);
+}
+@media (prefers-color-scheme: dark) {
+  .diary-card { background: linear-gradient(135deg, #2A251E 0%, #2A1F22 100%); }
+}
+.diary-card .card-title { color: #8A5B6A; display: flex; align-items: center; gap: 8px; }
+@media (prefers-color-scheme: dark) { .diary-card .card-title { color: #E9A5B8; } }
+.diary-private {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+  background: rgba(255,59,48,.12);
+  color: var(--bad);
+  border-radius: 999px;
+}
+.diary-meta { margin: 8px 0 0; font-size: 12px; color: var(--sub); text-align: right; }
+
+.diary-hist-list { list-style: none; padding: 0; margin: 0 0 14px; max-height: 60vh; overflow-y: auto; }
+.diary-hist-item {
+  padding: 12px 14px;
+  background: var(--bg);
+  border-radius: 10px;
+  margin-bottom: 8px;
+}
+.dh-date { font-size: 12px; font-weight: 800; color: var(--sub); letter-spacing: 1px; }
+.dh-text { font-size: 15px; color: var(--text); margin-top: 4px; line-height: 1.5; word-break: break-word; white-space: pre-wrap; }
+
+/* 질문 제안 */
+.suggest-list { list-style: none; padding: 0; margin: 0 0 14px; }
+.suggest-item {
+  position: relative;
+  padding: 12px 14px;
+  background: var(--bg);
+  border-radius: 10px;
+  margin-bottom: 8px;
+}
+.suggest-item.used { opacity: .6; }
+.su-head { display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 4px; }
+.su-author { color: var(--sub); font-weight: 700; }
+.su-pending { color: var(--primary); font-weight: 700; background: rgba(10,132,255,.12); padding: 2px 8px; border-radius: 999px; }
+.su-used { color: var(--sub); }
+.su-text { font-size: 15px; color: var(--text); line-height: 1.4; word-break: keep-all; padding-right: 28px; }
+.su-del {
+  position: absolute;
+  right: 8px; top: 10px;
+  background: none; border: none;
+  color: var(--sub);
+  font-size: 14px; cursor: pointer;
+}
+
+/* 시간별 상세 시트 */
+.hourly-detail-list { list-style: none; padding: 0; margin: 0 0 10px; max-height: 60vh; overflow-y: auto; }
+.hd-item {
+  display: grid;
+  grid-template-columns: 80px 32px 1fr 50px auto;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--line);
+  font-size: 14px;
+}
+.hd-item:last-child { border-bottom: none; }
+.hd-time { color: var(--sub); font-weight: 700; font-variant-numeric: tabular-nums; }
+.hd-icon { font-size: 20px; text-align: center; }
+.hd-desc { color: var(--text); }
+.hd-temp { font-weight: 800; color: var(--text); text-align: right; }
+.hd-rain { color: var(--primary); font-size: 12px; font-weight: 700; min-width: 60px; text-align: right; }
+
+.hourly { cursor: pointer; }
+.hourly:active { transform: scale(.99); }
+
 /* ========== 가족 투표 ========== */
 .poll-card {
   background: linear-gradient(135deg, #FFF8E8 0%, #FFECD8 100%);

@@ -303,6 +303,7 @@ function enterApp() {
   setupTtsAuto();
   setupTtsRate();
   loadPoll();
+  loadDiary();
 
   // 관리자 UI — 설정 화면으로 이동 (계정 카드의 '가족 관리' 버튼으로 열림)
   try {
@@ -662,6 +663,132 @@ $('medAddBtn').addEventListener('click', async () => {
     $('medName').value = '';
     loadMeds();
   } catch { alert('추가 실패'); }
+});
+
+// ---------- 질문 제안 ----------
+$('qSuggestBtn').addEventListener('click', async () => {
+  await openSuggestSheet();
+});
+async function openSuggestSheet() {
+  const list = await api('/api/question/suggestions').catch(() => []);
+  const ul = $('suggestList');
+  ul.innerHTML = '';
+  if (!list.length) {
+    ul.innerHTML = '<li class="empty-state-text" style="padding:14px 0;text-align:center">아직 제안된 질문이 없어요</li>';
+  }
+  for (const s of list) {
+    const li = document.createElement('li');
+    li.className = 'suggest-item' + (s.used_date ? ' used' : '');
+    li.innerHTML = `
+      <div class="su-head">
+        <span class="su-author">${iconEmoji(s.author_icon)} ${escapeHtml(s.author_name)}님</span>
+        ${s.used_date ? `<span class="su-used">사용됨</span>` : '<span class="su-pending">대기</span>'}
+      </div>
+      <div class="su-text"></div>
+      ${(s.author_id === ME.id || ME.role === 'admin') && !s.used_date
+        ? `<button class="su-del" data-id="${s.id}" aria-label="삭제">✕</button>` : ''}`;
+    li.querySelector('.su-text').textContent = s.text;
+    const del = li.querySelector('.su-del');
+    if (del) del.onclick = async () => {
+      if (!confirm('이 제안을 삭제할까요?')) return;
+      await api(`/api/question/suggestions/${s.id}`, { method: 'DELETE' });
+      openSuggestSheet();
+    };
+    ul.appendChild(li);
+  }
+  $('suggestSheet').classList.remove('hidden');
+}
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, (c) => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
+}
+$('suggestSubmit').addEventListener('click', async () => {
+  const text = $('suggestText').value.trim();
+  if (!text) { alert('질문을 입력해 주세요'); return; }
+  try {
+    await api('/api/question/suggest', { method: 'POST', body: JSON.stringify({ text }) });
+    $('suggestText').value = '';
+    openSuggestSheet();
+  } catch { alert('제안 실패'); }
+});
+$('suggestClose').addEventListener('click', () => $('suggestSheet').classList.add('hidden'));
+$('suggestSheet').addEventListener('click', (e) => {
+  if (e.target.id === 'suggestSheet') $('suggestSheet').classList.add('hidden');
+});
+
+// ---------- 개인 일기 ----------
+async function loadDiary() {
+  try {
+    const r = await api('/api/diary/today');
+    $('diaryInput').value = r.text || '';
+    if (r.updatedAt) {
+      $('diaryMeta').textContent = `마지막 저장: ${relativeTime(r.updatedAt)}`;
+    } else {
+      $('diaryMeta').textContent = '';
+    }
+  } catch {}
+}
+$('diarySave').addEventListener('click', async () => {
+  const text = $('diaryInput').value.trim();
+  try {
+    await api('/api/diary/today', { method: 'POST', body: JSON.stringify({ text }) });
+    $('diarySave').textContent = '저장됐어요';
+    setTimeout(() => $('diarySave').textContent = '저장', 1500);
+    loadDiary();
+  } catch { alert('저장 실패'); }
+});
+$('diaryHistBtn').addEventListener('click', async () => {
+  try {
+    const list = await api('/api/diary/recent?limit=30');
+    const ul = $('diaryHistList');
+    ul.innerHTML = '';
+    if (!list.length) {
+      ul.innerHTML = '<li class="empty-state-text" style="padding:20px 0;text-align:center">아직 일기가 없어요</li>';
+    }
+    for (const d of list) {
+      const date = new Date(d.date);
+      const li = document.createElement('li');
+      li.className = 'diary-hist-item';
+      li.innerHTML = `
+        <div class="dh-date">${date.getMonth() + 1}월 ${date.getDate()}일</div>
+        <div class="dh-text"></div>`;
+      li.querySelector('.dh-text').textContent = d.text;
+      ul.appendChild(li);
+    }
+    $('diaryHistSheet').classList.remove('hidden');
+  } catch { alert('불러오기 실패'); }
+});
+$('diaryHistClose').addEventListener('click', () => $('diaryHistSheet').classList.add('hidden'));
+$('diaryHistSheet').addEventListener('click', (e) => {
+  if (e.target.id === 'diaryHistSheet') $('diaryHistSheet').classList.add('hidden');
+});
+
+// ---------- 시간별 상세 시트 ----------
+let HOURLY_CACHE = [];
+$('hourlyBlock')?.addEventListener('click', () => {
+  if (!HOURLY_CACHE.length) return;
+  const ul = $('hourlyDetailList');
+  ul.innerHTML = '';
+  for (const h of HOURLY_CACHE) {
+    const d = new Date(h.time);
+    const dateLabel = `${d.getMonth() + 1}/${d.getDate()} ${d.getHours()}시`;
+    const icon = WMO_ICON[h.code] || '🌤️';
+    const desc = WMO[h.code] || '';
+    const li = document.createElement('li');
+    li.className = 'hd-item';
+    li.innerHTML = `
+      <span class="hd-time">${dateLabel}</span>
+      <span class="hd-icon">${icon}</span>
+      <span class="hd-desc"></span>
+      <span class="hd-temp">${h.temp}°</span>
+      <span class="hd-rain">${h.rainProb > 0 ? '💧 ' + h.rainProb + '%' : ''}</span>`;
+    li.querySelector('.hd-desc').textContent = desc;
+    ul.appendChild(li);
+  }
+  $('hourlySheet').classList.remove('hidden');
+});
+$('hourlyClose').addEventListener('click', () => $('hourlySheet').classList.add('hidden'));
+$('hourlySheet').addEventListener('click', (e) => {
+  if (e.target.id === 'hourlySheet') $('hourlySheet').classList.add('hidden');
 });
 
 // ---------- 가족 투표 ----------
@@ -1640,6 +1767,7 @@ function renderOutingScore(w, a) {
 }
 
 function renderHourly(hourly) {
+  HOURLY_CACHE = hourly || [];
   const block = $('hourlyBlock');
   if (!block) return;
   if (!hourly || !hourly.length) { block.classList.add('hidden'); return; }

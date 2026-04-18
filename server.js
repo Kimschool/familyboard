@@ -1170,18 +1170,116 @@ async function getOrCreateQuestion(familyId, dateStr) {
     [familyId, dateStr]
   );
   if (rows.length) return rows[0];
-  const days = Math.floor(new Date(dateStr).getTime() / 86400000);
-  const idx = ((familyId + days) % QUESTIONS.length + QUESTIONS.length) % QUESTIONS.length;
+
+  // 1) 가족 제안 질문 중 미사용 가장 오래된 것 우선
+  const [custom] = await getPool().query(
+    `SELECT id, text FROM custom_questions
+       WHERE family_id = ? AND used_date IS NULL
+       ORDER BY created_at ASC LIMIT 1`,
+    [familyId]
+  );
+  let text;
+  let customId = null;
+  if (custom.length) {
+    text = custom[0].text;
+    customId = custom[0].id;
+  } else {
+    const days = Math.floor(new Date(dateStr).getTime() / 86400000);
+    const idx = ((familyId + days) % QUESTIONS.length + QUESTIONS.length) % QUESTIONS.length;
+    text = QUESTIONS[idx];
+  }
+
   await getPool().query(
     'INSERT IGNORE INTO daily_questions (family_id, question_date, question_text) VALUES (?, ?, ?)',
-    [familyId, dateStr, QUESTIONS[idx]]
+    [familyId, dateStr, text]
   );
+  if (customId) {
+    await getPool().query(
+      'UPDATE custom_questions SET used_date = ? WHERE id = ?',
+      [dateStr, customId]
+    );
+  }
   const [rows2] = await getPool().query(
     'SELECT * FROM daily_questions WHERE family_id = ? AND question_date = ? LIMIT 1',
     [familyId, dateStr]
   );
   return rows2[0];
 }
+
+// ---------- 가족 질문 제안 ----------
+app.get('/api/question/suggestions', requireAuth, async (req, res) => {
+  const [rows] = await getPool().query(
+    `SELECT q.id, q.text, q.author_id, q.created_at, q.used_date,
+            u.display_name AS author_name, u.icon AS author_icon
+       FROM custom_questions q JOIN users u ON u.id = q.author_id
+      WHERE q.family_id = ?
+      ORDER BY (q.used_date IS NOT NULL), q.created_at DESC LIMIT 40`,
+    [req.user.family_id]
+  );
+  res.json(rows);
+});
+
+app.post('/api/question/suggest', requireAuth, async (req, res) => {
+  const text = (req.body?.text || '').toString().trim().slice(0, 300);
+  if (!text) return res.status(400).json({ error: 'text-required' });
+  const [r] = await getPool().query(
+    'INSERT INTO custom_questions (family_id, author_id, text) VALUES (?, ?, ?)',
+    [req.user.family_id, req.user.id, text]
+  );
+  res.json({ ok: true, id: r.insertId });
+});
+
+app.delete('/api/question/suggestions/:id', requireAuth, async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'bad-id' });
+  // 작성자 본인 또는 관리자, 아직 사용 안 된 것만
+  await getPool().query(
+    `DELETE FROM custom_questions
+      WHERE id = ? AND family_id = ? AND used_date IS NULL
+        AND (author_id = ? OR ? = 'admin')`,
+    [id, req.user.family_id, req.user.id, req.user.role]
+  );
+  res.json({ ok: true });
+});
+
+// ---------- 개인 일기 ----------
+app.get('/api/diary/today', requireAuth, async (req, res) => {
+  const today = todayLocal();
+  const [rows] = await getPool().query(
+    'SELECT text, updated_at FROM personal_diary WHERE user_id = ? AND entry_date = ? LIMIT 1',
+    [req.user.id, today]
+  );
+  res.json({ date: today, text: rows[0]?.text || '', updatedAt: rows[0]?.updated_at || null });
+});
+
+app.post('/api/diary/today', requireAuth, async (req, res) => {
+  const text = (req.body?.text || '').toString().trim().slice(0, 500);
+  const today = todayLocal();
+  if (!text) {
+    await getPool().query(
+      'DELETE FROM personal_diary WHERE user_id = ? AND entry_date = ?',
+      [req.user.id, today]
+    );
+    return res.json({ ok: true, text: '' });
+  }
+  await getPool().query(
+    `INSERT INTO personal_diary (user_id, entry_date, text) VALUES (?, ?, ?)
+     ON DUPLICATE KEY UPDATE text = VALUES(text)`,
+    [req.user.id, today, text]
+  );
+  res.json({ ok: true, text });
+});
+
+app.get('/api/diary/recent', requireAuth, async (req, res) => {
+  const limit = Math.min(30, Number(req.query.limit) || 14);
+  const [rows] = await getPool().query(
+    `SELECT DATE_FORMAT(entry_date, '%Y-%m-%d') AS date, text, updated_at
+       FROM personal_diary WHERE user_id = ?
+       ORDER BY entry_date DESC LIMIT ?`,
+    [req.user.id, limit]
+  );
+  res.json(rows);
+});
 
 app.get('/api/question/today', requireAuth, async (req, res) => {
   try {

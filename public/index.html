@@ -300,7 +300,7 @@
         <div class="os-detail" id="osDetail">—</div>
       </div>
     </div>
-    <div class="hourly hidden" id="hourlyBlock"></div>
+    <div class="hourly hidden" id="hourlyBlock" title="자세히 보기"></div>
     <div class="tomorrow hidden" id="tomorrowBlock">
       <span class="tomorrow-label">내일</span>
       <span class="tomorrow-icon" id="tmIcon">🌤️</span>
@@ -347,6 +347,7 @@
     <p class="question-hint hidden" id="qHint">내 답변은 언제든 수정할 수 있어요. 가족에겐 <b>내일</b> 공개돼요.</p>
     <div class="question-actions">
       <button id="qHistoryBtn" type="button" class="question-action-btn">지난 질문 모아보기</button>
+      <button id="qSuggestBtn" type="button" class="question-action-btn">💡 질문 제안</button>
     </div>
   </section>
 
@@ -384,6 +385,20 @@
         <ol class="rank-list" id="rankReceived"></ol>
       </div>
       <button class="sheet-close" id="rankingClose">닫기</button>
+    </div>
+  </div>
+
+  <!-- 질문 제안 바텀시트 -->
+  <div id="suggestSheet" class="sheet-backdrop hidden" role="dialog">
+    <div class="sheet sheet-tall" role="document">
+      <div class="sheet-handle"></div>
+      <h2 class="sheet-title">💡 가족 질문 제안</h2>
+      <p class="sheet-sub">내가 제안한 질문이 다음 날 가족에게 나와요</p>
+      <textarea id="suggestText" class="question-input" maxlength="300" placeholder="예: 어릴 적 우리 집에서 가장 좋아했던 음식은?"></textarea>
+      <button id="suggestSubmit" type="button" class="question-submit">제안하기</button>
+      <label class="admin-label" style="margin-top: 20px">가족이 제안한 질문</label>
+      <ul class="suggest-list" id="suggestList"></ul>
+      <button class="sheet-close" id="suggestClose">닫기</button>
     </div>
   </div>
 
@@ -719,6 +734,37 @@
       <button id="medAddBtn" type="button" class="user-add">추가</button>
     </div>
   </section>
+
+  <!-- 내 일기 (본인만 보기) -->
+  <section class="card diary-card" data-card-id="diary" id="diaryCard">
+    <div class="card-head-row">
+      <p class="card-title">📔 오늘의 내 일기 <span class="diary-private">🔒 나만 보기</span></p>
+      <button id="diaryHistBtn" type="button" class="med-mgr-btn">과거 기록</button>
+    </div>
+    <textarea id="diaryInput" class="question-input" maxlength="500" placeholder="오늘 하루 어땠어요? 짧게 남겨보세요"></textarea>
+    <button id="diarySave" type="button" class="question-submit">저장</button>
+    <p class="diary-meta" id="diaryMeta"></p>
+  </section>
+
+  <!-- 일기 과거 기록 시트 -->
+  <div id="diaryHistSheet" class="sheet-backdrop hidden" role="dialog">
+    <div class="sheet sheet-tall" role="document">
+      <div class="sheet-handle"></div>
+      <h2 class="sheet-title">📔 지난 일기</h2>
+      <ul class="diary-hist-list" id="diaryHistList"></ul>
+      <button class="sheet-close" id="diaryHistClose">닫기</button>
+    </div>
+  </div>
+
+  <!-- 시간별 상세 시트 -->
+  <div id="hourlySheet" class="sheet-backdrop hidden" role="dialog">
+    <div class="sheet sheet-tall" role="document">
+      <div class="sheet-handle"></div>
+      <h2 class="sheet-title">🌤️ 시간별 상세 예보</h2>
+      <ul class="hourly-detail-list" id="hourlyDetailList"></ul>
+      <button class="sheet-close" id="hourlyClose">닫기</button>
+    </div>
+  </div>
 
   <!-- 오늘 받은·보낸 응원 -->
   <section class="card stickers-card hidden" data-card-id="stickers" id="stickersCard">
