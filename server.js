@@ -681,7 +681,7 @@ app.get('/api/question/today', requireAuth, async (req, res) => {
     const today = todayLocal();
     const q = await getOrCreateQuestion(req.user.family_id, today);
     const [my] = await getPool().query(
-      'SELECT answer_text FROM daily_answers WHERE question_id = ? AND user_id = ? LIMIT 1',
+      'SELECT answer_text, is_skip FROM daily_answers WHERE question_id = ? AND user_id = ? LIMIT 1',
       [q.id, req.user.id]
     );
     const [counts] = await getPool().query(
@@ -701,10 +701,67 @@ app.get('/api/question/today', requireAuth, async (req, res) => {
       date: today,
       question: q.question_text,
       myAnswer: my[0]?.answer_text || null,
+      mySkipped: !!my[0]?.is_skip,
       answeredCount: counts[0].c,
       memberCount: members[0].c,
       answerers,
     });
+  } catch (e) { res.status(500).json({ error: 'internal', message: e.message }); }
+});
+
+app.post('/api/question/today/skip', requireAuth, async (req, res) => {
+  try {
+    const today = todayLocal();
+    const q = await getOrCreateQuestion(req.user.family_id, today);
+    await getPool().query(
+      `INSERT INTO daily_answers (question_id, user_id, answer_text, is_skip)
+         VALUES (?, ?, NULL, 1)
+       ON DUPLICATE KEY UPDATE answer_text = NULL, is_skip = 1`,
+      [q.id, req.user.id]
+    );
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: 'internal', message: e.message }); }
+});
+
+app.get('/api/question/streak', requireAuth, async (req, res) => {
+  try {
+    // 최근 60일 질문 중 내 답변 유무 (스킵 제외)
+    const [rows] = await getPool().query(
+      `SELECT q.question_date,
+              EXISTS (SELECT 1 FROM daily_answers a
+                        WHERE a.question_id = q.id AND a.user_id = ? AND a.is_skip = 0 AND a.answer_text IS NOT NULL) AS answered
+         FROM daily_questions q
+        WHERE q.family_id = ? AND q.question_date <= CURDATE()
+        ORDER BY q.question_date DESC LIMIT 60`,
+      [req.user.id, req.user.family_id]
+    );
+    let streak = 0;
+    for (const row of rows) {
+      if (row.answered) streak++;
+      else break;
+    }
+    // 가족 전체 스트릭
+    const [members] = await getPool().query(
+      `SELECT id, display_name, icon FROM users
+         WHERE family_id = ? AND password_hash IS NOT NULL`,
+      [req.user.family_id]
+    );
+    const familyStreaks = [];
+    for (const m of members) {
+      const [qs] = await getPool().query(
+        `SELECT EXISTS (SELECT 1 FROM daily_answers a
+                          WHERE a.question_id = q.id AND a.user_id = ? AND a.is_skip = 0 AND a.answer_text IS NOT NULL) AS answered
+           FROM daily_questions q
+          WHERE q.family_id = ? AND q.question_date <= CURDATE()
+          ORDER BY q.question_date DESC LIMIT 60`,
+        [m.id, req.user.family_id]
+      );
+      let s = 0;
+      for (const r of qs) { if (r.answered) s++; else break; }
+      familyStreaks.push({ id: m.id, name: m.display_name, icon: m.icon, streak: s });
+    }
+    familyStreaks.sort((a, b) => b.streak - a.streak);
+    res.json({ myStreak: streak, familyStreaks });
   } catch (e) { res.status(500).json({ error: 'internal', message: e.message }); }
 });
 
@@ -716,8 +773,8 @@ app.post('/api/question/today/answer', requireAuth, async (req, res) => {
     const today = todayLocal();
     const q = await getOrCreateQuestion(req.user.family_id, today);
     await getPool().query(
-      `INSERT INTO daily_answers (question_id, user_id, answer_text) VALUES (?, ?, ?)
-       ON DUPLICATE KEY UPDATE answer_text = VALUES(answer_text)`,
+      `INSERT INTO daily_answers (question_id, user_id, answer_text, is_skip) VALUES (?, ?, ?, 0)
+       ON DUPLICATE KEY UPDATE answer_text = VALUES(answer_text), is_skip = 0`,
       [q.id, req.user.id, answer]
     );
     res.json({ ok: true });
@@ -734,9 +791,10 @@ app.get('/api/question/yesterday', requireAuth, async (req, res) => {
     if (!qrows.length) return res.json({ date: y, question: null, answers: [] });
     const q = qrows[0];
     const [ans] = await getPool().query(
-      `SELECT a.id AS answer_id, a.answer_text, a.user_id, u.display_name, u.icon
+      `SELECT a.id AS answer_id, a.answer_text, a.is_skip, a.user_id, u.display_name, u.icon
          FROM daily_answers a JOIN users u ON u.id = a.user_id
-        WHERE a.question_id = ? ORDER BY a.created_at ASC`,
+        WHERE a.question_id = ? AND (a.answer_text IS NOT NULL OR a.is_skip = 1)
+        ORDER BY a.created_at ASC`,
       [q.id]
     );
     const ids = ans.map((a) => a.answer_id);

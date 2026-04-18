@@ -273,6 +273,7 @@ function enterApp() {
   loadYesterdayReveal();
   loadEmergencyContacts();
   loadStickers();
+  loadMyStreak();
 
   // 관리자 UI — 설정 화면으로 이동 (계정 카드의 '가족 관리' 버튼으로 열림)
   try {
@@ -828,6 +829,22 @@ function closeProfileSheet() {
   CURRENT_PROFILE_USER = null;
 }
 
+function spawnConfetti() {
+  const emojis = ['🎉','🎊','🎂','🎈','✨','💖','🌸'];
+  const count = 30;
+  for (let i = 0; i < count; i++) {
+    const d = document.createElement('div');
+    d.className = 'confetti';
+    d.textContent = emojis[Math.floor(Math.random() * emojis.length)];
+    d.style.left = Math.random() * 100 + 'vw';
+    d.style.animationDelay = (Math.random() * 1.2) + 's';
+    d.style.animationDuration = (3 + Math.random() * 2) + 's';
+    d.style.fontSize = (18 + Math.random() * 16) + 'px';
+    document.body.appendChild(d);
+    setTimeout(() => d.remove(), 6000);
+  }
+}
+
 // ---------- 생일 + 이번 주 기념일 ----------
 let TODAY_BIRTHDAY_USER = null;
 async function loadBirthday() {
@@ -840,6 +857,11 @@ async function loadBirthday() {
     if (r.today) {
       const isMe = ME && r.today.id === ME.id;
       TODAY_BIRTHDAY_USER = r.today;
+      // 세션 중 1회만 폭죽
+      if (!sessionStorage.getItem('fb_confetti_' + (r.today.id || 'x'))) {
+        spawnConfetti();
+        sessionStorage.setItem('fb_confetti_' + (r.today.id || 'x'), '1');
+      }
       $('bdEmoji').textContent = isMe ? '🎉' : iconEmoji(r.today.icon);
       $('bdTitle').textContent = isMe
         ? `${ME.displayName}님, 생일 축하드려요!`
@@ -1839,12 +1861,19 @@ async function loadTodayQuestion() {
     $('questionAnswer').value = q.myAnswer || '';
     $('questionMeta').textContent =
       `${q.answeredCount} / ${q.memberCount}명이 답했어요 · 모든 답변은 내일 공개돼요`;
-    // 답변 미완료 배지 + 완료 배지 + 힌트 + 버튼 문구
     const hasAnswer = !!q.myAnswer;
-    $('qPendingBadge').classList.toggle('hidden', hasAnswer);
+    const isSkip = !!q.mySkipped;
+    $('qPendingBadge').classList.toggle('hidden', hasAnswer || isSkip);
     $('qDoneBadge').classList.toggle('hidden', !hasAnswer);
     $('qHint').classList.toggle('hidden', !hasAnswer);
     $('questionSubmit').textContent = hasAnswer ? '답변 수정' : '답변 저장';
+    // 건너뛴 경우 표시
+    if (isSkip) {
+      $('qDoneBadge').textContent = '🌙 건너뛰었어요';
+      $('qDoneBadge').classList.remove('hidden');
+    } else {
+      $('qDoneBadge').textContent = '✓ 저장됨';
+    }
 
     // 참여 아바타 — 답한 사람만 컬러, 아직 안 한 사람은 회색
     QUESTION_ANSWERERS_CACHE = q.answerers || [];
@@ -1867,6 +1896,56 @@ async function loadTodayQuestion() {
   }
 }
 
+$('questionSkip').addEventListener('click', async () => {
+  if (!confirm('오늘 질문을 건너뛸까요? 답변 없이 넘어가요.')) return;
+  try {
+    await api('/api/question/today/skip', { method: 'POST' });
+    loadTodayQuestion();
+    loadMyStreak();
+  } catch { alert('처리 실패'); }
+});
+
+async function loadMyStreak() {
+  try {
+    const r = await api('/api/question/streak');
+    window._STREAK = r;
+    if (r.myStreak > 0) {
+      $('myStreakBadge').textContent = `🔥 ${r.myStreak}일 연속 답변 중!`;
+      $('streakRow').classList.remove('hidden');
+    } else {
+      $('myStreakBadge').textContent = '';
+      $('streakRow').classList.toggle('hidden', !(r.familyStreaks || []).some((f) => f.streak > 0));
+      if (!(r.familyStreaks || []).some((f) => f.streak > 0)) {
+        $('streakRow').classList.add('hidden');
+      } else {
+        // 가족 누구라도 연속이면 버튼만 보여줌
+        $('myStreakBadge').textContent = '🔥 오늘도 답변하면 기록 시작!';
+      }
+    }
+  } catch {}
+}
+
+$('openStreakSheet').addEventListener('click', () => {
+  const r = window._STREAK;
+  if (!r) return;
+  const ul = $('streakList');
+  ul.innerHTML = '';
+  for (const m of r.familyStreaks) {
+    const li = document.createElement('li');
+    li.innerHTML = `
+      <span class="streak-emoji">${iconEmoji(m.icon)}</span>
+      <span class="streak-name"></span>
+      <span class="streak-days">${m.streak > 0 ? '🔥 ' + m.streak + '일' : '—'}</span>`;
+    li.querySelector('.streak-name').textContent = m.name + '님';
+    ul.appendChild(li);
+  }
+  $('streakSheet').classList.remove('hidden');
+});
+$('streakClose').addEventListener('click', () => $('streakSheet').classList.add('hidden'));
+$('streakSheet').addEventListener('click', (e) => {
+  if (e.target.id === 'streakSheet') $('streakSheet').classList.add('hidden');
+});
+
 $('questionSubmit').addEventListener('click', async () => {
   const a = $('questionAnswer').value.trim();
   if (!a) { alert('답변을 적어 주세요'); return; }
@@ -1875,8 +1954,9 @@ $('questionSubmit').addEventListener('click', async () => {
       method: 'POST', body: JSON.stringify({ answer: a }),
     });
     $('questionSubmit').textContent = '저장됐어요';
-    setTimeout(() => $('questionSubmit').textContent = '답변 저장', 1500);
+    setTimeout(() => $('questionSubmit').textContent = '답변 수정', 1500);
     loadTodayQuestion();
+    loadMyStreak();
   } catch { alert('저장 실패'); }
 });
 
@@ -1890,16 +1970,17 @@ async function loadYesterdayReveal() {
     ul.innerHTML = '';
     for (const a of r.answers) {
       const li = document.createElement('li');
+      const skipped = !!a.is_skip;
       li.innerHTML = `
         <span class="reveal-emoji">${iconEmoji(a.icon)}</span>
         <div class="reveal-body">
           <div class="reveal-name"></div>
-          <div class="reveal-answer"></div>
+          <div class="reveal-answer ${skipped ? 'skipped' : ''}"></div>
           <div class="reaction-row"></div>
         </div>`;
       li.querySelector('.reveal-name').textContent = a.display_name + '님';
-      li.querySelector('.reveal-answer').textContent = a.answer_text;
-      renderReactionRow(li.querySelector('.reaction-row'), a.answer_id, a.reactions || []);
+      li.querySelector('.reveal-answer').textContent = skipped ? '🌙 건너뛰었어요' : a.answer_text;
+      if (!skipped) renderReactionRow(li.querySelector('.reaction-row'), a.answer_id, a.reactions || []);
       ul.appendChild(li);
     }
     $('revealCard').classList.remove('hidden');

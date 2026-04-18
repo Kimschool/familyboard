@@ -249,7 +249,14 @@
     </div>
     <p class="question-text" id="questionText">—</p>
     <textarea id="questionAnswer" class="question-input" placeholder="답변을 적어 주세요 (가족에겐 내일 공개돼요)"></textarea>
-    <button id="questionSubmit" type="button" class="question-submit">답변 저장</button>
+    <div class="question-actions-row">
+      <button id="questionSubmit" type="button" class="question-submit">답변 저장</button>
+      <button id="questionSkip" type="button" class="question-skip">오늘은 건너뛸게요</button>
+    </div>
+    <div class="streak-row hidden" id="streakRow">
+      <span class="streak-badge" id="myStreakBadge"></span>
+      <button type="button" class="streak-family-btn" id="openStreakSheet">🏆 가족 기록</button>
+    </div>
     <div class="question-participants" id="questionParticipants"></div>
     <p class="question-meta" id="questionMeta"></p>
     <p class="question-hint hidden" id="qHint">내 답변은 언제든 수정할 수 있어요. 가족에겐 <b>내일</b> 공개돼요.</p>
@@ -274,6 +281,16 @@
         <button id="bdayMsgSubmit" type="button" class="question-submit">메시지 남기기</button>
       </div>
       <button class="sheet-close" id="bdayClose">닫기</button>
+    </div>
+  </div>
+
+  <!-- 스트릭(연속 답변) 바텀시트 -->
+  <div id="streakSheet" class="sheet-backdrop hidden" role="dialog">
+    <div class="sheet" role="document">
+      <div class="sheet-handle"></div>
+      <h2 class="sheet-title">🔥 가족 연속 답변 기록</h2>
+      <ul class="streak-list" id="streakList"></ul>
+      <button class="sheet-close" id="streakClose">닫기</button>
     </div>
   </div>
 

@@ -1045,6 +1045,94 @@ body.tod-night .hero-weather { color: rgba(242,242,247,.8); }
   word-break: keep-all;
 }
 
+/* ========== 질문 건너뛰기 / 스트릭 ========== */
+.question-actions-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+.question-submit { flex: 1; margin-top: 0 !important; }
+.question-skip {
+  height: 52px;
+  padding: 0 14px;
+  border-radius: var(--r-sm);
+  background: transparent;
+  border: 1.5px solid var(--line);
+  color: var(--sub);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.question-skip:active { background: var(--bg); }
+
+.streak-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(0,0,0,.06);
+  flex-wrap: wrap;
+}
+@media (prefers-color-scheme: dark) {
+  .streak-row { border-top-color: rgba(255,255,255,.08); }
+}
+.streak-badge {
+  flex: 1;
+  font-size: 14px;
+  font-weight: 700;
+  color: #C24A2E;
+  padding: 6px 12px;
+  background: rgba(255,100,50,.12);
+  border-radius: 999px;
+  min-width: 0;
+}
+@media (prefers-color-scheme: dark) {
+  .streak-badge { color: #FFB08A; background: rgba(255,140,80,.15); }
+}
+.streak-family-btn {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  color: var(--text);
+}
+
+.streak-list { list-style: none; margin: 0; padding: 0; }
+.streak-list li {
+  display: flex; align-items: center; gap: 14px;
+  padding: 12px 0;
+  border-top: 1px solid var(--line);
+}
+.streak-list li:first-child { border-top: none; padding-top: 2px; }
+.streak-emoji { font-size: 28px; line-height: 1; flex-shrink: 0; width: 40px; text-align: center; }
+.streak-name { flex: 1; font-size: 16px; font-weight: 700; }
+.streak-days { font-size: 15px; font-weight: 800; color: #C24A2E; }
+@media (prefers-color-scheme: dark) { .streak-days { color: #FFB08A; } }
+
+.reveal-answer.skipped { color: var(--sub); font-style: italic; }
+
+/* ========== 생일 폭죽 ========== */
+.confetti {
+  position: fixed;
+  top: -40px;
+  z-index: 9998;
+  pointer-events: none;
+  animation: confetti-fall 4s linear forwards;
+  user-select: none;
+}
+@keyframes confetti-fall {
+  0%   { transform: translateY(0) rotate(0); opacity: 1; }
+  90%  { opacity: 1; }
+  100% { transform: translateY(110vh) rotate(720deg); opacity: 0; }
+}
+
 /* ========== 생일 배너 ========== */
 .banner {
   display: flex;
