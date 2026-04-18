@@ -454,6 +454,8 @@
       <label class="ufi-check" style="margin-top: 8px">
         <input id="myLunar" type="checkbox" /> 음력
       </label>
+      <label class="admin-label" style="margin-top: 12px">내 사진 URL (선택 — 아이콘 대신 사진 표시)</label>
+      <input id="myPhoto" class="ufi" type="url" placeholder="https://..." />
       <label class="admin-label" style="margin-top: 12px">전화번호 (선택)</label>
       <input id="myPhone" class="ufi" type="tel" placeholder="010-1234-5678" />
       <label class="admin-label" style="margin-top: 18px">비밀번호 변경 (선택)</label>
@@ -834,6 +836,7 @@
   <section class="card diary-card" data-card-id="diary" id="diaryCard">
     <div class="card-head-row">
       <p class="card-title">📔 오늘의 내 일기 <span class="diary-private">🔒 나만 보기</span></p>
+      <span class="diary-streak hidden" id="diaryStreak"></span>
       <button id="diaryHistBtn" type="button" class="med-mgr-btn">과거 기록</button>
     </div>
     <textarea id="diaryInput" class="question-input" maxlength="500" placeholder="오늘 하루 어땠어요? 짧게 남겨보세요"></textarea>
@@ -967,6 +970,12 @@
 <div id="undoToast" class="undo-toast hidden" role="status">
   <span class="undo-msg">메모를 삭제했어요</span>
   <button id="undoBtn" class="undo-btn">되돌리기</button>
+</div>
+
+<!-- 이미지 라이트박스 -->
+<div id="lightbox" class="lightbox hidden" role="dialog" aria-label="이미지 확대">
+  <button class="lightbox-close" id="lightboxClose" aria-label="닫기">✕</button>
+  <img id="lightboxImg" src="" alt="" />
 </div>
 
 <!-- 메모 퀵 추가 FAB -->

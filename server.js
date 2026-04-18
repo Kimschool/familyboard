@@ -54,7 +54,7 @@ app.get('/api/family/:alias', async (req, res) => {
     if (!f.length) return res.status(404).json({ error: 'not-found' });
     const [users] = await getPool().query(
       `SELECT id, display_name, icon, role, birth_year, birth_month, birth_day,
-              phone, mood, mood_date,
+              phone, photo_url, mood, mood_date,
               (password_hash IS NOT NULL) AS activated
          FROM users WHERE family_id = ?
          ORDER BY role DESC, id ASC`,
@@ -80,6 +80,7 @@ app.get('/api/family/:alias', async (req, res) => {
           birthMonth: u.birth_month,
           birthDay: u.birth_day,
           phone: u.phone || null,
+          photoUrl: u.photo_url || null,
           mood: moodToday,
           activated: !!u.activated,
         };
@@ -131,6 +132,10 @@ app.patch('/api/me', requireAuth, async (req, res) => {
     if (birthDay !== undefined)   { updates.push('birth_day = ?');   args.push(Number(birthDay)   || null); }
     if (isLunar !== undefined)    { updates.push('is_lunar = ?');    args.push(isLunar ? 1 : 0); }
     if (phone !== undefined)      { updates.push('phone = ?');       args.push(String(phone).trim() || null); }
+    if (req.body?.photoUrl !== undefined) {
+      const p = String(req.body.photoUrl).trim().slice(0, 500);
+      updates.push('photo_url = ?'); args.push(p || null);
+    }
 
     if (password) {
       if (String(password).length < 4) return res.status(400).json({ error: 'password-too-short' });
@@ -1350,6 +1355,48 @@ app.post('/api/diary/today', requireAuth, async (req, res) => {
     [req.user.id, today, text]
   );
   res.json({ ok: true, text });
+});
+
+app.get('/api/diary/streak', requireAuth, async (req, res) => {
+  try {
+    const [rows] = await getPool().query(
+      `SELECT DATE_FORMAT(entry_date, '%Y-%m-%d') AS d
+         FROM personal_diary WHERE user_id = ?
+         ORDER BY entry_date DESC LIMIT 120`,
+      [req.user.id]
+    );
+    const dates = new Set(rows.map((r) => r.d));
+    const tz = process.env.DEFAULT_TZ || 'Asia/Tokyo';
+    const todayStr = new Intl.DateTimeFormat('sv-SE', {
+      timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit',
+    }).format(new Date());
+
+    // 오늘 또는 어제부터 거슬러 연속일 계산 (오늘 안 썼어도 어제까지 이어지면 연속으로 인정)
+    let current = 0;
+    const start = new Date(todayStr);
+    if (!dates.has(todayStr)) start.setDate(start.getDate() - 1);
+    for (let i = 0; i < 120; i++) {
+      const d = new Date(start.getFullYear(), start.getMonth(), start.getDate() - i);
+      const ymd = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+      if (dates.has(ymd)) current++;
+      else break;
+    }
+    // 최장 기록
+    let longest = 0, run = 0;
+    const sorted = [...dates].sort();
+    let prev = null;
+    for (const d of sorted) {
+      if (prev) {
+        const pd = new Date(prev);
+        const cd = new Date(d);
+        const diff = Math.round((cd - pd) / 86400000);
+        run = (diff === 1) ? run + 1 : 1;
+      } else { run = 1; }
+      if (run > longest) longest = run;
+      prev = d;
+    }
+    res.json({ current, longest, totalDays: dates.size });
+  } catch (e) { res.status(500).json({ error: 'internal', message: e.message }); }
 });
 
 app.get('/api/diary/recent', requireAuth, async (req, res) => {

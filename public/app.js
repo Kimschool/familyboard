@@ -406,6 +406,14 @@ function renderHeroSummary() {
   el.classList.remove('hidden');
 }
 
+// 아이콘/사진 공용 렌더러 — photoUrl 있으면 사진, 없으면 이모지
+function avatarHtml(member, sizeClass = '') {
+  if (member?.photoUrl) {
+    return `<img class="ava-img ${sizeClass}" src="${member.photoUrl.replace(/"/g, '')}" alt="" />`;
+  }
+  return `<span class="ava-emoji ${sizeClass}">${iconEmoji(member?.icon)}</span>`;
+}
+
 function renderHero() {
   const now = new Date();
   const weekday = ['일','월','화','수','목','금','토'][now.getDay()];
@@ -417,7 +425,14 @@ function renderHero() {
     : h < 18 ? '좋은 오후에요'
     : h < 22 ? '편안한 저녁이에요' : '푹 주무세요';
   $('greeting').textContent = `${ME.displayName}님, ${phase}`;
-  $('heroAvatar').textContent = iconEmoji(ME.icon);
+  // hero avatar: 내 photoUrl 있으면 사진
+  const meInCache = (FAMILY_CACHE || []).find((x) => x.id === ME.id);
+  const photoUrl = meInCache?.photoUrl;
+  if (photoUrl) {
+    $('heroAvatar').innerHTML = `<img src="${photoUrl.replace(/"/g, '')}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:inherit" />`;
+  } else {
+    $('heroAvatar').textContent = iconEmoji(ME.icon);
+  }
 
   // 시간대별 배경 톤
   const tod = h < 5 ? 'night' : h < 11 ? 'morning' : h < 17 ? 'noon' : h < 20 ? 'evening' : 'night';
@@ -727,6 +742,20 @@ async function loadDiary() {
     } else {
       $('diaryMeta').textContent = '';
     }
+    // 스트릭 뱃지
+    try {
+      const s = await api('/api/diary/streak');
+      const badge = $('diaryStreak');
+      if (s.current >= 2) {
+        badge.textContent = `🔥 ${s.current}일 연속`;
+        badge.classList.remove('hidden');
+      } else if (s.current === 1) {
+        badge.textContent = '🌱 오늘부터';
+        badge.classList.remove('hidden');
+      } else {
+        badge.classList.add('hidden');
+      }
+    } catch {}
   } catch {}
 }
 $('diarySave').addEventListener('click', async () => {
@@ -1301,9 +1330,9 @@ function openMyProfileSheet() {
   $('myMonth').value = ME.birthMonth || '';
   $('myDay').value   = ME.birthDay   || '';
   $('myLunar').checked = !!ME.isLunar;
-  // phone 은 FAMILY_CACHE 에서 가져오기
   const self = (FAMILY_CACHE || []).find((x) => x.id === ME.id);
   $('myPhone').value = self?.phone || '';
+  $('myPhoto').value = self?.photoUrl || '';
   $('myCurrentPw').value = ''; $('myNewPw').value = '';
   renderMyIconPicker();
   $('myProfileSheet').classList.remove('hidden');
@@ -1338,6 +1367,7 @@ $('mySave').addEventListener('click', async () => {
     birthDay:   $('myDay').value   || null,
     isLunar: $('myLunar').checked,
     phone: $('myPhone').value.trim() || null,
+    photoUrl: $('myPhoto').value.trim() || null,
   };
   const newPw = $('myNewPw').value;
   const curPw = $('myCurrentPw').value;
@@ -4130,6 +4160,34 @@ if (toTop) {
     toTop.classList.toggle('hidden', window.scrollY < 400);
   }, { passive: true });
   toTop.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }));
+}
+
+// ---------- 이미지 라이트박스 ----------
+function openLightbox(src) {
+  const lb = $('lightbox');
+  $('lightboxImg').src = src;
+  lb.classList.remove('hidden');
+}
+$('lightboxClose').addEventListener('click', () => $('lightbox').classList.add('hidden'));
+$('lightbox').addEventListener('click', (e) => {
+  if (e.target.id === 'lightbox' || e.target.tagName === 'IMG') {
+    $('lightbox').classList.add('hidden');
+  }
+});
+// 답변 이미지 / hero photo 클릭 시 라이트박스
+document.addEventListener('click', (e) => {
+  const img = e.target;
+  if (img?.classList?.contains('reveal-image')) {
+    e.preventDefault(); e.stopPropagation();
+    openLightbox(img.src);
+  }
+});
+const heroOverlay = $('heroPhotoOverlay');
+if (heroOverlay) {
+  heroOverlay.addEventListener('click', () => {
+    const url = heroOverlay.style.backgroundImage.match(/url\("?([^")]+)"?\)/)?.[1];
+    if (url) openLightbox(url);
+  });
 }
 
 boot();

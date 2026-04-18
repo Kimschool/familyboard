@@ -88,6 +88,7 @@ async function ensureSchema() {
   await ensureColumn('users', 'last_recovery_week', 'VARCHAR(10) NULL');
   await ensureColumn('users', 'mood_date', 'DATE NULL');
   await ensureColumn('users', 'phone', 'VARCHAR(30) NULL');
+  await ensureColumn('users', 'photo_url', 'VARCHAR(500) NULL');
   await ensureColumn('daily_answers', 'is_skip', 'TINYINT(1) NOT NULL DEFAULT 0');
   await changeColumn('daily_answers', 'answer_text', 'VARCHAR(1000) NULL');
   await ensureColumn('families', 'notice', 'VARCHAR(500) NULL');
