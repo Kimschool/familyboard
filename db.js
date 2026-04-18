@@ -90,6 +90,21 @@ async function ensureSchema() {
   await ensureColumn('families', 'notice_updated_by', 'INT NULL');
 
   await p.query(`
+    CREATE TABLE IF NOT EXISTS family_stickers (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      family_id INT NOT NULL,
+      sender_id INT NOT NULL,
+      receiver_id INT NOT NULL,
+      emoji VARCHAR(10) NOT NULL,
+      sticker_date DATE NOT NULL,
+      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE KEY uq_day_sender_receiver_emoji (sticker_date, sender_id, receiver_id, emoji),
+      INDEX idx_receiver_date (receiver_id, sticker_date),
+      INDEX idx_family (family_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  `);
+
+  await p.query(`
     CREATE TABLE IF NOT EXISTS birthday_messages (
       id INT AUTO_INCREMENT PRIMARY KEY,
       family_id INT NOT NULL,

@@ -305,6 +305,60 @@ app.delete('/api/users/:id', requireAdmin, async (req, res) => {
   res.json({ ok: true });
 });
 
+// ---------- 응원 스티커 ----------
+app.get('/api/stickers/today', requireAuth, async (req, res) => {
+  try {
+    const today = todayLocal();
+    const [rows] = await getPool().query(
+      `SELECT s.receiver_id, s.sender_id, s.emoji,
+              u.display_name AS sender_name, u.icon AS sender_icon,
+              r.display_name AS receiver_name, r.icon AS receiver_icon
+         FROM family_stickers s
+         JOIN users u ON u.id = s.sender_id
+         JOIN users r ON r.id = s.receiver_id
+        WHERE s.family_id = ? AND s.sticker_date = ?
+        ORDER BY s.created_at DESC`,
+      [req.user.family_id, today]
+    );
+    res.json(rows);
+  } catch (e) { res.status(500).json({ error: 'internal', message: e.message }); }
+});
+
+app.post('/api/sticker', requireAuth, async (req, res) => {
+  try {
+    const receiverId = Number(req.body?.receiverId);
+    const emoji = (req.body?.emoji || '').toString().slice(0, 10);
+    if (!Number.isInteger(receiverId) || !emoji) return res.status(400).json({ error: 'bad-input' });
+    if (receiverId === req.user.id) return res.status(400).json({ error: 'self-not-allowed' });
+    const today = todayLocal();
+    // 같은 가족 확인
+    const [check] = await getPool().query(
+      'SELECT id FROM users WHERE id = ? AND family_id = ? LIMIT 1',
+      [receiverId, req.user.family_id]
+    );
+    if (!check.length) return res.status(404).json({ error: 'not-found' });
+
+    // 토글
+    const [existing] = await getPool().query(
+      `SELECT id FROM family_stickers
+        WHERE sender_id = ? AND receiver_id = ? AND emoji = ? AND sticker_date = ?
+        LIMIT 1`,
+      [req.user.id, receiverId, emoji, today]
+    );
+    if (existing.length) {
+      await getPool().query('DELETE FROM family_stickers WHERE id = ?', [existing[0].id]);
+      res.json({ ok: true, sent: false });
+    } else {
+      await getPool().query(
+        `INSERT INTO family_stickers (family_id, sender_id, receiver_id, emoji, sticker_date)
+         VALUES (?, ?, ?, ?, ?)`,
+        [req.user.family_id, req.user.id, receiverId, emoji, today]
+      );
+      res.json({ ok: true, sent: true });
+    }
+  } catch (e) { res.status(500).json({ error: 'internal', message: e.message }); }
+});
+
 // ---------- 응급 연락처 ----------
 app.get('/api/emergency', requireAuth, async (req, res) => {
   const [rows] = await getPool().query(

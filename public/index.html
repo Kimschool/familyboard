@@ -177,6 +177,14 @@
       <div class="sheet-row" id="profTodayAnswerRow"><span class="sheet-k">오늘 질문</span><span id="profTodayAnswer">—</span></div>
       <div class="sheet-row" id="profMemoCountRow"><span class="sheet-k">오늘 메모</span><span id="profMemoCount">—</span></div>
       <a id="profCallBtn" class="sheet-call hidden" href="tel:">📞 전화 걸기</a>
+      <div class="prof-stickers hidden" id="profStickersSection">
+        <label class="admin-label" style="margin-top: 14px">응원 보내기</label>
+        <div class="sticker-row" id="profStickerPicker"></div>
+        <div class="sticker-received hidden" id="profStickerReceived">
+          <label class="admin-label" style="margin-top: 14px">오늘 받은 응원</label>
+          <div class="sticker-row-list" id="profStickerList"></div>
+        </div>
+      </div>
       <button class="sheet-close" id="sheetClose">닫기</button>
     </div>
   </div>
@@ -413,6 +421,19 @@
       <button type="button" class="memo-cat" data-emoji="📞">📞 연락</button>
       <button type="button" class="memo-cat" data-emoji="🍱">🍱 식사</button>
     </div>
+    <details class="memo-templates">
+      <summary class="memo-templates-head">✨ 자주 쓰는 메모</summary>
+      <div class="memo-template-list" id="memoTemplateList">
+        <button type="button" class="memo-template" data-text="🛒 우유, 계란, 빵">🛒 우유·계란·빵</button>
+        <button type="button" class="memo-template" data-text="💊 아침 약 먹기">💊 아침 약</button>
+        <button type="button" class="memo-template" data-text="💊 저녁 약 먹기">💊 저녁 약</button>
+        <button type="button" class="memo-template" data-text="💧 물 2리터 마시기">💧 물 마시기</button>
+        <button type="button" class="memo-template" data-text="🚶 30분 산책">🚶 산책</button>
+        <button type="button" class="memo-template" data-text="📞 가족에게 안부 전화">📞 안부 전화</button>
+        <button type="button" class="memo-template" data-text="🏥 병원 예약 확인">🏥 병원 예약</button>
+        <button type="button" class="memo-template" data-text="🧺 빨래 돌리기">🧺 빨래</button>
+      </div>
+    </details>
     <form id="memoForm" class="memo-form">
       <input id="memoInput" class="memo-input" type="text" placeholder="오늘 기억할 일을 적어 주세요" maxlength="500" />
       <button class="memo-mic" type="button" id="memoMic" aria-label="음성 입력" title="음성으로 말하기">🎤</button>

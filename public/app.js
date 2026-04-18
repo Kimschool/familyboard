@@ -148,12 +148,22 @@ function renderMemberGrid(members) {
     grid.innerHTML = '<p class="zodiac-empty">구성원이 아직 없어요</p>';
     return;
   }
+  // 마지막 로그인 멤버가 있으면 맨 앞 + 강조
+  const lastId = Number(localStorage.getItem('fb_last_member_' + FAMILY_ALIAS) || 0);
+  if (lastId) {
+    members = [
+      ...members.filter((m) => m.id === lastId),
+      ...members.filter((m) => m.id !== lastId),
+    ];
+  }
   for (const m of members) {
+    const isLast = m.id === lastId;
     const btn = document.createElement('button');
-    btn.className = 'member-card' + (m.activated ? '' : ' pending');
+    btn.className = 'member-card' + (m.activated ? '' : ' pending') + (isLast ? ' recent' : '');
     btn.innerHTML = `
       <span class="member-emoji">${iconEmoji(m.icon)}</span>
       <span class="member-name"></span>
+      ${isLast ? '<span class="member-recent-tag">최근 로그인</span>' : ''}
       ${m.activated ? '' : '<span class="member-pending">초대 대기</span>'}
     `;
     btn.querySelector('.member-name').textContent = m.displayName;
@@ -190,6 +200,8 @@ async function doLogin() {
       body: JSON.stringify({ alias: FAMILY_ALIAS, userId: PICKED.id, password: pw }),
     });
     ME = r.user;
+    // 빠른 로그인용 마지막 멤버 id 기억
+    try { localStorage.setItem('fb_last_member_' + FAMILY_ALIAS, String(PICKED.id)); } catch {}
     enterApp();
   } catch (e) {
     $('loginErr').textContent = e.status === 401 ? '비밀번호가 맞지 않아요' : '오류가 발생했어요';
@@ -260,6 +272,7 @@ function enterApp() {
   loadTodayQuestion();
   loadYesterdayReveal();
   loadEmergencyContacts();
+  loadStickers();
 
   // 관리자 UI — 설정 화면으로 이동 (계정 카드의 '가족 관리' 버튼으로 열림)
   try {
@@ -365,6 +378,81 @@ $('logoutBtn').addEventListener('click', async () => {
   // 가족별칭은 기억 (다음 로그인 편의)
   location.reload();
 });
+
+// ---------- 응원 스티커 ----------
+async function loadStickers() {
+  try {
+    STICKERS_CACHE = await api('/api/stickers/today');
+  } catch { STICKERS_CACHE = []; }
+}
+
+function toggleSticker(receiverId, emoji, btn) {
+  return api('/api/sticker', {
+    method: 'POST',
+    body: JSON.stringify({ receiverId, emoji }),
+  }).then(async (r) => {
+    // 캐시 갱신
+    await loadStickers();
+    if (btn) btn.classList.toggle('on', r.sent);
+    // 프로필 시트에 받은 스티커 섹션 갱신
+    if (CURRENT_PROFILE_USER) updateProfileStickerSections(CURRENT_PROFILE_USER);
+    return r;
+  });
+}
+
+function updateProfileStickerSections(m) {
+  // 내가 이 사람에게 오늘 보낸 스티커들
+  const myToThem = STICKERS_CACHE
+    .filter((s) => s.sender_id === ME.id && s.receiver_id === m.id)
+    .map((s) => s.emoji);
+  // 이 사람이 받은 스티커들
+  const received = STICKERS_CACHE.filter((s) => s.receiver_id === m.id);
+
+  const pickerSection = $('profStickersSection');
+  const recvWrap = $('profStickerReceived');
+  const recvList = $('profStickerList');
+  const picker = $('profStickerPicker');
+
+  if (m.id === ME.id) {
+    // 본인 프로필: 받은 스티커만 보여줌, 보내기 숨김
+    picker.innerHTML = '';
+    pickerSection.classList.remove('hidden');
+  } else {
+    pickerSection.classList.remove('hidden');
+    picker.innerHTML = '';
+    for (const emoji of STICKER_EMOJIS) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'sticker-btn' + (myToThem.includes(emoji) ? ' on' : '');
+      b.textContent = emoji;
+      b.onclick = async () => {
+        await toggleSticker(m.id, emoji, b);
+      };
+      picker.appendChild(b);
+    }
+  }
+
+  if (received.length) {
+    recvWrap.classList.remove('hidden');
+    recvList.innerHTML = '';
+    // emoji 별 집계
+    const byEmoji = new Map();
+    for (const s of received) {
+      const arr = byEmoji.get(s.emoji) || [];
+      arr.push(s.sender_name);
+      byEmoji.set(s.emoji, arr);
+    }
+    for (const [emoji, senders] of byEmoji) {
+      const d = document.createElement('div');
+      d.className = 'sticker-received-item';
+      d.innerHTML = `<span class="sticker-received-emoji">${emoji}</span><span class="sticker-received-names"></span>`;
+      d.querySelector('.sticker-received-names').textContent = senders.join(', ') + '님';
+      recvList.appendChild(d);
+    }
+  } else {
+    recvWrap.classList.add('hidden');
+  }
+}
 
 // ---------- 빠른 연락처 ----------
 async function loadEmergencyContacts() {
@@ -597,6 +685,8 @@ function relativeTime(dateStr) {
 let FAMILY_CACHE = [];
 let ZODIAC_CACHE = [];
 let QUESTION_ANSWERERS_CACHE = [];
+let STICKERS_CACHE = [];
+const STICKER_EMOJIS = ['❤️','👍','🌸','☕','💪','🥰','✨','🎉'];
 
 async function loadFamilySummary() {
   try {
@@ -624,7 +714,9 @@ async function loadFamilySummary() {
   } catch {}
 }
 
+let CURRENT_PROFILE_USER = null;
 function openProfileSheet(m) {
+  CURRENT_PROFILE_USER = m;
   const age = koreanAge(m.birthYear, m.birthMonth, m.birthDay);
   $('profAvatar').textContent = iconEmoji(m.icon);
   $('profName').textContent = m.displayName + (m.id === ME.id ? ' (나)' : '');
@@ -670,11 +762,15 @@ function openProfileSheet(m) {
     callBtn.classList.add('hidden');
   }
 
+  // 응원 스티커 섹션
+  updateProfileStickerSections(m);
+
   $('profileSheet').classList.remove('hidden');
 }
 
 function closeProfileSheet() {
   $('profileSheet').classList.add('hidden');
+  CURRENT_PROFILE_USER = null;
 }
 
 // ---------- 생일 + 이번 주 기념일 ----------
@@ -1133,6 +1229,17 @@ function startMemoEdit(span, memo) {
     if (e.key === 'Escape') { input.value = memo.content; finish(false); }
   });
 }
+
+// 메모 템플릿
+document.querySelectorAll('.memo-template').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    const text = btn.dataset.text;
+    $('memoInput').value = text;
+    $('memoInput').focus();
+    const n = text.length;
+    $('memoInput').setSelectionRange(n, n);
+  });
+});
 
 // 메모 카테고리 빠른 입력
 document.querySelectorAll('.memo-cat').forEach((btn) => {
