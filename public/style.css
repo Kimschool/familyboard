@@ -3351,24 +3351,38 @@ body.reorder-mode #app #birthdayBanner { padding-top: 28px; }
 /* 화면 톤 테마 (계정 카드 버튼) */
 .theme-row {
   display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 0;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+  padding: 14px 0;
   margin-bottom: 8px;
   border-bottom: 1px solid var(--line);
 }
-.theme-buttons { display: flex; gap: 6px; margin-left: auto; }
+.theme-row .font-scale-label { font-weight: 700; }
+.theme-buttons {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
 .th-btn {
-  width: 40px; height: 40px;
-  border: 1.5px solid var(--line);
-  border-radius: 50%;
+  flex: 1 1 0;
+  min-width: 52px;
+  height: 56px;
+  border: 2px solid var(--line);
+  border-radius: 14px;
   background: var(--card);
-  font-size: 18px;
+  font-size: 26px;
   cursor: pointer;
   font-family: inherit;
-  transition: transform .12s;
+  transition: transform .12s, border-color .12s, background .12s;
+  color: var(--text);
 }
-.th-btn.active { border-color: var(--primary); transform: scale(1.1); box-shadow: 0 2px 8px rgba(10,132,255,.2); }
+.th-btn:active { transform: scale(.94); }
+.th-btn.active {
+  border-color: var(--primary);
+  background: rgba(10,132,255,.12);
+  box-shadow: 0 3px 12px rgba(10,132,255,.25);
+}
 
 /* ========== 색 테마 (scheme) 수동 오버라이드 ========== */
 /* @media (prefers-color-scheme: dark) 보다 specificity 높아 덮어씀 */
@@ -3909,3 +3923,66 @@ body.reorder-mode .quick-memo-fab { display: none; }
 /* ========== Footer ========== */
 .foot { text-align: center; padding: 12px 0 10px; }
 .foot-ver { margin: 0; color: var(--sub); font-size: 12px; }
+
+/* ==========================================================
+   수동 테마 강제 오버라이드
+   시스템 @media (prefers-color-scheme: dark) 가 이미 많은
+   컴포넌트에 dark gradient 를 걸어두는데, 사용자가 수동으로
+   테마를 선택하면 이 규칙들이 무시되어야 한다.
+   아래 블록이 body/card/text 등을 --bg/--card/--text 변수로
+   덮어쓰면서 수동 선택이 일관되게 반영되도록 한다.
+========================================================== */
+html[data-scheme] body,
+html[data-scheme] .card,
+html[data-scheme] .hero,
+html[data-scheme] .banner,
+html[data-scheme] .sheet,
+html[data-scheme] .auth-inner {
+  background-image: none !important;
+}
+
+html[data-scheme="dark"] body,
+html[data-scheme="darkgray"] body,
+html[data-scheme="hc"] body {
+  background: var(--bg) !important;
+  color: var(--text) !important;
+}
+
+html[data-scheme="light"] body,
+html[data-scheme="sepia"] body,
+html[data-scheme="kid"] body {
+  background: var(--bg) !important;
+  color: var(--text) !important;
+}
+
+/* 카드 배경은 variable 로 통일 */
+html[data-scheme] .card {
+  background-color: var(--card) !important;
+}
+html[data-scheme] .family-card { background: linear-gradient(135deg, color-mix(in srgb, var(--card) 60%, #FFE8EC), var(--card)) !important; }
+html[data-scheme] .mood-card { background: linear-gradient(135deg, color-mix(in srgb, var(--card) 70%, #E8F4FF), var(--card)) !important; }
+html[data-scheme] .sos-card { background: linear-gradient(135deg, color-mix(in srgb, var(--card) 70%, #FFF0F0), var(--card)) !important; }
+html[data-scheme] .notice-card { background: linear-gradient(135deg, color-mix(in srgb, var(--card) 55%, #FFF9DB), var(--card)) !important; }
+html[data-scheme] .question-card { background: linear-gradient(135deg, color-mix(in srgb, var(--card) 70%, #FFF4E5), var(--card)) !important; }
+html[data-scheme] .reveal-card { background: linear-gradient(135deg, color-mix(in srgb, var(--card) 70%, #E6F7FF), var(--card)) !important; }
+html[data-scheme] .upcoming-card { background: linear-gradient(135deg, color-mix(in srgb, var(--card) 70%, #E6F3FF), var(--card)) !important; }
+html[data-scheme] .stickers-card { background: linear-gradient(135deg, color-mix(in srgb, var(--card) 70%, #FFF0F5), var(--card)) !important; }
+html[data-scheme] .meds-card { background: linear-gradient(135deg, color-mix(in srgb, var(--card) 70%, #E8F8EE), var(--card)) !important; }
+html[data-scheme] .weekly-card { background: linear-gradient(135deg, color-mix(in srgb, var(--card) 70%, #F2F7FF), var(--card)) !important; }
+html[data-scheme] .events-card { background: linear-gradient(135deg, color-mix(in srgb, var(--card) 70%, #E6F9FF), var(--card)) !important; }
+html[data-scheme] .daily-quote-card { background: linear-gradient(135deg, color-mix(in srgb, var(--card) 70%, #F4FFEB), var(--card)) !important; }
+html[data-scheme] .poll-card { background: linear-gradient(135deg, color-mix(in srgb, var(--card) 70%, #FFF8E8), var(--card)) !important; }
+
+/* hero 는 그라데이션 없애고 투명하게 (테마에 그대로 녹아들게) */
+html[data-scheme] .hero { background: transparent !important; }
+html[data-scheme] .hero-avatar { background: var(--card) !important; }
+
+/* 다크 계열에서 밝은 그라데이션 보조 (채도 낮춤) */
+html[data-scheme="dark"] .card,
+html[data-scheme="darkgray"] .card { background-image: none !important; }
+
+/* 어린이 모드 전용 느낌 */
+html[data-scheme="kid"] .card {
+  background: var(--card) !important;
+  border: 2px solid #FFE4B5;
+}

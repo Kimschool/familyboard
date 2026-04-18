@@ -303,9 +303,7 @@ function enterApp() {
   setupTtsAuto();
   setupTtsRate();
   loadPoll();
-  loadDiary();
   loadEvents();
-  loadMissions();
 
   // 관리자 UI — 설정 화면으로 이동 (계정 카드의 '가족 관리' 버튼으로 열림)
   try {
@@ -3707,10 +3705,9 @@ $('streakSheet').addEventListener('click', (e) => {
 $('questionSubmit').addEventListener('click', async () => {
   const a = $('questionAnswer').value.trim();
   if (!a) { alert('답변을 적어 주세요'); return; }
-  const imageUrl = $('questionImageUrl')?.value.trim() || null;
   try {
     await api('/api/question/today/answer', {
-      method: 'POST', body: JSON.stringify({ answer: a, imageUrl }),
+      method: 'POST', body: JSON.stringify({ answer: a }),
     });
     $('questionSubmit').textContent = '저장됐어요';
     setTimeout(() => $('questionSubmit').textContent = '답변 수정', 1500);

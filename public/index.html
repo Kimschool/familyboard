@@ -365,10 +365,6 @@
     <p class="question-text" id="questionText">—</p>
     <div class="question-input-wrap">
       <textarea id="questionAnswer" class="question-input" placeholder="답변을 적어 주세요&#10;가족에겐 내일 공개돼요"></textarea>
-    <details class="q-image-details">
-      <summary>🖼️ 답변과 함께 사진 붙이기 (선택)</summary>
-      <input id="questionImageUrl" class="ufi" type="url" placeholder="사진 URL (https://...)" style="margin-top:6px" />
-    </details>
     </div>
     <div class="question-actions-row">
       <button id="questionSubmit" type="button" class="question-submit">답변 저장</button>
@@ -465,12 +461,6 @@
       <button class="sheet-close" id="myProfileClose">취소</button>
     </div>
   </div>
-
-  <!-- 주간 미션 -->
-  <section class="card missions-card hidden" data-card-id="missions" id="missionsCard">
-    <p class="card-title">🎯 이번 주 미션</p>
-    <ul class="missions-list" id="missionsList"></ul>
-  </section>
 
   <!-- 질문 제안 바텀시트 -->
   <div id="suggestSheet" class="sheet-backdrop hidden" role="dialog">
@@ -832,28 +822,6 @@
       <button id="medAddBtn" type="button" class="user-add">추가</button>
     </div>
   </section>
-
-  <!-- 내 일기 (본인만 보기) -->
-  <section class="card diary-card" data-card-id="diary" id="diaryCard">
-    <div class="card-head-row">
-      <p class="card-title">📔 오늘의 내 일기 <span class="diary-private">🔒 나만 보기</span></p>
-      <span class="diary-streak hidden" id="diaryStreak"></span>
-      <button id="diaryHistBtn" type="button" class="med-mgr-btn">과거 기록</button>
-    </div>
-    <textarea id="diaryInput" class="question-input" maxlength="500" placeholder="오늘 하루 어땠어요? 짧게 남겨보세요"></textarea>
-    <button id="diarySave" type="button" class="question-submit">저장</button>
-    <p class="diary-meta" id="diaryMeta"></p>
-  </section>
-
-  <!-- 일기 과거 기록 시트 -->
-  <div id="diaryHistSheet" class="sheet-backdrop hidden" role="dialog">
-    <div class="sheet sheet-tall" role="document">
-      <div class="sheet-handle"></div>
-      <h2 class="sheet-title">📔 지난 일기</h2>
-      <ul class="diary-hist-list" id="diaryHistList"></ul>
-      <button class="sheet-close" id="diaryHistClose">닫기</button>
-    </div>
-  </div>
 
   <!-- 시간별 상세 시트 -->
   <div id="hourlySheet" class="sheet-backdrop hidden" role="dialog">
