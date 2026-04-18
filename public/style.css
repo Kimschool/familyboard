@@ -251,6 +251,14 @@ body.tod-night .hero-date, body.tod-night .hero-greeting { color: #F2F2F7; }
   line-height: 1.2;
   word-break: keep-all;
 }
+.hero-weather {
+  margin: 6px 0 0;
+  font-size: 15px;
+  color: var(--sub);
+  font-weight: 500;
+  word-break: keep-all;
+}
+body.tod-night .hero-weather { color: rgba(242,242,247,.8); }
 
 /* ========== 우리 가족 요약 (뱃지) ========== */
 .family-card { background: linear-gradient(135deg, #FFF7E6 0%, #FFE8EC 100%); }
@@ -427,6 +435,29 @@ body.tod-night .hero-date, body.tod-night .hero-greeting { color: #F2F2F7; }
   background: var(--bg); border-radius: 999px; padding: 3px 10px;
 }
 .zodiac-fortune { font-size: 17px; color: var(--text); margin-top: 6px; line-height: 1.5; }
+.zodiac-lucky {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+.lucky-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  color: var(--sub);
+  background: var(--bg);
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-weight: 600;
+}
+.lucky-dot {
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px rgba(0,0,0,.05);
+  display: inline-block;
+}
 
 /* ========== 환율 ========== */
 .fx-list { list-style: none; margin: 0; padding: 0; }
@@ -518,6 +549,7 @@ body.tod-night .hero-date, body.tod-night .hero-greeting { color: #F2F2F7; }
   margin-top: 6px;
   font-size: 13px;
   color: var(--sub);
+  flex-wrap: wrap;
 }
 .memo-author-avatar {
   width: 24px; height: 24px;
@@ -528,6 +560,14 @@ body.tod-night .hero-date, body.tod-night .hero-greeting { color: #F2F2F7; }
   flex-shrink: 0;
 }
 .memo-author-name { font-weight: 600; color: var(--text); }
+.memo-time {
+  color: var(--sub);
+  font-size: 12px;
+  padding-left: 4px;
+  border-left: 1px solid var(--line);
+  margin-left: 4px;
+}
+.memo-time:empty { display: none; }
 .memo-del {
   background: none; border: none; color: var(--sub);
   font-size: 18px; padding: 6px 4px; cursor: pointer;

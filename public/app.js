@@ -288,6 +288,19 @@ function renderHero() {
   document.body.classList.add('tod-' + tod);
 }
 
+function updateHeroWeather(w) {
+  const el = $('heroWeather');
+  if (!el || !w) return;
+  const tag = w.temp <= 5 ? '추운'
+    : w.temp <= 12 ? '쌀쌀한'
+    : w.temp <= 20 ? '선선한'
+    : w.temp <= 26 ? '따뜻한' : '더운';
+  const icon = WMO_ICON[w.code] || '🌤️';
+  const rain = w.rainProb >= 60 ? ' · 비 확률 높음' : '';
+  el.textContent = `${icon} ${tag} ${w.temp}°, ${WMO[w.code] || ''}${rain}`;
+  el.classList.remove('hidden');
+}
+
 function renderAccount() {
   $('accountAvatar').textContent = iconEmoji(ME.icon);
   $('accountName').textContent = `${ME.displayName}님으로 로그인 중`;
@@ -305,6 +318,17 @@ $('logoutBtn').addEventListener('click', async () => {
 function koreanAge(birthYear) {
   if (!birthYear) return null;
   return new Date().getFullYear() - Number(birthYear) + 1;
+}
+
+function relativeTime(dateStr) {
+  const d = new Date(dateStr);
+  const now = new Date();
+  const diffSec = Math.floor((now - d) / 1000);
+  if (diffSec < 60)      return '방금';
+  if (diffSec < 3600)    return `${Math.floor(diffSec / 60)}분 전`;
+  if (diffSec < 86400)   return `${Math.floor(diffSec / 3600)}시간 전`;
+  if (diffSec < 604800)  return `${Math.floor(diffSec / 86400)}일 전`;
+  return `${d.getMonth() + 1}월 ${d.getDate()}일`;
 }
 
 async function loadFamilySummary() {
@@ -387,6 +411,7 @@ async function loadWeatherAndAir() {
     $('wMin').textContent  = `${w.min}°`;
     $('wFeel').textContent = `${w.feels}°`;
     $('wHum').textContent  = `${w.humidity}%`;
+    updateHeroWeather(w);
   } else {
     $('wDesc').textContent = '날씨 정보를 잠시 후 다시 시도해요';
   }
@@ -507,6 +532,7 @@ function renderMemos(list) {
         <span class="memo-author">
           <span class="memo-author-avatar"></span>
           <span class="memo-author-name"></span>
+          <span class="memo-time"></span>
         </span>
       </div>
       <button class="memo-del" aria-label="삭제">✕</button>`;
@@ -515,7 +541,11 @@ function renderMemos(list) {
       li.querySelector('.memo-author-avatar').textContent = iconEmoji(m.created_by_icon);
       li.querySelector('.memo-author-name').textContent = m.created_by_name;
     } else {
-      li.querySelector('.memo-author').style.display = 'none';
+      li.querySelector('.memo-author-avatar').style.display = 'none';
+      li.querySelector('.memo-author-name').style.display = 'none';
+    }
+    if (m.created_at) {
+      li.querySelector('.memo-time').textContent = relativeTime(m.created_at);
     }
     li.querySelector('.memo-check').onclick = async () => {
       await api(`/api/memos/${m.id}`, { method: 'PATCH', body: JSON.stringify({ done: !m.done }) });
@@ -537,6 +567,23 @@ $('memoForm').addEventListener('submit', async (e) => {
 });
 
 // ---------- 띠별 운세 ----------
+const LUCKY_COLORS = [
+  { name: '파랑',   hex: '#0A84FF' },
+  { name: '초록',   hex: '#34C759' },
+  { name: '빨강',   hex: '#FF3B30' },
+  { name: '노랑',   hex: '#FFCC00' },
+  { name: '분홍',   hex: '#FF69B4' },
+  { name: '보라',   hex: '#AF52DE' },
+  { name: '주황',   hex: '#FF9500' },
+  { name: '하늘색', hex: '#64D2FF' },
+  { name: '남색',   hex: '#1D3557' },
+  { name: '금색',   hex: '#D4AF37' },
+];
+const LUCKY_DIR = ['동쪽','동남쪽','남쪽','서남쪽','서쪽','서북쪽','북쪽','동북쪽'];
+function dayOfYearClient(d = new Date()) {
+  return Math.floor((d - new Date(d.getFullYear(), 0, 0)) / 86400000);
+}
+
 async function loadZodiac() {
   try {
     const list = await api('/api/zodiac');
@@ -549,7 +596,12 @@ async function loadZodiac() {
       </li>`;
       return;
     }
+    const doy = dayOfYearClient();
     for (const z of list) {
+      const seed = doy + (z.year || 0);
+      const color = LUCKY_COLORS[seed % LUCKY_COLORS.length];
+      const dir   = LUCKY_DIR[seed % LUCKY_DIR.length];
+      const num   = (seed % 9) + 1;
       const li = document.createElement('li');
       li.innerHTML = `
         <span class="zodiac-emoji">${iconEmoji(z.icon)}</span>
@@ -559,6 +611,11 @@ async function loadZodiac() {
             <span class="zodiac-tag"></span>
           </div>
           <div class="zodiac-fortune"></div>
+          <div class="zodiac-lucky">
+            <span class="lucky-chip"><span class="lucky-dot" style="background:${color.hex}"></span>${color.name}</span>
+            <span class="lucky-chip">🧭 ${dir}</span>
+            <span class="lucky-chip">🔢 ${num}</span>
+          </div>
         </div>`;
       li.querySelector('.zodiac-name').textContent = z.name;
       li.querySelector('.zodiac-tag').textContent = `${z.zodiac}띠`;
