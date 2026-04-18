@@ -3139,15 +3139,24 @@ $('settingsBack').addEventListener('click', () => { showOnly('app'); });
 
 // ---------- 카드 순서 편집 ----------
 const DEFAULT_CARD_ORDER = [
-  'notice','upcoming','family','birthday','weather','tips',
-  'reveal','question','zodiac','fx','calc','memo','account'
+  'notice','upcoming','family','chat','birthday','weather','tips',
+  'reveal','gallery','question','zodiac','fx','calc','memo','account'
 ];
 function loadCardOrder() {
   try {
     const saved = JSON.parse(localStorage.getItem('fb_card_order') || 'null');
     if (!Array.isArray(saved)) return DEFAULT_CARD_ORDER.slice();
-    // 누락된 카드 뒤에 추가
-    for (const k of DEFAULT_CARD_ORDER) if (!saved.includes(k)) saved.push(k);
+    // 누락된 신규 카드는 기본 순서상 앞 이웃 뒤에 끼워 넣음 (뒤에 뭉쳐 붙지 않게)
+    for (let i = 0; i < DEFAULT_CARD_ORDER.length; i++) {
+      const k = DEFAULT_CARD_ORDER[i];
+      if (saved.includes(k)) continue;
+      let insertAt = saved.length;
+      for (let j = i - 1; j >= 0; j--) {
+        const prevIdx = saved.indexOf(DEFAULT_CARD_ORDER[j]);
+        if (prevIdx >= 0) { insertAt = prevIdx + 1; break; }
+      }
+      saved.splice(insertAt, 0, k);
+    }
     return saved;
   } catch { return DEFAULT_CARD_ORDER.slice(); }
 }
