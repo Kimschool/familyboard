@@ -4502,18 +4502,25 @@ body.reorder-mode .quick-memo-fab { display: none; }
   position: fixed;
   right: 18px;
   bottom: calc(18px + env(safe-area-inset-bottom));
-  width: 54px; height: 54px;
+  width: 48px; height: 48px;
   border-radius: 50%;
-  border: none;
-  background: var(--primary);
-  color: #fff;
-  font-size: 24px;
-  font-weight: 800;
+  border: 1px solid var(--line);
+  background: var(--card);
+  color: var(--sub);
+  font-size: 22px;
+  font-weight: 700;
   cursor: pointer;
-  box-shadow: 0 4px 16px rgba(10,132,255,.35);
+  box-shadow: 0 2px 8px rgba(0,0,0,.08);
   z-index: 900;
-  transition: opacity .25s, transform .2s;
+  transition: opacity .25s, transform .2s, color .15s, box-shadow .15s;
+  opacity: .85;
+  -webkit-tap-highlight-color: transparent;
+}
+.to-top-fab:hover,
+.to-top-fab:focus-visible {
   opacity: 1;
+  color: var(--text);
+  box-shadow: 0 3px 12px rgba(0,0,0,.12);
 }
 .to-top-fab.hidden {
   display: flex !important;
