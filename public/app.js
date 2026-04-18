@@ -276,6 +276,7 @@ function enterApp() {
   loadMyStreak();
   loadMeds();
   loadWeeklyReport();
+  loadAnniversaries();
 
   // 관리자 UI — 설정 화면으로 이동 (계정 카드의 '가족 관리' 버튼으로 열림)
   try {
@@ -1222,10 +1223,18 @@ $('bdaySheet').addEventListener('click', (e) => {
   if (e.target.id === 'bdaySheet') $('bdaySheet').classList.add('hidden');
 });
 
+let ANNIV_CACHE = [];
 function renderUpcomingCard(r) {
   const list = [];
-  if (r.today) list.push({ ...r.today, daysLeft: 0 });
-  if (r.upcoming) list.push(...r.upcoming);
+  // 생일
+  if (r.today) list.push({ kind: 'birthday', ...r.today, daysLeft: 0 });
+  if (r.upcoming) list.push(...r.upcoming.map((u) => ({ kind: 'birthday', ...u })));
+  // 커스텀 기념일 (7일 이내만 여기서)
+  for (const a of (ANNIV_CACHE || [])) {
+    if (a.daysLeft <= 7) list.push({ kind: 'anniv', ...a });
+  }
+  list.sort((a, b) => (a.daysLeft || 0) - (b.daysLeft || 0));
+
   const card = $('upcomingCard');
   const ul = $('upcomingList');
   if (!list.length) { card.classList.add('hidden'); return; }
@@ -1235,19 +1244,78 @@ function renderUpcomingCard(r) {
     const dayLabel = u.daysLeft === 0 ? '오늘'
       : u.daysLeft === 1 ? '내일'
       : `${u.daysLeft}일 뒤`;
+    const emoji = u.kind === 'birthday' ? iconEmoji(u.icon) : (u.emoji || '🎈');
+    const name = u.kind === 'birthday' ? `${u.display_name}님` : u.title;
+    const dateLine = u.kind === 'birthday'
+      ? `${u.birth_month}월 ${u.birth_day}일${u.is_lunar ? ' (음력)' : ''} 생일`
+      : `${u.month}월 ${u.day}일${u.is_lunar ? ' (음력)' : ''}${u.year ? ' (' + (new Date().getFullYear() - u.year) + '주년)' : ''}`;
     li.innerHTML = `
-      <span class="up-emoji">${iconEmoji(u.icon)}</span>
+      <span class="up-emoji">${emoji}</span>
       <div class="up-body">
         <div class="up-name"></div>
-        <div class="up-date">${u.birth_month}월 ${u.birth_day}일${u.is_lunar ? ' (음력)' : ''} 생일</div>
+        <div class="up-date"></div>
       </div>
       <span class="up-days ${u.daysLeft === 0 ? 'today' : ''}"></span>`;
-    li.querySelector('.up-name').textContent = `${u.display_name}님`;
+    li.querySelector('.up-name').textContent = name;
+    li.querySelector('.up-date').textContent = dateLine;
     li.querySelector('.up-days').textContent = dayLabel;
     ul.appendChild(li);
   }
   card.classList.remove('hidden');
 }
+
+async function loadAnniversaries() {
+  try {
+    ANNIV_CACHE = await api('/api/anniversaries');
+    // 관리자 설정에도 반영
+    const listEl = $('annivList');
+    if (listEl) {
+      listEl.innerHTML = '';
+      if (!ANNIV_CACHE.length) {
+        listEl.innerHTML = '<li style="color:var(--sub);font-size:13px;padding:6px 0">등록된 기념일이 없어요</li>';
+      }
+      for (const a of ANNIV_CACHE) {
+        const li = document.createElement('li');
+        li.innerHTML = `
+          <span class="user-emoji">${a.emoji || '🎈'}</span>
+          <div class="user-main">
+            <div class="user-name"></div>
+            <div class="user-sub">${a.month}월 ${a.day}일${a.is_lunar ? ' 음력' : ''}${a.year ? ' · ' + a.year + '년' : ''}</div>
+          </div>
+          <button class="user-del" aria-label="삭제">✕</button>`;
+        li.querySelector('.user-name').textContent = a.title;
+        li.querySelector('.user-del').onclick = async () => {
+          if (!confirm(`"${a.title}" 기념일을 삭제할까요?`)) return;
+          await api(`/api/anniversaries/${a.id}`, { method: 'DELETE' });
+          loadAnniversaries();
+          loadBirthday();
+        };
+        listEl.appendChild(li);
+      }
+    }
+    loadBirthday(); // upcoming 갱신
+  } catch {}
+}
+
+document.addEventListener('click', async (e) => {
+  if (e.target && e.target.id === 'annivAddBtn') {
+    const body = {
+      title: $('annivTitle').value.trim(),
+      emoji: $('annivEmoji').value.trim() || '🎈',
+      month: $('annivMonth').value,
+      day: $('annivDay').value,
+      year: $('annivYear').value || null,
+      isLunar: $('annivLunar').checked,
+    };
+    if (!body.title || !body.month || !body.day) { alert('제목·월·일을 입력해 주세요'); return; }
+    try {
+      await api('/api/anniversaries', { method: 'POST', body: JSON.stringify(body) });
+      ['annivTitle','annivEmoji','annivYear','annivMonth','annivDay'].forEach((id) => $(id).value = '');
+      $('annivLunar').checked = false;
+      loadAnniversaries();
+    } catch { alert('추가 실패'); }
+  }
+});
 
 // ---------- 날씨 + 대기질 + 4가지 조언 ----------
 const WMO = {
@@ -1552,6 +1620,18 @@ function renderMemos(list) {
   const renderItem = (m, targetUl) => {
     const li = document.createElement('li');
     li.className = m.important ? 'memo-important' : '';
+    if (MEMO_BULK) {
+      li.classList.add('memo-bulk-item');
+      if (MEMO_BULK_SELECTED.has(m.id)) li.classList.add('selected');
+      li.addEventListener('click', (e) => {
+        // 내부 버튼 탭은 무시, 다른 곳 탭하면 선택 토글
+        if (e.target.tagName === 'BUTTON' || e.target.tagName === 'INPUT') return;
+        if (MEMO_BULK_SELECTED.has(m.id)) MEMO_BULK_SELECTED.delete(m.id);
+        else MEMO_BULK_SELECTED.add(m.id);
+        updateBulkUI();
+        li.classList.toggle('selected');
+      });
+    }
     li.innerHTML = `
       <button class="memo-check ${m.done ? 'done' : ''}" aria-label="완료"></button>
       <div class="memo-body">
@@ -1718,6 +1798,56 @@ document.querySelectorAll('.memo-cat').forEach((btn) => {
     const n = input.value.length;
     input.setSelectionRange(n, n);
   });
+});
+
+// 메모 다중 선택 모드
+let MEMO_BULK = false;
+const MEMO_BULK_SELECTED = new Set();
+
+function updateBulkUI() {
+  const bar = $('memoBulkBar');
+  const btn = $('memoBulkBtn');
+  if (!bar) return;
+  bar.classList.toggle('hidden', !MEMO_BULK);
+  document.body.classList.toggle('memo-bulk-mode', MEMO_BULK);
+  btn.textContent = MEMO_BULK ? '완료' : '☐☐';
+  btn.classList.toggle('active', MEMO_BULK);
+  $('memoBulkCount').textContent = `${MEMO_BULK_SELECTED.size}개 선택`;
+}
+$('memoBulkBtn').addEventListener('click', () => {
+  MEMO_BULK = !MEMO_BULK;
+  if (!MEMO_BULK) MEMO_BULK_SELECTED.clear();
+  updateBulkUI();
+  renderMemos(MEMO_CACHE);
+});
+$('memoBulkCancel').addEventListener('click', () => {
+  MEMO_BULK = false;
+  MEMO_BULK_SELECTED.clear();
+  updateBulkUI();
+  renderMemos(MEMO_CACHE);
+});
+$('memoBulkDone').addEventListener('click', async () => {
+  const ids = [...MEMO_BULK_SELECTED];
+  if (!ids.length) return;
+  for (const id of ids) {
+    await api(`/api/memos/${id}`, { method: 'PATCH', body: JSON.stringify({ done: true }) }).catch(() => {});
+  }
+  MEMO_BULK_SELECTED.clear();
+  MEMO_BULK = false;
+  updateBulkUI();
+  loadMemos();
+});
+$('memoBulkDel').addEventListener('click', async () => {
+  const ids = [...MEMO_BULK_SELECTED];
+  if (!ids.length) return;
+  if (!confirm(`선택한 ${ids.length}개 메모를 삭제할까요?`)) return;
+  for (const id of ids) {
+    await api(`/api/memos/${id}`, { method: 'DELETE' }).catch(() => {});
+  }
+  MEMO_BULK_SELECTED.clear();
+  MEMO_BULK = false;
+  updateBulkUI();
+  loadMemos();
 });
 
 $('memoDoneToggle').addEventListener('click', () => {

@@ -2490,6 +2490,67 @@ body.reorder-mode #app #birthdayBanner { padding-top: 28px; }
 .celebrate-text { font-size: 16px; font-weight: 700; color: #8A6B2E; }
 @media (prefers-color-scheme: dark) { .celebrate-text { color: #E9C97A; } }
 
+/* 메모 다중 선택 */
+.memo-bulk-btn {
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 4px 10px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+  cursor: pointer;
+  font-family: inherit;
+  height: 32px;
+}
+.memo-bulk-btn.active {
+  background: var(--primary);
+  color: #fff;
+  border-color: var(--primary);
+}
+.memo-bulk-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 12px;
+  background: rgba(10,132,255,.08);
+  border-radius: 10px;
+  margin: 8px 0;
+  flex-wrap: wrap;
+}
+.memo-bulk-count { flex: 1; font-size: 13px; font-weight: 700; color: var(--primary); }
+.memo-bulk-act {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 6px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  color: var(--text);
+}
+.memo-bulk-act.danger { color: var(--bad); }
+
+.memo-bulk-item {
+  cursor: pointer;
+  transition: background .12s;
+  border-radius: 8px;
+}
+.memo-bulk-item.selected {
+  background: rgba(10,132,255,.1);
+  outline: 2px solid var(--primary);
+  outline-offset: -2px;
+}
+
+/* 기념일 리스트 (설정) */
+.anniv-list { list-style: none; margin: 0 0 12px; padding: 0; }
+.anniv-list li {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 0; border-bottom: 1px solid var(--line);
+}
+.anniv-list li:last-child { border-bottom: none; }
+
 /* 메모 진행률 표시 */
 .memo-progress {
   font-size: 13px;

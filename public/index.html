@@ -496,12 +496,19 @@
     <div class="card-head-row">
       <p class="card-title">오늘의 메모</p>
       <span class="memo-progress" id="memoProgress"></span>
+      <button type="button" class="memo-bulk-btn" id="memoBulkBtn" aria-label="여러개 선택">☐☐</button>
       <select id="memoSort" class="memo-sort" aria-label="정렬">
         <option value="default">기본 순서</option>
         <option value="recent">최근 작성순</option>
         <option value="oldest">오래된 순</option>
         <option value="author">작성자별</option>
       </select>
+    </div>
+    <div class="memo-bulk-bar hidden" id="memoBulkBar">
+      <span class="memo-bulk-count" id="memoBulkCount">0개 선택</span>
+      <button type="button" class="memo-bulk-act" id="memoBulkDone">✓ 완료</button>
+      <button type="button" class="memo-bulk-act danger" id="memoBulkDel">✕ 삭제</button>
+      <button type="button" class="memo-bulk-act" id="memoBulkCancel">취소</button>
     </div>
     <div class="memo-celebrate hidden" id="memoCelebrate">
       <span class="celebrate-emoji">🎉</span>
@@ -574,6 +581,24 @@
       <div class="admin-section">
         <label class="admin-label">가족 구성원</label>
         <ul class="user-list" id="userList"></ul>
+      </div>
+
+      <div class="admin-section">
+        <label class="admin-label">🎈 가족 기념일 (결혼·이사 등)</label>
+        <ul class="anniv-list" id="annivList"></ul>
+        <div class="ufi-row">
+          <input id="annivTitle" class="ufi" type="text" placeholder="예: 결혼기념일" maxlength="100" />
+          <input id="annivEmoji" class="ufi-s" type="text" placeholder="💍" maxlength="4" style="flex:0 0 60px; text-align:center; font-size:22px" />
+        </div>
+        <div class="ufi-row" style="margin-top:8px">
+          <input id="annivYear"  class="ufi-s" type="number" placeholder="년도 (선택)" />
+          <input id="annivMonth" class="ufi-s" type="number" placeholder="월" min="1" max="12" />
+          <input id="annivDay"   class="ufi-s" type="number" placeholder="일" min="1" max="31" />
+        </div>
+        <label class="ufi-check">
+          <input id="annivLunar" type="checkbox" /> 음력
+        </label>
+        <button id="annivAddBtn" type="button" class="user-add">기념일 추가</button>
       </div>
 
       <div class="admin-section">

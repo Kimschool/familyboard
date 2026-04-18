@@ -1332,6 +1332,57 @@ app.delete('/api/birthday/:userId/message', requireAuth, async (req, res) => {
   res.json({ ok: true });
 });
 
+// ---------- 커스텀 기념일 ----------
+app.get('/api/anniversaries', requireAuth, async (req, res) => {
+  try {
+    const [rows] = await getPool().query(
+      `SELECT id, title, emoji, month, day, year, is_lunar
+         FROM anniversaries WHERE family_id = ?
+         ORDER BY month, day`,
+      [req.user.family_id]
+    );
+    const now = new Date();
+    const todayMid = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const list = rows.map((r) => {
+      let target = new Date(now.getFullYear(), r.month - 1, r.day);
+      if (target < todayMid) target = new Date(now.getFullYear() + 1, r.month - 1, r.day);
+      const daysLeft = Math.round((target - todayMid) / 86400000);
+      const years = r.year ? (now.getFullYear() - r.year + (target.getFullYear() > now.getFullYear() ? 0 : 0)) : null;
+      return { ...r, daysLeft, years };
+    });
+    res.json(list);
+  } catch (e) { res.status(500).json({ error: 'internal', message: e.message }); }
+});
+
+app.post('/api/anniversaries', requireAuth, async (req, res) => {
+  try {
+    const { title, emoji, month, day, year, isLunar } = req.body || {};
+    const t = (title || '').toString().trim().slice(0, 100);
+    const m = Number(month);
+    const d = Number(day);
+    if (!t) return res.status(400).json({ error: 'title-required' });
+    if (!(m >= 1 && m <= 12)) return res.status(400).json({ error: 'bad-month' });
+    if (!(d >= 1 && d <= 31)) return res.status(400).json({ error: 'bad-day' });
+    const [r] = await getPool().query(
+      `INSERT INTO anniversaries (family_id, title, emoji, month, day, year, is_lunar, created_by)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [req.user.family_id, t, (emoji || '🎈').toString().slice(0, 10), m, d,
+       year ? Number(year) : null, isLunar ? 1 : 0, req.user.id]
+    );
+    res.json({ ok: true, id: r.insertId });
+  } catch (e) { res.status(500).json({ error: 'internal', message: e.message }); }
+});
+
+app.delete('/api/anniversaries/:id', requireAuth, async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'bad-id' });
+  await getPool().query(
+    'DELETE FROM anniversaries WHERE id = ? AND family_id = ?',
+    [id, req.user.family_id]
+  );
+  res.json({ ok: true });
+});
+
 // ---------- 곧 다가오는 생일 ----------
 app.get('/api/birthdays/soon', requireAuth, async (req, res) => {
   const [rows] = await getPool().query(
