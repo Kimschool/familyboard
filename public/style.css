@@ -466,6 +466,117 @@ body.tod-night .hero-weather { color: rgba(242,242,247,.8); }
   font-weight: 600;
 }
 
+/* ========== 오늘의 응원 (홈 카드) ========== */
+.stickers-card {
+  background: linear-gradient(135deg, #FFF0F5 0%, #FFEDD8 100%);
+}
+@media (prefers-color-scheme: dark) {
+  .stickers-card { background: linear-gradient(135deg, #2A1F28 0%, #2A2319 100%); }
+}
+.stickers-card .card-title { color: #9A2E5A; }
+@media (prefers-color-scheme: dark) { .stickers-card .card-title { color: #E97AAA; } }
+.stickers-block { margin-top: 10px; }
+.stickers-block:first-of-type { margin-top: 0; }
+.stickers-label {
+  margin: 0 0 6px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--sub);
+  letter-spacing: 0.5px;
+}
+.stickers-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.sticker-home-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(255,255,255,.82);
+  padding: 7px 12px 7px 10px;
+  border-radius: 999px;
+  font-size: 14px;
+  color: var(--text);
+}
+@media (prefers-color-scheme: dark) {
+  .sticker-home-chip { background: rgba(255,255,255,.08); }
+}
+.sticker-home-chip.sent {
+  background: rgba(10, 132, 255, .14);
+}
+@media (prefers-color-scheme: dark) {
+  .sticker-home-chip.sent { background: rgba(10, 132, 255, .2); }
+}
+.sh-emoji { font-size: 20px; line-height: 1; }
+.sh-from { font-weight: 600; font-size: 13px; }
+.sh-to-icon { font-size: 18px; line-height: 1; }
+.sh-to-name { font-weight: 700; font-size: 13px; }
+
+/* ========== PWA 설치 배너 ========== */
+.install-banner {
+  position: fixed;
+  left: 12px; right: 12px;
+  bottom: calc(12px + env(safe-area-inset-bottom));
+  background: var(--card);
+  border: 1.5px solid var(--line);
+  border-radius: 16px;
+  padding: 14px 14px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  box-shadow: 0 8px 32px rgba(0,0,0,.18);
+  z-index: 950;
+  max-width: 560px;
+  margin: 0 auto;
+  animation: install-up .4s cubic-bezier(.22,.61,.36,1);
+}
+@keyframes install-up {
+  from { transform: translateY(120%); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+.install-emoji { font-size: 32px; line-height: 1; flex-shrink: 0; }
+.install-body { flex: 1; min-width: 0; }
+.install-title { font-size: 15px; font-weight: 700; }
+.install-sub { font-size: 12px; color: var(--sub); margin-top: 2px; }
+.install-btn {
+  background: var(--primary);
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: inherit;
+  flex-shrink: 0;
+}
+.install-close {
+  background: none; border: none;
+  color: var(--sub);
+  font-size: 16px;
+  cursor: pointer;
+  padding: 6px 4px;
+  flex-shrink: 0;
+}
+
+/* 답변 저장 완료 배지 + 힌트 */
+.done-badge {
+  background: var(--good);
+  color: #fff;
+  border-radius: 999px;
+  padding: 4px 12px;
+  font-size: 12px;
+  font-weight: 700;
+}
+.question-hint {
+  margin: 10px 0 0;
+  font-size: 13px;
+  color: var(--sub);
+  text-align: center;
+  font-style: italic;
+}
+
 /* ========== 빠른 연락처 (SOS) ========== */
 .sos-card { background: linear-gradient(135deg, #FFF0F0 0%, #FFE7D6 100%); }
 @media (prefers-color-scheme: dark) {

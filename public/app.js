@@ -383,7 +383,61 @@ $('logoutBtn').addEventListener('click', async () => {
 async function loadStickers() {
   try {
     STICKERS_CACHE = await api('/api/stickers/today');
+    renderStickerCard();
   } catch { STICKERS_CACHE = []; }
+}
+
+function renderStickerCard() {
+  const card = $('stickersCard');
+  if (!card || !ME) return;
+  const received = STICKERS_CACHE.filter((s) => s.receiver_id === ME.id);
+  const sent = STICKERS_CACHE.filter((s) => s.sender_id === ME.id);
+
+  const recvBlock = $('stickersReceivedBlock');
+  const recvRow = $('stickersReceivedRow');
+  recvRow.innerHTML = '';
+  if (received.length) {
+    // 이모지 별 집계
+    const byEmoji = new Map();
+    for (const s of received) {
+      const arr = byEmoji.get(s.emoji) || [];
+      arr.push({ name: s.sender_name, icon: s.sender_icon });
+      byEmoji.set(s.emoji, arr);
+    }
+    for (const [emoji, senders] of byEmoji) {
+      const chip = document.createElement('div');
+      chip.className = 'sticker-home-chip';
+      chip.innerHTML = `
+        <span class="sh-emoji">${emoji}</span>
+        <span class="sh-from"></span>`;
+      chip.querySelector('.sh-from').textContent = senders.map((x) => x.name).join(', ');
+      recvRow.appendChild(chip);
+    }
+    recvBlock.classList.remove('hidden');
+  } else {
+    recvBlock.classList.add('hidden');
+  }
+
+  const sentBlock = $('stickersSentBlock');
+  const sentRow = $('stickersSentRow');
+  sentRow.innerHTML = '';
+  if (sent.length) {
+    for (const s of sent) {
+      const chip = document.createElement('div');
+      chip.className = 'sticker-home-chip sent';
+      chip.innerHTML = `
+        <span class="sh-to-icon">${iconEmoji(s.receiver_icon)}</span>
+        <span class="sh-to-name"></span>
+        <span class="sh-emoji">${s.emoji}</span>`;
+      chip.querySelector('.sh-to-name').textContent = s.receiver_name;
+      sentRow.appendChild(chip);
+    }
+    sentBlock.classList.remove('hidden');
+  } else {
+    sentBlock.classList.add('hidden');
+  }
+
+  card.classList.toggle('hidden', received.length === 0 && sent.length === 0);
 }
 
 function toggleSticker(receiverId, emoji, btn) {
@@ -396,6 +450,7 @@ function toggleSticker(receiverId, emoji, btn) {
     if (btn) btn.classList.toggle('on', r.sent);
     // 프로필 시트에 받은 스티커 섹션 갱신
     if (CURRENT_PROFILE_USER) updateProfileStickerSections(CURRENT_PROFILE_USER);
+    renderStickerCard();
     return r;
   });
 }
@@ -1784,8 +1839,12 @@ async function loadTodayQuestion() {
     $('questionAnswer').value = q.myAnswer || '';
     $('questionMeta').textContent =
       `${q.answeredCount} / ${q.memberCount}명이 답했어요 · 모든 답변은 내일 공개돼요`;
-    // 답변 미완료 배지
-    $('qPendingBadge').classList.toggle('hidden', !!q.myAnswer);
+    // 답변 미완료 배지 + 완료 배지 + 힌트 + 버튼 문구
+    const hasAnswer = !!q.myAnswer;
+    $('qPendingBadge').classList.toggle('hidden', hasAnswer);
+    $('qDoneBadge').classList.toggle('hidden', !hasAnswer);
+    $('qHint').classList.toggle('hidden', !hasAnswer);
+    $('questionSubmit').textContent = hasAnswer ? '답변 수정' : '답변 저장';
 
     // 참여 아바타 — 답한 사람만 컬러, 아직 안 한 사람은 회색
     QUESTION_ANSWERERS_CACHE = q.answerers || [];
@@ -2003,6 +2062,63 @@ document.querySelectorAll('.fs-btn').forEach((b) => {
 });
 // 초기값 로드 (enterApp 후 적용되도록 setTimeout)
 setTimeout(() => applyFontScale(localStorage.getItem('fb_font_scale') || 'md'), 0);
+
+// ---------- PWA 설치 배너 ----------
+(function () {
+  const banner = document.getElementById('installBanner');
+  const btn = document.getElementById('installBtn');
+  const closeBtn = document.getElementById('installClose');
+  const sub = document.getElementById('installSub');
+  if (!banner || !btn) return;
+
+  let deferredPrompt = null;
+  const DISMISS_KEY = 'fb_install_dismissed';
+  const dismissed = localStorage.getItem(DISMISS_KEY);
+  if (dismissed) return;
+
+  closeBtn.addEventListener('click', () => {
+    banner.classList.add('hidden');
+    localStorage.setItem(DISMISS_KEY, '1');
+  });
+
+  // 이미 홈화면에 추가된 경우 감지
+  if (window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone) {
+    return;
+  }
+
+  // Chrome / Edge / Android
+  window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    deferredPrompt = e;
+    btn.textContent = '설치';
+    sub.textContent = '앱처럼 바로 열 수 있어요';
+    setTimeout(() => banner.classList.remove('hidden'), 3000);
+  });
+
+  btn.addEventListener('click', async () => {
+    if (deferredPrompt) {
+      deferredPrompt.prompt();
+      const res = await deferredPrompt.userChoice;
+      deferredPrompt = null;
+      if (res.outcome === 'accepted') banner.classList.add('hidden');
+      localStorage.setItem(DISMISS_KEY, '1');
+    } else {
+      // iOS 안내
+      alert('사파리 하단의 "공유" → "홈 화면에 추가" 를 눌러 주세요.');
+      localStorage.setItem(DISMISS_KEY, '1');
+      banner.classList.add('hidden');
+    }
+  });
+
+  // iOS Safari (no beforeinstallprompt)
+  const isIos = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+  const isStandalone = window.navigator.standalone;
+  if (isIos && !isStandalone) {
+    btn.textContent = '안내 보기';
+    sub.textContent = 'iPhone은 공유 버튼에서 추가할 수 있어요';
+    setTimeout(() => banner.classList.remove('hidden'), 4000);
+  }
+})();
 
 // ---------- 맨 위로 FAB ----------
 const toTop = document.getElementById('toTopFab');

@@ -245,12 +245,14 @@
     <div class="card-head-row">
       <p class="card-title">오늘의 가족 질문</p>
       <span class="pending-badge hidden" id="qPendingBadge">아직 답변 전</span>
+      <span class="done-badge hidden" id="qDoneBadge">✓ 저장됨</span>
     </div>
     <p class="question-text" id="questionText">—</p>
     <textarea id="questionAnswer" class="question-input" placeholder="답변을 적어 주세요 (가족에겐 내일 공개돼요)"></textarea>
     <button id="questionSubmit" type="button" class="question-submit">답변 저장</button>
     <div class="question-participants" id="questionParticipants"></div>
     <p class="question-meta" id="questionMeta"></p>
+    <p class="question-hint hidden" id="qHint">내 답변은 언제든 수정할 수 있어요. 가족에겐 <b>내일</b> 공개돼요.</p>
     <div class="question-actions">
       <button id="qHistoryBtn" type="button" class="question-action-btn">지난 질문 모아보기</button>
     </div>
@@ -520,6 +522,19 @@
     </div>
   </section>
 
+  <!-- 오늘 받은·보낸 응원 -->
+  <section class="card stickers-card hidden" data-card-id="stickers" id="stickersCard">
+    <p class="card-title">오늘의 응원</p>
+    <div class="stickers-block hidden" id="stickersReceivedBlock">
+      <p class="stickers-label">받은 응원</p>
+      <div class="stickers-row" id="stickersReceivedRow"></div>
+    </div>
+    <div class="stickers-block hidden" id="stickersSentBlock">
+      <p class="stickers-label">내가 보낸 응원</p>
+      <div class="stickers-row" id="stickersSentRow"></div>
+    </div>
+  </section>
+
   <!-- 응급 연락처 -->
   <section class="card sos-card hidden" data-card-id="sos" id="sosCard">
     <p class="card-title">📞 빠른 연락처</p>
@@ -554,6 +569,17 @@
     <p class="foot-ver">familyboard · 부모님을 위한 하루 안내</p>
   </footer>
 </main>
+
+<!-- PWA 설치 배너 -->
+<div id="installBanner" class="install-banner hidden">
+  <span class="install-emoji">📲</span>
+  <div class="install-body">
+    <div class="install-title">홈 화면에 추가하기</div>
+    <div class="install-sub" id="installSub">앱처럼 바로 열 수 있어요</div>
+  </div>
+  <button id="installBtn" class="install-btn">설치</button>
+  <button id="installClose" class="install-close" aria-label="닫기">✕</button>
+</div>
 
 <!-- 맨 위로 가기 FAB -->
 <button id="toTopFab" class="to-top-fab hidden" aria-label="맨 위로">↑</button>
