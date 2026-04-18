@@ -325,9 +325,26 @@ function renderHeroSummary() {
     tone: myAnswered ? 'good' : 'warn',
   });
 
+  // 내 스트릭
+  if (window._STREAK?.myStreak >= 3) {
+    chips.push({ emoji: '🔥', text: `${window._STREAK.myStreak}일 연속`, target: 'question', tone: 'hot' });
+  }
+
+  // 받은 응원 개수
+  const recvStickers = (STICKERS_CACHE || []).filter((s) => s.receiver_id === ME.id).length;
+  if (recvStickers > 0) {
+    chips.push({ emoji: '💖', text: `응원 ${recvStickers}개`, target: 'stickers', tone: 'good' });
+  }
+
   // 공지 유무
   if (!$('noticeCard').classList.contains('hidden')) {
-    chips.push({ emoji: '📌', text: '가족 공지', target: 'notice' });
+    const hasNew = !$('noticeNewBadge').classList.contains('hidden');
+    chips.push({
+      emoji: '📌',
+      text: hasNew ? '새 공지' : '가족 공지',
+      target: 'notice',
+      tone: hasNew ? 'warn' : undefined,
+    });
   }
 
   el.innerHTML = '';
@@ -714,6 +731,69 @@ function renderMoodFamily(members) {
   }
 }
 
+// ---------- 월간 가족 달력 ----------
+let CAL_VIEW = new Date();
+CAL_VIEW.setDate(1);
+
+function renderCalendar() {
+  const grid = $('calGrid');
+  const title = $('calTitle');
+  if (!grid || !title) return;
+  const y = CAL_VIEW.getFullYear();
+  const m = CAL_VIEW.getMonth();
+  title.textContent = `${y}년 ${m + 1}월`;
+
+  // 이번 달 생일 맵: "m-d" -> [{name, icon}, ...]
+  const birthdayMap = new Map();
+  for (const mem of (FAMILY_CACHE || [])) {
+    if (mem.birthMonth == null || mem.birthDay == null) continue;
+    if (mem.birthMonth !== m + 1) continue;
+    const key = mem.birthDay;
+    const arr = birthdayMap.get(key) || [];
+    arr.push(mem);
+    birthdayMap.set(key, arr);
+  }
+
+  const first = new Date(y, m, 1);
+  const lastDay = new Date(y, m + 1, 0).getDate();
+  const startWeekday = first.getDay(); // 0=일
+
+  const today = new Date();
+  const todayY = today.getFullYear();
+  const todayM = today.getMonth();
+  const todayD = today.getDate();
+
+  grid.innerHTML = '';
+  // 앞 빈칸
+  for (let i = 0; i < startWeekday; i++) {
+    const cell = document.createElement('div');
+    cell.className = 'cal-cell empty';
+    grid.appendChild(cell);
+  }
+  for (let d = 1; d <= lastDay; d++) {
+    const cell = document.createElement('div');
+    cell.className = 'cal-cell';
+    const isToday = (y === todayY && m === todayM && d === todayD);
+    const bdPeople = birthdayMap.get(d);
+    if (isToday) cell.classList.add('is-today');
+    if (bdPeople) cell.classList.add('is-birthday');
+    cell.innerHTML = `
+      <span class="cal-day">${d}</span>
+      ${bdPeople ? `<span class="cal-bd">${bdPeople.slice(0,3).map((p) => iconEmoji(p.icon)).join('')}</span>` : ''}
+    `;
+    if (bdPeople) {
+      cell.title = bdPeople.map((p) => p.displayName + '님 생일').join(', ');
+      cell.onclick = () => alert(bdPeople.map((p) => `${iconEmoji(p.icon)} ${p.displayName}님 생일 (${m + 1}월 ${d}일)`).join('\n'));
+    }
+    grid.appendChild(cell);
+  }
+}
+$('calPrev').addEventListener('click', () => { CAL_VIEW.setMonth(CAL_VIEW.getMonth() - 1); renderCalendar(); });
+$('calNext').addEventListener('click', () => { CAL_VIEW.setMonth(CAL_VIEW.getMonth() + 1); renderCalendar(); });
+$('calToday').addEventListener('click', () => {
+  CAL_VIEW = new Date(); CAL_VIEW.setDate(1); renderCalendar();
+});
+
 // ---------- 우리 가족 요약 ----------
 function koreanAge(birthYear, birthMonth, birthDay) {
   if (!birthYear) return null;
@@ -750,6 +830,7 @@ async function loadFamilySummary() {
     if (!alias) return;
     const r = await fetch(`/api/family/${encodeURIComponent(alias)}`).then(r => r.json());
     FAMILY_CACHE = r.members;
+    renderCalendar(); // 가족 데이터 로드 후 달력 생일 표시
     $('familyCardTitle').textContent = r.family.displayName || '우리 가족';
     const row = $('familyRow');
     row.innerHTML = '';
@@ -1594,6 +1675,19 @@ async function loadFamilyNotice() {
         const when = date ? relativeTime(date) : '';
         $('noticeMeta').textContent = `${iconEmoji(f.noticeBy.icon)} ${f.noticeBy.name}${when ? ' · ' + when : ''}`;
       } else { $('noticeMeta').textContent = ''; }
+      // NEW 배지: 마지막으로 본 시각보다 최신이면 표시
+      const updatedAt = f.noticeUpdatedAt ? new Date(f.noticeUpdatedAt).getTime() : 0;
+      const lastSeen = Number(localStorage.getItem('fb_notice_seen') || 0);
+      if (updatedAt && updatedAt > lastSeen) {
+        $('noticeNewBadge').classList.remove('hidden');
+        // 3초 후 읽음 처리
+        setTimeout(() => {
+          localStorage.setItem('fb_notice_seen', String(updatedAt));
+          $('noticeNewBadge').classList.add('hidden');
+        }, 3500);
+      } else {
+        $('noticeNewBadge').classList.add('hidden');
+      }
       $('noticeCard').classList.remove('hidden');
     } else {
       $('noticeCard').classList.add('hidden');
@@ -1909,6 +2003,7 @@ async function loadMyStreak() {
   try {
     const r = await api('/api/question/streak');
     window._STREAK = r;
+    renderHeroSummary();
     if (r.myStreak > 0) {
       $('myStreakBadge').textContent = `🔥 ${r.myStreak}일 연속 답변 중!`;
       $('streakRow').classList.remove('hidden');

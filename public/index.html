@@ -96,10 +96,27 @@
     <div class="notice-head">
       <span class="notice-pin">📌</span>
       <span class="notice-label">가족 공지</span>
+      <span class="notice-new hidden" id="noticeNewBadge">NEW</span>
       <span class="notice-meta" id="noticeMeta"></span>
       <button class="tts-btn" data-tts="notice" aria-label="읽어주기">🔊</button>
     </div>
     <p class="notice-text" id="noticeText"></p>
+  </section>
+
+  <!-- 월간 가족 달력 -->
+  <section class="card calendar-card" data-card-id="calendar" id="calendarCard">
+    <div class="card-head-row">
+      <p class="card-title" id="calTitle">가족 달력</p>
+      <div class="cal-nav">
+        <button type="button" class="cal-nav-btn" id="calPrev">‹</button>
+        <button type="button" class="cal-nav-btn" id="calToday">오늘</button>
+        <button type="button" class="cal-nav-btn" id="calNext">›</button>
+      </div>
+    </div>
+    <div class="cal-weekdays">
+      <span>일</span><span>월</span><span>화</span><span>수</span><span>목</span><span>금</span><span>토</span>
+    </div>
+    <div class="cal-grid" id="calGrid"></div>
   </section>
 
   <!-- 이번 주 가족 기념일 -->
