@@ -1168,6 +1168,61 @@ app.get('/api/question/yesterday', requireAuth, async (req, res) => {
   } catch (e) { res.status(500).json({ error: 'internal', message: e.message }); }
 });
 
+app.get('/api/answer/:id/comments', requireAuth, async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id)) return res.status(400).json({ error: 'bad-id' });
+    // 같은 가족 확인
+    const [ok] = await getPool().query(
+      `SELECT 1 FROM daily_answers a
+         JOIN daily_questions q ON q.id = a.question_id
+        WHERE a.id = ? AND q.family_id = ? LIMIT 1`,
+      [id, req.user.family_id]
+    );
+    if (!ok.length) return res.status(404).json({ error: 'not-found' });
+    const [rows] = await getPool().query(
+      `SELECT c.id, c.text, c.author_id, c.created_at,
+              u.display_name AS author_name, u.icon AS author_icon
+         FROM answer_comments c JOIN users u ON u.id = c.author_id
+        WHERE c.answer_id = ? ORDER BY c.created_at ASC`, [id]
+    );
+    res.json(rows);
+  } catch (e) { res.status(500).json({ error: 'internal', message: e.message }); }
+});
+
+app.post('/api/answer/:id/comments', requireAuth, async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id)) return res.status(400).json({ error: 'bad-id' });
+    const text = (req.body?.text || '').toString().trim().slice(0, 300);
+    if (!text) return res.status(400).json({ error: 'empty' });
+    const [ok] = await getPool().query(
+      `SELECT 1 FROM daily_answers a
+         JOIN daily_questions q ON q.id = a.question_id
+        WHERE a.id = ? AND q.family_id = ? LIMIT 1`,
+      [id, req.user.family_id]
+    );
+    if (!ok.length) return res.status(404).json({ error: 'not-found' });
+    const [r] = await getPool().query(
+      'INSERT INTO answer_comments (answer_id, author_id, text) VALUES (?, ?, ?)',
+      [id, req.user.id, text]
+    );
+    res.json({ ok: true, id: r.insertId });
+  } catch (e) { res.status(500).json({ error: 'internal', message: e.message }); }
+});
+
+app.delete('/api/answer/:id/comments/:cid', requireAuth, async (req, res) => {
+  try {
+    const cid = Number(req.params.cid);
+    if (!Number.isInteger(cid)) return res.status(400).json({ error: 'bad-id' });
+    await getPool().query(
+      'DELETE FROM answer_comments WHERE id = ? AND author_id = ?',
+      [cid, req.user.id]
+    );
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: 'internal', message: e.message }); }
+});
+
 app.post('/api/answer/:id/react', requireAuth, async (req, res) => {
   try {
     const id = Number(req.params.id);

@@ -692,6 +692,110 @@ body.tod-night .hero-weather { color: rgba(242,242,247,.8); }
   font-weight: 600;
 }
 
+/* ========== 오늘의 한 마디 ========== */
+.daily-quote-card {
+  background: linear-gradient(135deg, #F4FFEB 0%, #E8F7FF 100%);
+}
+@media (prefers-color-scheme: dark) {
+  .daily-quote-card { background: linear-gradient(135deg, #1F2A1A 0%, #1A2530 100%); }
+}
+.daily-quote-card .card-title { color: #3A7A4A; }
+@media (prefers-color-scheme: dark) { .daily-quote-card .card-title { color: #8FE0B0; } }
+.daily-quote {
+  margin: 0;
+  padding: 8px 4px 4px 18px;
+  font-size: 18px;
+  line-height: 1.7;
+  color: var(--text);
+  font-weight: 600;
+  letter-spacing: -0.2px;
+  border-left: 3px solid var(--good);
+  word-break: keep-all;
+}
+
+/* 계정: 자동 TTS 토글 */
+.tts-auto-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 2px;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 10px;
+  font-size: 14px;
+  color: var(--text);
+  font-weight: 600;
+  cursor: pointer;
+}
+.tts-auto-row input { width: 22px; height: 22px; accent-color: var(--primary); }
+
+/* 어제 답변 코멘트 */
+.comment-toggle {
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--sub);
+  cursor: pointer;
+  margin-top: 8px;
+  font-family: inherit;
+}
+.comment-toggle:active { background: var(--card); }
+
+.comment-section {
+  margin-top: 10px;
+  padding: 10px;
+  background: var(--bg);
+  border-radius: 10px;
+}
+.comment-list { list-style: none; margin: 0 0 10px; padding: 0; }
+.comment-list li {
+  display: flex;
+  gap: 8px;
+  padding: 8px 0;
+  border-top: 1px solid var(--line);
+  position: relative;
+  align-items: flex-start;
+}
+.comment-list li:first-child { border-top: none; padding-top: 2px; }
+.cm-icon { font-size: 22px; line-height: 1; flex-shrink: 0; }
+.cm-body { flex: 1; min-width: 0; }
+.cm-name { font-size: 12px; color: var(--sub); font-weight: 700; }
+.cm-text { font-size: 14px; color: var(--text); line-height: 1.5; margin-top: 2px; word-break: break-word; }
+.cm-del {
+  background: none; border: none; color: var(--sub);
+  font-size: 13px; cursor: pointer; padding: 4px 6px;
+  flex-shrink: 0;
+}
+
+.comment-form { display: flex; gap: 6px; }
+.comment-input {
+  flex: 1;
+  height: 40px;
+  padding: 0 12px;
+  font-size: 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--card);
+  color: var(--text);
+  font-family: inherit;
+  outline: none;
+}
+.comment-input:focus { border-color: var(--primary); }
+.comment-send {
+  height: 40px;
+  padding: 0 14px;
+  background: var(--primary);
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: inherit;
+}
+
 /* ========== 월간 가족 달력 ========== */
 .calendar-card { overflow: hidden; }
 .cal-nav { display: flex; gap: 4px; align-items: center; }

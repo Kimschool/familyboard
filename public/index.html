@@ -121,6 +121,12 @@
     <div class="weekly-tops hidden" id="weeklyTops"></div>
   </section>
 
+  <!-- 오늘의 한 마디 -->
+  <section class="card daily-quote-card" data-card-id="quote" id="quoteCard">
+    <p class="card-title">🌿 오늘의 한 마디</p>
+    <blockquote class="daily-quote" id="dailyQuote">—</blockquote>
+  </section>
+
   <!-- 월간 가족 달력 -->
   <section class="card calendar-card" data-card-id="calendar" id="calendarCard">
     <div class="card-head-row">
@@ -711,6 +717,10 @@
         <button type="button" class="fs-btn" data-scale="lg">가</button>
       </div>
     </div>
+    <label class="tts-auto-row">
+      <input type="checkbox" id="ttsAutoToggle" />
+      <span>🔊 로그인하면 자동으로 오늘의 안내 읽어주기</span>
+    </label>
     <div class="account-menu">
       <button id="helpBtn" type="button" class="account-menu-btn">❓ 도움말</button>
       <button id="reorderToggleBtn" type="button" class="account-menu-btn">🧩 카드 순서·표시 편집</button>

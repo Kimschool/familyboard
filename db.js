@@ -129,6 +129,17 @@ async function ensureSchema() {
   `);
 
   await p.query(`
+    CREATE TABLE IF NOT EXISTS answer_comments (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      answer_id INT NOT NULL,
+      author_id INT NOT NULL,
+      text VARCHAR(300) NOT NULL,
+      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      INDEX idx_answer_time (answer_id, created_at)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  `);
+
+  await p.query(`
     CREATE TABLE IF NOT EXISTS mood_history (
       id INT AUTO_INCREMENT PRIMARY KEY,
       user_id INT NOT NULL,

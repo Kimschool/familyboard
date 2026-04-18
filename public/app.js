@@ -277,6 +277,8 @@ function enterApp() {
   loadMeds();
   loadWeeklyReport();
   loadAnniversaries();
+  renderDailyQuote();
+  setupTtsAuto();
 
   // 관리자 UI — 설정 화면으로 이동 (계정 카드의 '가족 관리' 버튼으로 열림)
   try {
@@ -637,6 +639,80 @@ $('medAddBtn').addEventListener('click', async () => {
     loadMeds();
   } catch { alert('추가 실패'); }
 });
+
+// ---------- 오늘의 한 마디 ----------
+const DAILY_QUOTES = [
+  '오늘도 가족이 무사한 하루가 가장 큰 복이에요.',
+  '느리게 가도 괜찮아요. 방향이 맞으면 돼요.',
+  '작은 일에도 고마워할 수 있는 하루가 잘 살아낸 하루예요.',
+  '오늘의 한 끼가 누군가에겐 큰 위로가 됩니다.',
+  '걱정은 내일 걱정이에요, 오늘은 오늘에 집중하세요.',
+  '가까운 사람에게 한 마디 따뜻하게 건네 보세요.',
+  '산책 한 걸음이 마음을 가볍게 해요.',
+  '잠시 멈춰 숨을 깊게 쉬어 보세요. 그 자체로 약이 돼요.',
+  '부모님의 목소리를 들을 수 있는 오늘은 참 귀한 날입니다.',
+  '서두르지 않아도 충분히 잘 해내고 계세요.',
+  '어제의 나보다 한 뼘 더 따뜻해지면 충분해요.',
+  '실수해도 괜찮아요. 다시 시작할 수 있어요.',
+  '가족은 말하지 않아도 마음으로 전해져요.',
+  '오늘 하루도 수고하셨어요.',
+  '자기 자신에게도 다정하게 대해 주세요.',
+  '좋아하는 음악 한 곡이 하루를 바꿔줄 때가 있어요.',
+  '작은 시도가 큰 변화를 만들어요.',
+  '웃을 일을 하나 만들어 보세요.',
+  '오늘 본 하늘이 제일 예쁠지도 몰라요.',
+  '사랑한다는 말은 아껴두지 마세요.',
+  '쉬는 것도 중요한 일입니다.',
+  '어려울 땐 가족에게 기대도 괜찮아요.',
+  '즐거운 기억 하나씩 쌓는 하루가 좋은 하루예요.',
+  '하고 싶은 일을 지금 시작해 보세요.',
+  '오늘 먹은 맛있는 한 끼를 기억해 두세요.',
+  '때로는 지는 해가 가장 아름답습니다.',
+  '오늘의 마음을 기록해 두면 훗날의 보물이 돼요.',
+  '서로의 다정함이 가족을 가족답게 만들어요.',
+  '건강보다 소중한 건 없어요. 몸을 아껴 주세요.',
+  '괜찮은 하루가 가장 좋은 하루일 때가 많아요.',
+];
+function dayOfYear(d = new Date()) {
+  return Math.floor((d - new Date(d.getFullYear(), 0, 0)) / 86400000);
+}
+function renderDailyQuote() {
+  const el = $('dailyQuote');
+  if (!el) return;
+  el.textContent = DAILY_QUOTES[dayOfYear() % DAILY_QUOTES.length];
+}
+
+// ---------- 자동 TTS 토글 ----------
+function setupTtsAuto() {
+  const cb = $('ttsAutoToggle');
+  if (!cb) return;
+  cb.checked = localStorage.getItem('fb_tts_auto') === '1';
+  cb.addEventListener('change', () => {
+    localStorage.setItem('fb_tts_auto', cb.checked ? '1' : '0');
+  });
+  // 자동 낭독: 로드 후 공지 + tips 읽기
+  if (cb.checked && 'speechSynthesis' in window) {
+    setTimeout(() => {
+      const noticeText = $('noticeText')?.textContent;
+      const parts = [];
+      if (noticeText && !$('noticeCard').classList.contains('hidden')) {
+        parts.push('가족 공지입니다. ' + noticeText);
+      }
+      const tips = [
+        $('tipDress')?.textContent, $('tipHum')?.textContent,
+        $('tipAir')?.textContent, $('tipPollen')?.textContent,
+      ].filter((t) => t && t !== '—').join(' ');
+      if (tips) parts.push(tips);
+      if (parts.length) {
+        try {
+          const u = new SpeechSynthesisUtterance(parts.join(' '));
+          u.lang = 'ko-KR'; u.rate = 0.95;
+          speechSynthesis.speak(u);
+        } catch {}
+      }
+    }, 2500);
+  }
+}
 
 // ---------- 빠른 연락처 ----------
 async function loadEmergencyContacts() {
@@ -2765,13 +2841,73 @@ async function loadYesterdayReveal() {
           </div>
           <div class="reveal-answer ${skipped ? 'skipped' : ''}"></div>
           <div class="reaction-row"></div>
+          ${skipped ? '' : `<button class="comment-toggle" data-aid="${a.answer_id}">💬 한 마디 남기기</button>
+            <div class="comment-section hidden" data-aid="${a.answer_id}"></div>`}
         </div>`;
       li.querySelector('.reveal-name').textContent = a.display_name + '님';
       li.querySelector('.reveal-answer').textContent = skipped ? '🌙 건너뛰었어요' : a.answer_text;
-      if (!skipped) renderReactionRow(li.querySelector('.reaction-row'), a.answer_id, a.reactions || []);
+      if (!skipped) {
+        renderReactionRow(li.querySelector('.reaction-row'), a.answer_id, a.reactions || []);
+        const tbtn = li.querySelector('.comment-toggle');
+        tbtn.onclick = () => toggleCommentSection(a.answer_id, li.querySelector('.comment-section'), tbtn);
+      }
       ul.appendChild(li);
     }
     $('revealCard').classList.remove('hidden');
+  } catch {}
+}
+
+async function toggleCommentSection(answerId, section, btn) {
+  if (!section.classList.contains('hidden')) {
+    section.classList.add('hidden');
+    btn.textContent = '💬 한 마디 남기기';
+    return;
+  }
+  btn.textContent = '💬 닫기';
+  section.classList.remove('hidden');
+  try {
+    const list = await api(`/api/answer/${answerId}/comments`);
+    section.innerHTML = `
+      <ul class="comment-list"></ul>
+      <div class="comment-form">
+        <input class="comment-input" type="text" maxlength="300" placeholder="따뜻한 한 마디를 남겨 보세요" />
+        <button type="button" class="comment-send">보내기</button>
+      </div>`;
+    const ul = section.querySelector('.comment-list');
+    for (const c of list) {
+      const li = document.createElement('li');
+      li.innerHTML = `
+        <span class="cm-icon">${iconEmoji(c.author_icon)}</span>
+        <div class="cm-body">
+          <div class="cm-head"><span class="cm-name"></span></div>
+          <div class="cm-text"></div>
+        </div>
+        ${c.author_id === ME.id ? `<button class="cm-del" data-cid="${c.id}" aria-label="삭제">✕</button>` : ''}`;
+      li.querySelector('.cm-name').textContent = c.author_name + '님';
+      li.querySelector('.cm-text').textContent = c.text;
+      const del = li.querySelector('.cm-del');
+      if (del) del.onclick = async () => {
+        await api(`/api/answer/${answerId}/comments/${c.id}`, { method: 'DELETE' });
+        toggleCommentSection(answerId, section, btn); // 재로드
+        toggleCommentSection(answerId, section, btn);
+      };
+      ul.appendChild(li);
+    }
+    const input = section.querySelector('.comment-input');
+    const send = async () => {
+      const text = input.value.trim();
+      if (!text) return;
+      try {
+        await api(`/api/answer/${answerId}/comments`, {
+          method: 'POST', body: JSON.stringify({ text }),
+        });
+        input.value = '';
+        section.classList.add('hidden');
+        toggleCommentSection(answerId, section, btn); // 재열기로 목록 갱신
+      } catch { alert('저장 실패'); }
+    };
+    section.querySelector('.comment-send').addEventListener('click', send);
+    input.addEventListener('keydown', (e) => { if (e.key === 'Enter') send(); });
   } catch {}
 }
 
