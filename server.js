@@ -430,6 +430,46 @@ app.delete('/api/users/:id', requireAdmin, async (req, res) => {
 });
 
 // ---------- 약 복용 체크 ----------
+app.get('/api/meds/month', requireAuth, async (req, res) => {
+  try {
+    const today = todayLocal();
+    const [meds] = await getPool().query(
+      `SELECT id, name, schedule FROM meds WHERE user_id = ?
+        ORDER BY FIELD(schedule,'morning','lunch','evening','night'), sort_order, id`,
+      [req.user.id]
+    );
+    if (!meds.length) return res.json({ days: [], meds: [] });
+
+    const ids = meds.map((m) => m.id);
+    const [checks] = await getPool().query(
+      `SELECT med_id, DATE_FORMAT(check_date, '%Y-%m-%d') AS d
+         FROM med_checks
+        WHERE med_id IN (?) AND check_date >= DATE_SUB(?, INTERVAL 29 DAY)`,
+      [ids, today]
+    );
+    const byMed = new Map();
+    for (const c of checks) {
+      const set = byMed.get(c.med_id) || new Set();
+      set.add(c.d);
+      byMed.set(c.med_id, set);
+    }
+    // 30일 날짜 배열 (오래된 순)
+    const days = [];
+    const t = new Date(today);
+    for (let i = 29; i >= 0; i--) {
+      const d = new Date(t.getFullYear(), t.getMonth(), t.getDate() - i);
+      days.push(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`);
+    }
+    res.json({
+      days,
+      meds: meds.map((m) => ({
+        id: m.id, name: m.name, schedule: m.schedule,
+        checks: days.map((d) => (byMed.get(m.id) || new Set()).has(d) ? 1 : 0),
+      })),
+    });
+  } catch (e) { res.status(500).json({ error: 'internal', message: e.message }); }
+});
+
 app.get('/api/meds', requireAuth, async (req, res) => {
   try {
     const today = todayLocal();

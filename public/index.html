@@ -814,6 +814,7 @@
     <div class="card-head-row">
       <p class="card-title">💊 오늘 약</p>
       <span class="med-achieve hidden" id="medsAchieve"></span>
+      <button type="button" class="med-mgr-btn" id="openMedMonthBtn">📊 30일</button>
       <button type="button" class="med-mgr-btn" id="openMedMgr">관리</button>
     </div>
     <div class="meds-body" id="medsBody"></div>
@@ -970,6 +971,17 @@
 <div id="undoToast" class="undo-toast hidden" role="status">
   <span class="undo-msg">메모를 삭제했어요</span>
   <button id="undoBtn" class="undo-btn">되돌리기</button>
+</div>
+
+<!-- 약 30일 히트맵 시트 -->
+<div id="medMonthSheet" class="sheet-backdrop hidden" role="dialog">
+  <div class="sheet sheet-tall" role="document">
+    <div class="sheet-handle"></div>
+    <h2 class="sheet-title">💊 약 복용 30일 기록</h2>
+    <p class="sheet-sub" id="medMonthSummary">—</p>
+    <div class="med-month-wrap" id="medMonthWrap"></div>
+    <button class="sheet-close" id="medMonthClose">닫기</button>
+  </div>
 </div>
 
 <!-- 이미지 라이트박스 -->

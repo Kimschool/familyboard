@@ -2033,6 +2033,12 @@ body.tod-night .hero-weather { color: rgba(242,242,247,.8); }
 }
 .family-badge.dim { opacity: .5; }
 .family-badge-emoji { font-size: 22px; line-height: 1; }
+.family-badge-photo {
+  width: 26px; height: 26px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 1.5px solid rgba(255,255,255,.8);
+}
 .family-badge-name { font-weight: 600; }
 .family-badge-age {
   font-size: 12px;
@@ -3746,6 +3752,38 @@ li.memo-important .memo-text { font-weight: 700; }
 .lightbox-close:active { background: rgba(255,255,255,.25); }
 .reveal-image { cursor: zoom-in; }
 .hero-photo-overlay.active { cursor: zoom-in; }
+
+/* 약 30일 히트맵 시트 */
+.med-month-wrap { max-height: 55vh; overflow-y: auto; margin-bottom: 14px; }
+.mm-section {
+  padding: 12px 0;
+  border-top: 1px solid var(--line);
+}
+.mm-section:first-child { border-top: none; padding-top: 4px; }
+.mm-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+  font-size: 14px;
+}
+.mm-name { font-weight: 800; color: var(--text); }
+.mm-sched { color: var(--sub); font-size: 12px; font-weight: 600; }
+.mm-pct { margin-left: auto; font-size: 12px; font-weight: 700; color: var(--primary); background: rgba(10,132,255,.1); padding: 3px 10px; border-radius: 999px; }
+.mm-strip {
+  display: grid;
+  grid-template-columns: repeat(30, 1fr);
+  gap: 2px;
+}
+.mm-cell {
+  aspect-ratio: 1 / 1;
+  min-height: 10px;
+  background: var(--line);
+  border-radius: 3px;
+}
+.mm-cell.on { background: var(--good); }
+.mm-cell.today { outline: 2px solid var(--primary); outline-offset: 1px; }
 
 /* 일기 스트릭 뱃지 */
 .diary-streak {

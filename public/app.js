@@ -671,6 +671,59 @@ async function loadMeds() {
 $('openMedMgr').addEventListener('click', () => {
   $('medMgr').classList.toggle('hidden');
 });
+
+$('openMedMonthBtn').addEventListener('click', async () => {
+  try {
+    const r = await api('/api/meds/month');
+    const wrap = $('medMonthWrap');
+    wrap.innerHTML = '';
+    if (!r.meds?.length) {
+      wrap.innerHTML = '<p class="empty-state-text" style="padding:20px 0;text-align:center">등록된 약이 없어요</p>';
+      $('medMonthSummary').textContent = '';
+    } else {
+      // 전체 통계
+      let totalCells = 0, doneCells = 0;
+      r.meds.forEach((m) => {
+        totalCells += m.checks.length;
+        doneCells += m.checks.filter((x) => x === 1).length;
+      });
+      const pct = totalCells ? Math.round((doneCells / totalCells) * 100) : 0;
+      $('medMonthSummary').textContent = `최근 30일 · 전체 ${doneCells}/${totalCells} (${pct}%)`;
+
+      // 각 약마다 30일 스트립
+      for (const m of r.meds) {
+        const doneDays = m.checks.filter((x) => x === 1).length;
+        const mpct = Math.round((doneDays / m.checks.length) * 100);
+        const section = document.createElement('div');
+        section.className = 'mm-section';
+        const scheduleLabel = { morning:'🌅 아침', lunch:'🌤️ 점심', evening:'🌆 저녁', night:'🌙 취침' }[m.schedule] || '';
+        section.innerHTML = `
+          <div class="mm-head">
+            <span class="mm-name"></span>
+            <span class="mm-sched">${scheduleLabel}</span>
+            <span class="mm-pct">${doneDays}일 (${mpct}%)</span>
+          </div>
+          <div class="mm-strip"></div>`;
+        section.querySelector('.mm-name').textContent = m.name;
+        const strip = section.querySelector('.mm-strip');
+        m.checks.forEach((v, i) => {
+          const cell = document.createElement('span');
+          cell.className = 'mm-cell' + (v ? ' on' : '');
+          const d = new Date(r.days[i]);
+          cell.title = `${r.days[i]} ${v ? '복용' : '미복용'}`;
+          if (i === m.checks.length - 1) cell.classList.add('today');
+          strip.appendChild(cell);
+        });
+        wrap.appendChild(section);
+      }
+    }
+    $('medMonthSheet').classList.remove('hidden');
+  } catch { alert('불러오기 실패'); }
+});
+$('medMonthClose').addEventListener('click', () => $('medMonthSheet').classList.add('hidden'));
+$('medMonthSheet').addEventListener('click', (e) => {
+  if (e.target.id === 'medMonthSheet') $('medMonthSheet').classList.add('hidden');
+});
 $('medAddBtn').addEventListener('click', async () => {
   const name = $('medName').value.trim();
   const schedule = $('medSchedule').value;
@@ -1585,8 +1638,11 @@ async function loadFamilySummary() {
       badge.type = 'button';
       badge.className = 'family-badge' + (m.id === ME.id ? ' me' : '') + (m.activated ? '' : ' dim');
       badge.style.cssText += accentStyle(m.id, 'bg');
+      const avatarHtml = m.photoUrl
+        ? `<img class="family-badge-photo" src="${m.photoUrl.replace(/"/g, '')}" alt="" />`
+        : `<span class="family-badge-emoji">${iconEmoji(m.icon)}</span>`;
       badge.innerHTML = `
-        <span class="family-badge-emoji">${iconEmoji(m.icon)}</span>
+        ${avatarHtml}
         <span class="family-badge-name"></span>
         ${age ? `<span class="family-badge-age">${age}</span>` : ''}
       `;
@@ -1601,7 +1657,12 @@ let CURRENT_PROFILE_USER = null;
 function openProfileSheet(m) {
   CURRENT_PROFILE_USER = m;
   const age = koreanAge(m.birthYear, m.birthMonth, m.birthDay);
-  $('profAvatar').textContent = iconEmoji(m.icon);
+  // 프로필 큰 아바타: 사진 있으면 이미지
+  if (m.photoUrl) {
+    $('profAvatar').innerHTML = `<img src="${m.photoUrl.replace(/"/g, '')}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:inherit" />`;
+  } else {
+    $('profAvatar').textContent = iconEmoji(m.icon);
+  }
   $('profName').textContent = m.displayName + (m.id === ME.id ? ' (나)' : '');
   $('profMeta').textContent = m.role === 'admin' ? '관리자' : '가족';
   if (age) { $('profAge').textContent = `${age}세 (${m.birthYear}년생)`; $('profAgeRow').classList.remove('hidden'); }
@@ -3399,6 +3460,38 @@ if (!('speechSynthesis' in window)) {
   document.querySelectorAll('.tts-btn').forEach((b) => b.style.display = 'none');
 }
 
+function cleanupOldDrafts() {
+  try {
+    const today = new Date();
+    const cutoff = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 7).toISOString().slice(0, 10);
+    for (let i = localStorage.length - 1; i >= 0; i--) {
+      const key = localStorage.key(i);
+      if (key?.startsWith('fb_answer_draft_')) {
+        const date = key.slice('fb_answer_draft_'.length);
+        if (date < cutoff) localStorage.removeItem(key);
+      }
+    }
+  } catch {}
+}
+
+// 답변 input 이 변경될 때마다 임시저장
+const qAnswerEl = document.getElementById('questionAnswer');
+if (qAnswerEl) {
+  let draftTimer = null;
+  qAnswerEl.addEventListener('input', () => {
+    clearTimeout(draftTimer);
+    draftTimer = setTimeout(() => {
+      try {
+        const tz = 'Asia/Tokyo';
+        const today = new Intl.DateTimeFormat('sv-SE', { timeZone: tz, year:'numeric', month:'2-digit', day:'2-digit' }).format(new Date());
+        const val = qAnswerEl.value.trim();
+        if (val) localStorage.setItem('fb_answer_draft_' + today, val);
+        else localStorage.removeItem('fb_answer_draft_' + today);
+      } catch {}
+    }, 500);
+  });
+}
+
 function renderCountdownToReveal() {
   const el = $('questionCountdown');
   if (!el) return;
@@ -3427,7 +3520,19 @@ async function loadTodayQuestion() {
   try {
     const q = await api('/api/question/today');
     $('questionText').textContent = q.question;
-    $('questionAnswer').value = q.myAnswer || '';
+    // 서버 답변 > 로컬 임시저장 (서버 값이 있으면 임시저장 삭제)
+    const draftKey = 'fb_answer_draft_' + q.date;
+    const draft = localStorage.getItem(draftKey);
+    if (q.myAnswer) {
+      $('questionAnswer').value = q.myAnswer;
+      localStorage.removeItem(draftKey);
+    } else if (draft) {
+      $('questionAnswer').value = draft;
+    } else {
+      $('questionAnswer').value = '';
+    }
+    // 오래된 draft 정리 (7일 이상 된 것)
+    cleanupOldDrafts();
     $('questionMeta').textContent =
       `${q.answeredCount} / ${q.memberCount}명이 답했어요. 모든 답변은 내일 공개돼요`;
     renderCountdownToReveal();
