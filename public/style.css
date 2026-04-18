@@ -260,6 +260,42 @@ body.tod-night .hero-date, body.tod-night .hero-greeting { color: #F2F2F7; }
 }
 body.tod-night .hero-weather { color: rgba(242,242,247,.8); }
 
+/* ========== 이번 주 기념일 ========== */
+.upcoming-card { background: linear-gradient(135deg, #E6F3FF 0%, #FFE8F0 100%); }
+@media (prefers-color-scheme: dark) {
+  .upcoming-card { background: linear-gradient(135deg, #1A2235 0%, #2A1E28 100%); }
+}
+.upcoming-card .card-title { color: #4A6A9A; }
+@media (prefers-color-scheme: dark) {
+  .upcoming-card .card-title { color: #9AB3D9; }
+}
+.upcoming-list { list-style: none; margin: 0; padding: 0; }
+.upcoming-list li {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 0;
+  border-bottom: 1px solid rgba(0,0,0,.06);
+}
+.upcoming-list li:last-child { border-bottom: none; }
+@media (prefers-color-scheme: dark) {
+  .upcoming-list li { border-bottom-color: rgba(255,255,255,.08); }
+}
+.up-emoji { font-size: 34px; line-height: 1; flex-shrink: 0; }
+.up-body { flex: 1; min-width: 0; }
+.up-name { font-size: 16px; font-weight: 700; color: var(--text); }
+.up-date { font-size: 13px; color: var(--sub); margin-top: 2px; }
+.up-days {
+  font-size: 14px; font-weight: 700; color: var(--primary);
+  background: rgba(10, 132, 255, .1);
+  padding: 6px 12px; border-radius: 999px;
+  flex-shrink: 0;
+}
+.up-days.today {
+  color: #fff;
+  background: linear-gradient(135deg, #FF3B30, #FF9500);
+}
+
 /* ========== 우리 가족 요약 (뱃지) ========== */
 .family-card { background: linear-gradient(135deg, #FFF7E6 0%, #FFE8EC 100%); }
 @media (prefers-color-scheme: dark) {
@@ -361,6 +397,23 @@ body.tod-night .hero-weather { color: rgba(242,242,247,.8); }
   padding: 20px 20px 18px;
   margin-bottom: 18px;
   box-shadow: var(--shadow-sm);
+  animation: card-enter .5s cubic-bezier(.22,.61,.36,1) both;
+}
+#app > .card:nth-of-type(1) { animation-delay: .03s; }
+#app > .card:nth-of-type(2) { animation-delay: .08s; }
+#app > .card:nth-of-type(3) { animation-delay: .13s; }
+#app > .card:nth-of-type(4) { animation-delay: .18s; }
+#app > .card:nth-of-type(5) { animation-delay: .23s; }
+#app > .card:nth-of-type(6) { animation-delay: .28s; }
+#app > .card:nth-of-type(7) { animation-delay: .33s; }
+#app > .card:nth-of-type(8) { animation-delay: .38s; }
+#app > .card:nth-of-type(9) { animation-delay: .43s; }
+@keyframes card-enter {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .card { animation: none; }
 }
 .card-title {
   margin: 0 0 14px;
@@ -791,6 +844,39 @@ body.tod-night .hero-weather { color: rgba(242,242,247,.8); }
 .account-info { flex: 1; min-width: 0; }
 .account-name { font-size: 16px; font-weight: 700; color: var(--text); }
 .account-meta { font-size: 13px; color: var(--sub); margin-top: 2px; }
+
+.font-scale {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 0;
+  margin-bottom: 8px;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+.font-scale-label { font-size: 14px; font-weight: 600; color: var(--sub); }
+.font-scale-buttons { display: flex; gap: 6px; }
+.fs-btn {
+  width: 44px; height: 44px;
+  border: 1.5px solid var(--line); border-radius: var(--r-sm);
+  background: var(--card); color: var(--text); cursor: pointer;
+  font-family: inherit; font-weight: 700;
+  transition: all .15s;
+}
+.fs-btn[data-scale="sm"] { font-size: 13px; }
+.fs-btn[data-scale="md"] { font-size: 17px; }
+.fs-btn[data-scale="lg"] { font-size: 22px; }
+.fs-btn.active {
+  background: var(--primary); color: #fff; border-color: var(--primary);
+  transform: scale(1.05);
+}
+
+/* 글자 크기 scale (zoom — 노인 친화 전체 확대) */
+#app.scale-sm { zoom: 0.92; }
+#app.scale-md { zoom: 1;    }
+#app.scale-lg { zoom: 1.12; }
+
 .account-logout {
   width: 100%; height: 48px;
   border: 1.5px solid var(--line); border-radius: var(--r-sm);

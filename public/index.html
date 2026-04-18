@@ -82,6 +82,12 @@
     </div>
   </header>
 
+  <!-- 이번 주 가족 기념일 -->
+  <section class="card upcoming-card hidden" id="upcomingCard">
+    <p class="card-title">이번 주 가족 기념일</p>
+    <ul class="upcoming-list" id="upcomingList"></ul>
+  </section>
+
   <!-- 우리 가족 요약 -->
   <section class="card family-card" id="familyCard">
     <p class="card-title" id="familyCardTitle">우리 가족</p>
@@ -278,6 +284,14 @@
       <div class="account-info">
         <div class="account-name" id="accountName">—</div>
         <div class="account-meta" id="accountMeta">—</div>
+      </div>
+    </div>
+    <div class="font-scale">
+      <span class="font-scale-label">글자 크기</span>
+      <div class="font-scale-buttons">
+        <button type="button" class="fs-btn" data-scale="sm">가</button>
+        <button type="button" class="fs-btn" data-scale="md">가</button>
+        <button type="button" class="fs-btn" data-scale="lg">가</button>
       </div>
     </div>
     <button id="logoutBtn" class="account-logout">로그아웃</button>

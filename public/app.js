@@ -386,10 +386,11 @@ function closeProfileSheet() {
   $('profileSheet').classList.add('hidden');
 }
 
-// ---------- 생일 ----------
+// ---------- 생일 + 이번 주 기념일 ----------
 async function loadBirthday() {
   try {
     const r = await api('/api/birthdays/soon');
+    renderUpcomingCard(r);
     const el = $('birthdayBanner');
     el.classList.remove('today');
     if (r.today) {
@@ -411,6 +412,33 @@ async function loadBirthday() {
       el.classList.remove('hidden');
     }
   } catch {}
+}
+
+function renderUpcomingCard(r) {
+  const list = [];
+  if (r.today) list.push({ ...r.today, daysLeft: 0 });
+  if (r.upcoming) list.push(...r.upcoming);
+  const card = $('upcomingCard');
+  const ul = $('upcomingList');
+  if (!list.length) { card.classList.add('hidden'); return; }
+  ul.innerHTML = '';
+  for (const u of list) {
+    const li = document.createElement('li');
+    const dayLabel = u.daysLeft === 0 ? '오늘'
+      : u.daysLeft === 1 ? '내일'
+      : `${u.daysLeft}일 뒤`;
+    li.innerHTML = `
+      <span class="up-emoji">${iconEmoji(u.icon)}</span>
+      <div class="up-body">
+        <div class="up-name"></div>
+        <div class="up-date">${u.birth_month}월 ${u.birth_day}일${u.is_lunar ? ' (음력)' : ''} 생신</div>
+      </div>
+      <span class="up-days ${u.daysLeft === 0 ? 'today' : ''}"></span>`;
+    li.querySelector('.up-name').textContent = `${u.display_name}님`;
+    li.querySelector('.up-days').textContent = dayLabel;
+    ul.appendChild(li);
+  }
+  card.classList.remove('hidden');
 }
 
 // ---------- 날씨 + 대기질 + 4가지 조언 ----------
@@ -842,5 +870,22 @@ document.getElementById('sheetClose').addEventListener('click', closeProfileShee
 document.getElementById('profileSheet').addEventListener('click', (e) => {
   if (e.target.id === 'profileSheet') closeProfileSheet();
 });
+
+// 글자 크기 조절
+function applyFontScale(scale) {
+  const el = $('app');
+  if (!el) return;
+  el.classList.remove('scale-sm','scale-md','scale-lg');
+  el.classList.add('scale-' + scale);
+  document.querySelectorAll('.fs-btn').forEach((b) => {
+    b.classList.toggle('active', b.dataset.scale === scale);
+  });
+  localStorage.setItem('fb_font_scale', scale);
+}
+document.querySelectorAll('.fs-btn').forEach((b) => {
+  b.addEventListener('click', () => applyFontScale(b.dataset.scale));
+});
+// 초기값 로드 (enterApp 후 적용되도록 setTimeout)
+setTimeout(() => applyFontScale(localStorage.getItem('fb_font_scale') || 'md'), 0);
 
 boot();
