@@ -3370,19 +3370,25 @@ document.getElementById('profileSheet').addEventListener('click', (e) => {
   if (e.target.id === 'profileSheet') closeProfileSheet();
 });
 
-// 화면 톤 테마
-function applyTheme(theme) {
-  document.body.classList.remove('theme-default','theme-spring','theme-summer','theme-autumn','theme-winter');
-  document.body.classList.add('theme-' + (theme || 'default'));
+// 화면 톤 (색 테마)
+function applyScheme(scheme) {
+  const s = ['light','dark','darkgray','sepia'].includes(scheme) ? scheme : 'auto';
+  const root = document.documentElement;
+  if (s === 'auto') root.removeAttribute('data-scheme');
+  else root.setAttribute('data-scheme', s);
   document.querySelectorAll('.th-btn').forEach((b) => {
-    b.classList.toggle('active', b.dataset.theme === (theme || 'default'));
+    b.classList.toggle('active', (b.dataset.scheme || 'auto') === s);
   });
-  localStorage.setItem('fb_theme', theme || 'default');
+  localStorage.setItem('fb_scheme', s);
 }
 document.querySelectorAll('.th-btn').forEach((b) => {
-  b.addEventListener('click', () => applyTheme(b.dataset.theme));
+  b.addEventListener('click', () => applyScheme(b.dataset.scheme));
 });
-setTimeout(() => applyTheme(localStorage.getItem('fb_theme') || 'default'), 0);
+// 부팅 시 적용
+(function initScheme() {
+  const saved = localStorage.getItem('fb_scheme') || 'auto';
+  applyScheme(saved);
+})();
 
 // 글자 크기 조절
 function applyFontScale(scale) {

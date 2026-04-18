@@ -3077,20 +3077,47 @@ body.reorder-mode #app #birthdayBanner { padding-top: 28px; }
 }
 .th-btn.active { border-color: var(--primary); transform: scale(1.1); box-shadow: 0 2px 8px rgba(10,132,255,.2); }
 
-/* 테마별 body 배경 */
-body.theme-default { background: var(--bg); }
-body.theme-spring  { background: linear-gradient(180deg, #FFE8EE 0%, var(--bg) 260px); }
-body.theme-summer  { background: linear-gradient(180deg, #E0F4FF 0%, var(--bg) 260px); }
-body.theme-autumn  { background: linear-gradient(180deg, #FFE6D0 0%, var(--bg) 260px); }
-body.theme-winter  { background: linear-gradient(180deg, #E8F0FF 0%, var(--bg) 260px); }
-body.theme-spring, body.theme-summer, body.theme-autumn, body.theme-winter {
-  background-attachment: fixed;
+/* ========== 색 테마 (scheme) 수동 오버라이드 ========== */
+/* @media (prefers-color-scheme: dark) 보다 specificity 높아 덮어씀 */
+html[data-scheme="light"] {
+  --bg: #F2F2F7;
+  --card: #FFFFFF;
+  --text: #1C1C1E;
+  --sub: #6E6E73;
+  --line: #E5E5EA;
+  --shadow-sm: 0 1px 2px rgba(0,0,0,.03), 0 2px 8px rgba(0,0,0,.04);
+  --shadow-md: 0 2px 4px rgba(0,0,0,.04), 0 8px 24px rgba(0,0,0,.05);
+  color-scheme: light;
 }
-@media (prefers-color-scheme: dark) {
-  body.theme-spring  { background: linear-gradient(180deg, #2E1A20 0%, var(--bg) 260px); }
-  body.theme-summer  { background: linear-gradient(180deg, #162430 0%, var(--bg) 260px); }
-  body.theme-autumn  { background: linear-gradient(180deg, #2A1E10 0%, var(--bg) 260px); }
-  body.theme-winter  { background: linear-gradient(180deg, #1A2030 0%, var(--bg) 260px); }
+html[data-scheme="dark"] {
+  --bg: #000000;
+  --card: #1C1C1E;
+  --text: #F2F2F7;
+  --sub: #8E8E93;
+  --line: #2C2C2E;
+  --shadow-sm: 0 0 0 1px rgba(255,255,255,.04);
+  --shadow-md: 0 0 0 1px rgba(255,255,255,.05);
+  color-scheme: dark;
+}
+html[data-scheme="darkgray"] {
+  --bg: #1A1A1D;
+  --card: #2C2C2E;
+  --text: #E5E5EA;
+  --sub: #98989A;
+  --line: #3A3A3C;
+  --shadow-sm: 0 0 0 1px rgba(255,255,255,.05);
+  --shadow-md: 0 0 0 1px rgba(255,255,255,.06);
+  color-scheme: dark;
+}
+html[data-scheme="sepia"] {
+  --bg: #F4EFE3;
+  --card: #FBF6EA;
+  --text: #3A2E22;
+  --sub: #7A6B56;
+  --line: #E3D9C3;
+  --shadow-sm: 0 1px 2px rgba(60, 40, 20, .04), 0 2px 8px rgba(60, 40, 20, .05);
+  --shadow-md: 0 2px 4px rgba(60, 40, 20, .05), 0 8px 24px rgba(60, 40, 20, .06);
+  color-scheme: light;
 }
 
 /* ========== 공지 히스토리 ========== */
