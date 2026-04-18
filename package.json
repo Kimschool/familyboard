@@ -1,0 +1,21 @@
+{
+  "name": "familyboard",
+  "version": "0.1.0",
+  "private": true,
+  "description": "부모님용 홈 대시보드 PWA (날씨/미세먼지/환율/메모/음악)",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.1",
+    "jsonwebtoken": "^9.0.2",
+    "mysql2": "^3.11.5"
+  }
+}

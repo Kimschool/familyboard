@@ -1,0 +1,12 @@
+version: "3.9"
+services:
+  familyboard:
+    image: familyboard:latest
+    container_name: familyboard
+    restart: unless-stopped
+    ports:
+      - "${HOST_PORT:-3010}:3010"
+    env_file:
+      - .env
+    volumes:
+      - ${NAS_DATA_DIR:-/volume2/familyboard데이터}:/app/data

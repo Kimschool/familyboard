@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+<meta name="theme-color" content="#F2F2F7" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="default" />
+<meta name="apple-mobile-web-app-title" content="가족보드" />
+<link rel="manifest" href="/manifest.json" />
+<link rel="apple-touch-icon" href="/icons/icon-192.png" />
+<link rel="icon" href="/icons/icon-192.png" />
+<link rel="stylesheet" href="/style.css" />
+<title>가족보드</title>
+</head>
+<body>
+
+<!-- 로그인 화면 -->
+<section id="login" class="screen login-screen hidden">
+  <div class="login-inner">
+    <div class="login-emoji">🌿</div>
+    <h1 class="login-title">가족보드</h1>
+    <p class="login-sub">가족 비밀번호를 입력해 주세요</p>
+    <input id="pw" class="pw-input" type="password" inputmode="numeric" placeholder="비밀번호" autocomplete="current-password" />
+    <button id="loginBtn" class="pw-btn">들어가기</button>
+    <p id="loginErr" class="pw-err"></p>
+  </div>
+</section>
+
+<!-- 메인 화면 -->
+<main id="app" class="screen hidden">
+
+  <header class="hero">
+    <p class="hero-date" id="todayStr">—</p>
+    <h1 class="hero-greeting" id="greeting">안녕하세요</h1>
+  </header>
+
+  <!-- 생일 배너 -->
+  <section id="birthdayBanner" class="banner hidden">
+    <span class="banner-emoji">🎂</span>
+    <div>
+      <p class="banner-title" id="bdTitle">—</p>
+      <p class="banner-sub" id="bdSub"></p>
+    </div>
+  </section>
+
+  <!-- 오늘 날씨/대기 카드 -->
+  <section class="card weather-card">
+    <div class="weather-top">
+      <div>
+        <p class="card-eyebrow" id="wCity">—</p>
+        <p class="weather-desc" id="wDesc">—</p>
+      </div>
+      <div class="weather-hero">
+        <span id="wIcon" class="weather-icon">☀️</span>
+        <span id="wTemp" class="weather-temp">--°</span>
+      </div>
+    </div>
+
+    <div class="weather-range">
+      <span>최고 <b id="wMax">--°</b></span>
+      <span class="dot">·</span>
+      <span>최저 <b id="wMin">--°</b></span>
+      <span class="dot">·</span>
+      <span>체감 <b id="wFeel">--°</b></span>
+    </div>
+
+    <div class="chip-row" id="chipRow">
+      <span class="chip"><span class="chip-k">습도</span><b id="wHum">--%</b></span>
+      <span class="chip"><span class="chip-k">미세</span><b id="aPm10">--</b><i class="lvl" id="aPm10L"></i></span>
+      <span class="chip"><span class="chip-k">초미세</span><b id="aPm25">--</b><i class="lvl" id="aPm25L"></i></span>
+      <span class="chip"><span class="chip-k">꽃가루</span><b id="aPol">--</b><i class="lvl" id="aPolL"></i></span>
+    </div>
+
+    <div class="tip" id="wTip">오늘의 안내를 불러오고 있어요.</div>
+  </section>
+
+  <!-- 환율 카드 -->
+  <section class="card fx-card">
+    <p class="card-title">오늘의 환율</p>
+    <ul class="fx-list">
+      <li>
+        <span class="fx-label">100엔 → 원</span>
+        <span class="fx-val" id="fxJpyKrw">—</span>
+      </li>
+      <li>
+        <span class="fx-label">1달러 → 엔</span>
+        <span class="fx-val" id="fxUsdJpy">—</span>
+      </li>
+      <li>
+        <span class="fx-label">1달러 → 원</span>
+        <span class="fx-val" id="fxUsdKrw">—</span>
+      </li>
+    </ul>
+    <p class="card-foot" id="fxTs">—</p>
+  </section>
+
+  <!-- 계산기 카드 -->
+  <section class="card calc-card">
+    <p class="card-title">환율 계산기</p>
+    <div class="calc-row">
+      <input id="calcAmt" class="calc-input" type="number" inputmode="decimal" placeholder="금액" />
+      <select id="calcFrom" class="calc-sel">
+        <option value="KRW">원</option>
+        <option value="JPY">엔</option>
+        <option value="USD">달러</option>
+      </select>
+    </div>
+    <div class="calc-arrow">↓</div>
+    <div class="calc-row">
+      <div class="calc-result" id="calcResult">—</div>
+      <select id="calcTo" class="calc-sel">
+        <option value="JPY">엔</option>
+        <option value="KRW">원</option>
+        <option value="USD">달러</option>
+      </select>
+    </div>
+  </section>
+
+  <!-- 메모 카드 -->
+  <section class="card memo-card">
+    <p class="card-title">오늘의 메모</p>
+    <ul class="memo-list" id="memoList"></ul>
+    <form id="memoForm" class="memo-form">
+      <input id="memoInput" class="memo-input" type="text" placeholder="할 일을 적어 주세요" maxlength="500" />
+      <button class="memo-add" type="submit">＋</button>
+    </form>
+  </section>
+
+  <!-- 음악 카드 -->
+  <section class="card music-card">
+    <p class="card-title">오늘의 음악</p>
+    <p class="card-eyebrow" id="musicMood">비 오는 날, 조용한 음악 어떠세요</p>
+    <ul class="music-list" id="musicList"></ul>
+  </section>
+
+  <footer class="foot">
+    <button id="logoutBtn" class="foot-btn">로그아웃</button>
+    <p class="foot-ver">familyboard · 부모님을 위한 하루 안내</p>
+  </footer>
+</main>
+
+<script src="/app.js" defer></script>
+</body>
+</html>
