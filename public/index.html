@@ -82,6 +82,16 @@
     </div>
   </header>
 
+  <!-- 가족 공지 (관리자가 남긴 메시지) -->
+  <section class="card notice-card hidden" id="noticeCard">
+    <div class="notice-head">
+      <span class="notice-pin">📌</span>
+      <span class="notice-label">가족 공지</span>
+      <span class="notice-meta" id="noticeMeta"></span>
+    </div>
+    <p class="notice-text" id="noticeText"></p>
+  </section>
+
   <!-- 이번 주 가족 기념일 -->
   <section class="card upcoming-card hidden" id="upcomingCard">
     <p class="card-title">이번 주 가족 기념일</p>
@@ -165,6 +175,7 @@
     <p class="question-text" id="questionText">—</p>
     <textarea id="questionAnswer" class="question-input" placeholder="답변을 적어 주세요 (가족에겐 내일 공개돼요)"></textarea>
     <button id="questionSubmit" type="button" class="question-submit">답변 저장</button>
+    <div class="question-participants" id="questionParticipants"></div>
     <p class="question-meta" id="questionMeta"></p>
     <div class="question-actions">
       <button id="qHistoryBtn" type="button" class="question-action-btn">지난 질문 모아보기</button>
@@ -243,8 +254,10 @@
     <ul class="memo-list" id="memoList"></ul>
     <form id="memoForm" class="memo-form">
       <input id="memoInput" class="memo-input" type="text" placeholder="오늘 기억할 일을 적어 주세요" maxlength="500" />
+      <button class="memo-mic" type="button" id="memoMic" aria-label="음성 입력" title="음성으로 말하기">🎤</button>
       <button class="memo-add" type="submit" aria-label="추가">＋</button>
     </form>
+    <p class="memo-mic-hint hidden" id="memoMicHint">🔴 듣고 있어요 — 말씀해 주세요</p>
   </section>
 
   <!-- 가족 관리 (관리자만) -->
@@ -265,6 +278,9 @@
           <input id="famName" class="ufi" type="text" />
           <button id="famNameSave" class="ufi-btn">저장</button>
         </div>
+        <label class="admin-label" style="margin-top:10px">가족 공지 (모두에게 상단에 표시)</label>
+        <textarea id="famNotice" class="ufi" style="height: 80px; padding: 10px 12px; font-family: inherit; font-size: 15px;" maxlength="500" placeholder="예: 오늘 저녁 7시에 모여요"></textarea>
+        <button id="famNoticeSave" class="ufi-btn" style="width: 100%; margin-top: 8px;">공지 저장</button>
       </div>
 
       <div class="admin-section">

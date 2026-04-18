@@ -260,6 +260,109 @@ body.tod-night .hero-date, body.tod-night .hero-greeting { color: #F2F2F7; }
 }
 body.tod-night .hero-weather { color: rgba(242,242,247,.8); }
 
+/* ========== 가족 공지 (관리자 pinned) ========== */
+.notice-card {
+  background: linear-gradient(135deg, #FFF9DB 0%, #FFE9B8 100%);
+  border-left: 5px solid #FFCC00;
+}
+@media (prefers-color-scheme: dark) {
+  .notice-card {
+    background: linear-gradient(135deg, #2A2819 0%, #2E261A 100%);
+    border-left-color: #FFCC00;
+  }
+}
+.notice-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+}
+.notice-pin { font-size: 20px; line-height: 1; }
+.notice-label {
+  font-size: 13px;
+  font-weight: 800;
+  color: #9A7B2E;
+  letter-spacing: 1px;
+}
+@media (prefers-color-scheme: dark) {
+  .notice-label { color: #E9C97A; }
+}
+.notice-meta { font-size: 12px; color: var(--sub); margin-left: auto; }
+.notice-text {
+  margin: 0;
+  font-size: 17px;
+  line-height: 1.55;
+  color: var(--text);
+  font-weight: 500;
+  word-break: keep-all;
+  white-space: pre-wrap;
+}
+
+/* ========== 질문 참여 아바타 ========== */
+.question-participants {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 12px;
+}
+.q-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px 5px 7px;
+  background: rgba(255,255,255,.5);
+  border-radius: 999px;
+  font-size: 12px;
+  color: var(--sub);
+  opacity: .55;
+  transition: opacity .2s, background .2s;
+}
+@media (prefers-color-scheme: dark) {
+  .q-chip { background: rgba(255,255,255,.08); }
+}
+.q-chip.done {
+  opacity: 1;
+  background: #fff;
+  color: var(--text);
+  font-weight: 700;
+  box-shadow: 0 1px 4px rgba(0,0,0,.08);
+}
+@media (prefers-color-scheme: dark) {
+  .q-chip.done { background: var(--card); }
+}
+.q-chip-emoji { font-size: 16px; line-height: 1; }
+
+/* ========== 메모 음성 입력 ========== */
+.memo-mic {
+  width: 60px; height: 60px;
+  border: 1.5px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--card);
+  color: var(--primary);
+  font-size: 24px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.memo-mic:active { transform: scale(.95); }
+.memo-mic.listening {
+  background: var(--bad);
+  color: #fff;
+  border-color: var(--bad);
+  animation: mic-pulse 1s ease-in-out infinite;
+}
+@keyframes mic-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+}
+.memo-mic-hint {
+  margin: 8px 0 0;
+  font-size: 13px;
+  color: var(--bad);
+  text-align: center;
+  font-weight: 600;
+}
+
 /* ========== 이번 주 기념일 ========== */
 .upcoming-card { background: linear-gradient(135deg, #E6F3FF 0%, #FFE8F0 100%); }
 @media (prefers-color-scheme: dark) {

@@ -278,17 +278,36 @@ app.delete('/api/users/:id', requireAdmin, async (req, res) => {
 // ---------- 가족 정보 (관리자: 별칭 수정) ----------
 app.get('/api/family', requireAuth, async (req, res) => {
   const [rows] = await getPool().query(
-    'SELECT alias, display_name FROM families WHERE id = ? LIMIT 1', [req.user.family_id]
+    `SELECT f.alias, f.display_name, f.notice, f.notice_updated_at,
+            u.display_name AS notice_by_name, u.icon AS notice_by_icon
+       FROM families f
+       LEFT JOIN users u ON u.id = f.notice_updated_by
+      WHERE f.id = ? LIMIT 1`,
+    [req.user.family_id]
   );
-  res.json(rows[0] ? { alias: rows[0].alias, displayName: rows[0].display_name } : {});
+  const r = rows[0];
+  if (!r) return res.json({});
+  res.json({
+    alias: r.alias,
+    displayName: r.display_name,
+    notice: r.notice || null,
+    noticeUpdatedAt: r.notice_updated_at,
+    noticeBy: r.notice_by_name ? { name: r.notice_by_name, icon: r.notice_by_icon } : null,
+  });
 });
 
 app.patch('/api/family', requireAdmin, async (req, res) => {
   try {
-    const { alias, displayName } = req.body || {};
+    const { alias, displayName, notice } = req.body || {};
     const upd = [], args = [];
     if (alias !== undefined) { upd.push('alias = ?'); args.push(String(alias).trim()); }
     if (displayName !== undefined) { upd.push('display_name = ?'); args.push(String(displayName).trim()); }
+    if (notice !== undefined) {
+      const n = String(notice).trim();
+      upd.push('notice = ?'); args.push(n || null);
+      upd.push('notice_updated_at = ?'); args.push(n ? new Date() : null);
+      upd.push('notice_updated_by = ?'); args.push(n ? req.user.id : null);
+    }
     if (!upd.length) return res.json({ ok: true });
     args.push(req.user.family_id);
     await getPool().query(`UPDATE families SET ${upd.join(', ')} WHERE id = ?`, args);
@@ -524,12 +543,19 @@ app.get('/api/question/today', requireAuth, async (req, res) => {
       "SELECT COUNT(*) AS c FROM users WHERE family_id = ? AND password_hash IS NOT NULL",
       [req.user.family_id]
     );
+    const [answerers] = await getPool().query(
+      `SELECT a.user_id, u.display_name, u.icon
+         FROM daily_answers a JOIN users u ON u.id = a.user_id
+        WHERE a.question_id = ?`,
+      [q.id]
+    );
     res.json({
       date: today,
       question: q.question_text,
       myAnswer: my[0]?.answer_text || null,
       answeredCount: counts[0].c,
       memberCount: members[0].c,
+      answerers,
     });
   } catch (e) { res.status(500).json({ error: 'internal', message: e.message }); }
 });

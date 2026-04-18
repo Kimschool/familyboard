@@ -248,6 +248,7 @@ function enterApp() {
   try { renderAccount(); } catch {}
 
   // 가족 공통 데이터 — 하나 실패해도 다른 카드는 로드되게
+  loadFamilyNotice();
   loadFamilySummary();
   loadBirthday();
   loadWeatherAndAir();
@@ -646,6 +647,39 @@ function renderMemos(list) {
     ul.appendChild(li);
   }
 }
+// ---------- 메모 음성 입력 ----------
+const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+let micRecognition = null;
+if (SpeechRecognition) {
+  $('memoMic').addEventListener('click', () => {
+    if (micRecognition) { micRecognition.stop(); return; }
+    micRecognition = new SpeechRecognition();
+    micRecognition.lang = 'ko-KR';
+    micRecognition.interimResults = true;
+    micRecognition.continuous = false;
+    $('memoMicHint').classList.remove('hidden');
+    $('memoMic').classList.add('listening');
+    micRecognition.onresult = (e) => {
+      let text = '';
+      for (const r of e.results) text += r[0].transcript;
+      $('memoInput').value = text.trim();
+    };
+    micRecognition.onerror = () => {
+      $('memoMicHint').classList.add('hidden');
+      $('memoMic').classList.remove('listening');
+      micRecognition = null;
+    };
+    micRecognition.onend = () => {
+      $('memoMicHint').classList.add('hidden');
+      $('memoMic').classList.remove('listening');
+      micRecognition = null;
+    };
+    try { micRecognition.start(); } catch {}
+  });
+} else {
+  $('memoMic').style.display = 'none';
+}
+
 $('memoForm').addEventListener('submit', async (e) => {
   e.preventDefault();
   const v = $('memoInput').value.trim(); if (!v) return;
@@ -725,6 +759,24 @@ async function loadFamilyInfo() {
     const f = await api('/api/family');
     $('famAlias').value = f.alias || '';
     $('famName').value = f.displayName || '';
+    $('famNotice').value = f.notice || '';
+  } catch {}
+}
+
+async function loadFamilyNotice() {
+  try {
+    const f = await api('/api/family');
+    if (f.notice) {
+      $('noticeText').textContent = f.notice;
+      if (f.noticeBy) {
+        const date = f.noticeUpdatedAt ? new Date(f.noticeUpdatedAt) : null;
+        const when = date ? relativeTime(date) : '';
+        $('noticeMeta').textContent = `${iconEmoji(f.noticeBy.icon)} ${f.noticeBy.name}${when ? ' · ' + when : ''}`;
+      } else { $('noticeMeta').textContent = ''; }
+      $('noticeCard').classList.remove('hidden');
+    } else {
+      $('noticeCard').classList.add('hidden');
+    }
   } catch {}
 }
 
@@ -747,6 +799,16 @@ $('famNameSave').addEventListener('click', async () => {
     await api('/api/family', { method: 'PATCH', body: JSON.stringify({ displayName }) });
     alert('가족 이름이 변경되었어요');
   } catch { alert('변경 실패'); }
+});
+
+$('famNoticeSave').addEventListener('click', async () => {
+  const notice = $('famNotice').value.trim();
+  try {
+    await api('/api/family', { method: 'PATCH', body: JSON.stringify({ notice }) });
+    $('famNoticeSave').textContent = '저장됐어요';
+    setTimeout(() => $('famNoticeSave').textContent = '공지 저장', 1500);
+    loadFamilyNotice();
+  } catch { alert('공지 저장 실패'); }
 });
 
 async function loadUsers() {
@@ -882,6 +944,22 @@ async function loadTodayQuestion() {
     $('questionAnswer').value = q.myAnswer || '';
     $('questionMeta').textContent =
       `${q.answeredCount} / ${q.memberCount}명이 답했어요 · 모든 답변은 내일 공개돼요`;
+
+    // 참여 아바타 — 답한 사람만 컬러, 아직 안 한 사람은 회색
+    const ids = new Set((q.answerers || []).map(a => a.user_id));
+    const pEl = $('questionParticipants');
+    pEl.innerHTML = '';
+    if (FAMILY_CACHE?.length) {
+      for (const m of FAMILY_CACHE) {
+        if (!m.activated) continue;
+        const div = document.createElement('div');
+        div.className = 'q-chip' + (ids.has(m.id) ? ' done' : '');
+        div.innerHTML = `<span class="q-chip-emoji">${iconEmoji(m.icon)}</span><span class="q-chip-name"></span>`;
+        div.querySelector('.q-chip-name').textContent = m.displayName;
+        div.title = ids.has(m.id) ? `${m.displayName}님 답변 완료` : `${m.displayName}님 아직`;
+        pEl.appendChild(div);
+      }
+    }
   } catch {
     $('questionText').textContent = '잠시 후 다시 시도해 주세요';
   }

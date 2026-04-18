@@ -81,6 +81,9 @@ async function ensureSchema() {
   await ensureColumn('users', 'invite_expires_at', 'DATETIME NULL');
   await changeColumn('users', 'password_hash', 'VARCHAR(255) NULL'); // 초대대기 허용
   await ensureColumn('memos', 'family_id', 'INT NULL');
+  await ensureColumn('families', 'notice', 'VARCHAR(500) NULL');
+  await ensureColumn('families', 'notice_updated_at', 'DATETIME NULL');
+  await ensureColumn('families', 'notice_updated_by', 'INT NULL');
 
   // 기본 가족 보장
   const [f] = await p.query('SELECT id FROM families LIMIT 1');
