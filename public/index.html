@@ -155,6 +155,8 @@
       <div class="sheet-row" id="profAgeRow"><span class="sheet-k">나이</span><span id="profAge">—</span></div>
       <div class="sheet-row" id="profZodiacRow"><span class="sheet-k">띠</span><span id="profZodiac">—</span></div>
       <div class="sheet-row" id="profFortuneRow"><span class="sheet-k">오늘 운세</span><span id="profFortune">—</span></div>
+      <div class="sheet-row" id="profTodayAnswerRow"><span class="sheet-k">오늘 질문</span><span id="profTodayAnswer">—</span></div>
+      <div class="sheet-row" id="profMemoCountRow"><span class="sheet-k">오늘 메모</span><span id="profMemoCount">—</span></div>
       <button class="sheet-close" id="sheetClose">닫기</button>
     </div>
   </div>
@@ -168,6 +170,7 @@
   </section>
 
   <section class="card weather-card" data-card-id="weather">
+    <button class="tts-btn tts-float" data-tts="weather" aria-label="읽어주기">🔊</button>
     <div class="weather-top">
       <div>
         <p class="card-eyebrow" id="wCity">—</p>
@@ -249,11 +252,16 @@
   </section>
 
   <section class="card zodiac-card" data-card-id="zodiac">
-    <p class="card-title">오늘의 띠별 운세</p>
+    <div class="card-head-row">
+      <p class="card-title">오늘의 띠별 운세</p>
+      <button class="tts-btn" data-tts="zodiac" aria-label="읽어주기">🔊</button>
+    </div>
     <ul class="zodiac-list" id="zodiacList">
       <li class="zodiac-empty">가족을 등록하면 운세를 보여드려요</li>
     </ul>
   </section>
+
+<!-- (원래 위치 그대로 placeholder) -->
 
   <section class="card fx-card" data-card-id="fx">
     <p class="card-title">오늘의 환율</p>
@@ -294,8 +302,16 @@
   </section>
 
   <section class="card memo-card" data-card-id="memo">
-    <p class="card-title">오늘의 메모</p>
+    <div class="card-head-row">
+      <p class="card-title">오늘의 메모</p>
+      <span class="memo-progress" id="memoProgress"></span>
+    </div>
     <ul class="memo-list" id="memoList"></ul>
+    <button type="button" class="memo-done-toggle hidden" id="memoDoneToggle">
+      <span id="memoDoneLabel">완료된 메모 0개</span>
+      <span class="memo-done-chev">▾</span>
+    </button>
+    <ul class="memo-list memo-done-list hidden" id="memoDoneList"></ul>
     <form id="memoForm" class="memo-form">
       <input id="memoInput" class="memo-input" type="text" placeholder="오늘 기억할 일을 적어 주세요" maxlength="500" />
       <button class="memo-mic" type="button" id="memoMic" aria-label="음성 입력" title="음성으로 말하기">🎤</button>

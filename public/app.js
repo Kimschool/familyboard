@@ -345,6 +345,7 @@ function relativeTime(dateStr) {
 
 let FAMILY_CACHE = [];
 let ZODIAC_CACHE = [];
+let QUESTION_ANSWERERS_CACHE = [];
 
 async function loadFamilySummary() {
   try {
@@ -390,6 +391,23 @@ function openProfileSheet(m) {
     $('profZodiacRow').classList.add('hidden');
     $('profFortuneRow').classList.add('hidden');
   }
+
+  // 오늘의 질문 답변 여부
+  const answered = QUESTION_ANSWERERS_CACHE.some((a) => a.user_id === m.id);
+  $('profTodayAnswer').textContent = answered ? '답변 완료 ✓' : '아직 답변 전';
+  $('profTodayAnswer').style.color = answered ? 'var(--good)' : 'var(--sub)';
+  $('profTodayAnswerRow').classList.remove('hidden');
+
+  // 오늘 메모 개수 (가족 전체 중 이 사용자가 쓴 것)
+  const todayYMD = new Date().toISOString().slice(0, 10);
+  const memoCount = (MEMO_CACHE || []).filter((x) => {
+    if (!x.created_at) return false;
+    const d = new Date(x.created_at);
+    const ymd = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    return x.created_by_name === m.displayName && ymd === todayYMD;
+  }).length;
+  $('profMemoCount').textContent = memoCount > 0 ? `${memoCount}개 작성` : '없음';
+  $('profMemoCountRow').classList.remove('hidden');
 
   $('profileSheet').classList.remove('hidden');
 }
@@ -598,21 +616,58 @@ function calcUpdate() {
 }
 
 // ---------- 메모 ----------
+let MEMO_CACHE = [];
 async function loadMemos() {
-  try { renderMemos(await api('/api/memos')); }
-  catch { renderMemos([]); }
+  try {
+    const list = await api('/api/memos');
+    MEMO_CACHE = list;
+    renderMemos(list);
+  } catch { renderMemos([]); }
 }
 function renderMemos(list) {
   const ul = $('memoList');
-  ul.innerHTML = '';
+  const doneUl = $('memoDoneList');
+  const toggleBtn = $('memoDoneToggle');
+  const progress = $('memoProgress');
+  ul.innerHTML = ''; doneUl.innerHTML = '';
+
+  const active = list.filter((m) => !m.done);
+  const done = list.filter((m) => m.done);
+
+  // 진행률
+  if (list.length) {
+    progress.textContent = done.length
+      ? `${done.length} / ${list.length} 완료`
+      : `${list.length}개 남음`;
+  } else {
+    progress.textContent = '';
+  }
+
   if (!list.length) {
     ul.innerHTML = `<li class="empty-state">
       <span class="empty-state-emoji">📝</span>
       <span class="empty-state-text">오늘은 깨끗해요. 아래에 새로 적어보세요</span>
     </li>`;
+    toggleBtn.classList.add('hidden');
+    doneUl.classList.add('hidden');
     return;
   }
-  for (const m of list) {
+  if (!active.length) {
+    ul.innerHTML = `<li class="empty-state">
+      <span class="empty-state-emoji">✨</span>
+      <span class="empty-state-text">오늘의 할 일을 모두 끝내셨어요!</span>
+    </li>`;
+  }
+  // 완료된 메모 토글
+  if (done.length) {
+    $('memoDoneLabel').textContent = `완료된 메모 ${done.length}개`;
+    toggleBtn.classList.remove('hidden');
+  } else {
+    toggleBtn.classList.add('hidden');
+    doneUl.classList.add('hidden');
+  }
+
+  const renderItem = (m, targetUl) => {
     const li = document.createElement('li');
     li.className = m.important ? 'memo-important' : '';
     li.innerHTML = `
@@ -635,9 +690,7 @@ function renderMemos(list) {
       li.querySelector('.memo-author-avatar').style.display = 'none';
       li.querySelector('.memo-author-name').style.display = 'none';
     }
-    if (m.created_at) {
-      li.querySelector('.memo-time').textContent = relativeTime(m.created_at);
-    }
+    if (m.created_at) li.querySelector('.memo-time').textContent = relativeTime(m.created_at);
     li.querySelector('.memo-check').onclick = async () => {
       await api(`/api/memos/${m.id}`, { method: 'PATCH', body: JSON.stringify({ done: !m.done }) });
       loadMemos();
@@ -651,8 +704,11 @@ function renderMemos(list) {
       await api(`/api/memos/${m.id}`, { method: 'DELETE' });
       loadMemos();
     };
-    ul.appendChild(li);
-  }
+    targetUl.appendChild(li);
+  };
+
+  for (const m of active) renderItem(m, ul);
+  for (const m of done) renderItem(m, doneUl);
 }
 // ---------- 메모 음성 입력 ----------
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -686,6 +742,12 @@ if (SpeechRecognition) {
 } else {
   $('memoMic').style.display = 'none';
 }
+
+$('memoDoneToggle').addEventListener('click', () => {
+  const list = $('memoDoneList');
+  list.classList.toggle('hidden');
+  $('memoDoneToggle').classList.toggle('open');
+});
 
 $('memoForm').addEventListener('submit', async (e) => {
   e.preventDefault();
@@ -1049,6 +1111,23 @@ function buildTtsText(kind) {
   if (kind === 'notice') {
     return `가족 공지입니다. ${$('noticeText').textContent}`;
   }
+  if (kind === 'weather') {
+    const city = $('wCity').textContent;
+    const desc = $('wDesc').textContent;
+    const t = $('wTemp').textContent;
+    const mx = $('wMax').textContent, mn = $('wMin').textContent;
+    const feel = $('wFeel').textContent, hum = $('wHum').textContent;
+    return `${city} ${desc}. 현재 기온 ${t}, 최고 ${mx}, 최저 ${mn}, 체감 ${feel}, 습도 ${hum}.`;
+  }
+  if (kind === 'zodiac') {
+    const items = Array.from(document.querySelectorAll('#zodiacList li')).map((li) => {
+      const name = li.querySelector('.zodiac-name')?.textContent || '';
+      const tag = li.querySelector('.zodiac-tag')?.textContent || '';
+      const fortune = li.querySelector('.zodiac-fortune')?.textContent || '';
+      return name ? `${name} ${tag}. ${fortune}` : '';
+    }).filter(Boolean).join(' ');
+    return `오늘의 띠별 운세입니다. ${items}`;
+  }
   return '';
 }
 document.querySelectorAll('.tts-btn').forEach((btn) => {
@@ -1087,6 +1166,7 @@ async function loadTodayQuestion() {
     $('qPendingBadge').classList.toggle('hidden', !!q.myAnswer);
 
     // 참여 아바타 — 답한 사람만 컬러, 아직 안 한 사람은 회색
+    QUESTION_ANSWERERS_CACHE = q.answerers || [];
     const ids = new Set((q.answerers || []).map(a => a.user_id));
     const pEl = $('questionParticipants');
     pEl.innerHTML = '';

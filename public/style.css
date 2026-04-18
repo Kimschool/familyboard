@@ -282,6 +282,13 @@ body.tod-night .hero-weather { color: rgba(242,242,247,.8); }
   flex-shrink: 0;
   transition: background .15s, transform .1s;
 }
+.tts-float {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  z-index: 2;
+}
+.weather-card { position: relative; }
 .tts-btn:hover { border-color: var(--primary); }
 .tts-btn:active { transform: scale(.95); }
 .tts-btn.speaking {
@@ -1298,6 +1305,38 @@ body.reorder-mode #app #birthdayBanner { padding-top: 28px; }
   background: var(--primary); color: #fff;
   font-size: 17px; font-weight: 600; cursor: pointer;
 }
+
+/* 메모 진행률 표시 */
+.memo-progress {
+  font-size: 13px;
+  color: var(--sub);
+  font-weight: 600;
+  background: var(--bg);
+  padding: 4px 12px;
+  border-radius: 999px;
+}
+
+/* 완료된 메모 접기 토글 */
+.memo-done-toggle {
+  width: 100%;
+  margin-top: 10px;
+  padding: 12px;
+  background: var(--bg);
+  border: none;
+  border-radius: var(--r-sm);
+  color: var(--sub);
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 6px;
+}
+.memo-done-chev { transition: transform .2s; }
+.memo-done-toggle.open .memo-done-chev { transform: rotate(180deg); }
+.memo-done-list { margin-top: 8px; opacity: .75; }
 
 /* ========== 메모 중요(별표) ========== */
 .memo-star {
