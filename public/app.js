@@ -305,6 +305,7 @@ function enterApp() {
   loadPoll();
   loadDiary();
   loadEvents();
+  loadMissions();
 
   // 관리자 UI — 설정 화면으로 이동 (계정 카드의 '가족 관리' 버튼으로 열림)
   try {
@@ -1212,6 +1213,111 @@ async function loadWeeklyReport() {
   } catch {}
 }
 
+// ---------- 주간 미션 ----------
+async function loadMissions() {
+  try {
+    const list = await api('/api/missions/week');
+    const ul = $('missionsList');
+    ul.innerHTML = '';
+    if (!list.length) { $('missionsCard').classList.add('hidden'); return; }
+    let doneCount = 0;
+    for (const m of list) {
+      const pct = Math.round((m.progress / m.target) * 100);
+      const done = m.progress >= m.target;
+      if (done) doneCount++;
+      const li = document.createElement('li');
+      li.className = 'mission-item' + (done ? ' done' : '');
+      li.innerHTML = `
+        <span class="ms-emoji">${m.emoji}</span>
+        <div class="ms-body">
+          <div class="ms-title"></div>
+          <div class="ms-bar-wrap"><div class="ms-bar" style="width:${Math.min(100, pct)}%"></div></div>
+        </div>
+        <span class="ms-count">${m.progress}/${m.target}</span>
+        ${done ? '<span class="ms-check">✓</span>' : ''}`;
+      li.querySelector('.ms-title').textContent = m.title;
+      ul.appendChild(li);
+    }
+    $('missionsCard').classList.remove('hidden');
+    if (doneCount === list.length) {
+      const congrat = document.createElement('li');
+      congrat.className = 'mission-congrat';
+      congrat.textContent = '🎉 이번 주 미션 전부 완료! 멋져요';
+      ul.appendChild(congrat);
+    }
+  } catch {}
+}
+
+// ---------- 내 정보 편집 ----------
+let MY_PICKED_ICON = 'star';
+$('myProfileBtn').addEventListener('click', () => openMyProfileSheet());
+function openMyProfileSheet() {
+  MY_PICKED_ICON = ME.icon || 'star';
+  $('myDisplay').value = ME.displayName || '';
+  $('myYear').value  = ME.birthYear  || '';
+  $('myMonth').value = ME.birthMonth || '';
+  $('myDay').value   = ME.birthDay   || '';
+  $('myLunar').checked = !!ME.isLunar;
+  // phone 은 FAMILY_CACHE 에서 가져오기
+  const self = (FAMILY_CACHE || []).find((x) => x.id === ME.id);
+  $('myPhone').value = self?.phone || '';
+  $('myCurrentPw').value = ''; $('myNewPw').value = '';
+  renderMyIconPicker();
+  $('myProfileSheet').classList.remove('hidden');
+}
+function renderMyIconPicker() {
+  const grid = $('myIconPicker');
+  grid.innerHTML = '';
+  for (const i of ICONS) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'icon-opt' + (i.code === MY_PICKED_ICON ? ' selected' : '');
+    b.title = i.label;
+    b.innerHTML = `<span class="icon-emoji">${i.emoji}</span>`;
+    b.onclick = () => {
+      MY_PICKED_ICON = i.code;
+      grid.querySelectorAll('.icon-opt').forEach((x) => x.classList.remove('selected'));
+      b.classList.add('selected');
+    };
+    grid.appendChild(b);
+  }
+}
+$('myProfileClose').addEventListener('click', () => $('myProfileSheet').classList.add('hidden'));
+$('myProfileSheet').addEventListener('click', (e) => {
+  if (e.target.id === 'myProfileSheet') $('myProfileSheet').classList.add('hidden');
+});
+$('mySave').addEventListener('click', async () => {
+  const body = {
+    displayName: $('myDisplay').value.trim(),
+    icon: MY_PICKED_ICON,
+    birthYear:  $('myYear').value  || null,
+    birthMonth: $('myMonth').value || null,
+    birthDay:   $('myDay').value   || null,
+    isLunar: $('myLunar').checked,
+    phone: $('myPhone').value.trim() || null,
+  };
+  const newPw = $('myNewPw').value;
+  const curPw = $('myCurrentPw').value;
+  if (newPw) {
+    if (newPw.length < 4) { alert('비밀번호는 4자 이상'); return; }
+    if (!curPw) { alert('현재 비밀번호를 입력해 주세요'); return; }
+    body.password = newPw;
+    body.currentPassword = curPw;
+  }
+  try {
+    await api('/api/me', { method: 'PATCH', body: JSON.stringify(body) });
+    // ME 캐시 업데이트
+    ME = { ...ME, ...body, displayName: body.displayName, icon: MY_PICKED_ICON };
+    $('myProfileSheet').classList.add('hidden');
+    // 새로고침으로 모든 UI 반영
+    location.reload();
+  } catch (e) {
+    if (e.status === 401) alert('현재 비밀번호가 맞지 않아요');
+    else if (e.status === 409) alert('이름이 이미 사용중이에요');
+    else alert('저장 실패');
+  }
+});
+
 // ---------- 가족 공용 일정 ----------
 let EVENTS_CACHE = [];
 async function loadEvents() {
@@ -2046,6 +2152,15 @@ let MEMO_CACHE = [];
 let MEMO_QUERY = '';
 let MEMO_SORT = localStorage.getItem('fb_memo_sort') || 'default';
 let MEMO_DUE_DAYS = 'none'; // 'none' | '0' | '1' | '7' | '30'
+let MEMO_FILTER = 'all'; // 'all' | 'important' | '🛒' | '💊' | ...
+document.querySelectorAll('.memo-filter').forEach((b) => {
+  b.addEventListener('click', () => {
+    MEMO_FILTER = b.dataset.filter;
+    document.querySelectorAll('.memo-filter').forEach((x) => x.classList.remove('active'));
+    b.classList.add('active');
+    renderMemos(MEMO_CACHE);
+  });
+});
 async function loadMemos() {
   try {
     const list = await api('/api/memos');
@@ -2091,7 +2206,12 @@ function renderMemos(list) {
 
   const q = MEMO_QUERY;
   let filtered = q ? list.filter((m) => (m.content || '').toLowerCase().includes(q)) : list;
-  // 정렬 (완료/미완료 분리는 기존대로 유지하지만 각 섹션 내부에서 정렬 적용)
+  // 카테고리 필터
+  if (MEMO_FILTER === 'important') {
+    filtered = filtered.filter((m) => m.important);
+  } else if (MEMO_FILTER !== 'all') {
+    filtered = filtered.filter((m) => (m.content || '').trim().startsWith(MEMO_FILTER));
+  }
   filtered = sortMemos(filtered);
 
   const active = filtered.filter((m) => !m.done);

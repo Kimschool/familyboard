@@ -1192,6 +1192,70 @@ body.tod-night .hero-weather { color: rgba(242,242,247,.8); }
   list-style: none;
 }
 
+/* ========== 주간 미션 ========== */
+.missions-card {
+  background: linear-gradient(135deg, #FFF9E6 0%, #FFEFE8 100%);
+}
+@media (prefers-color-scheme: dark) {
+  .missions-card { background: linear-gradient(135deg, #2A2619 0%, #2A1F1A 100%); }
+}
+.missions-card .card-title { color: #9A6B2E; }
+@media (prefers-color-scheme: dark) { .missions-card .card-title { color: #E9B97A; } }
+.missions-list { list-style: none; padding: 0; margin: 0; }
+.mission-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid rgba(0,0,0,.06);
+}
+.mission-item:last-child { border-bottom: none; }
+@media (prefers-color-scheme: dark) { .mission-item { border-bottom-color: rgba(255,255,255,.08); } }
+.mission-item.done .ms-title { text-decoration: line-through; color: var(--sub); }
+.ms-emoji { font-size: 26px; line-height: 1; flex-shrink: 0; }
+.ms-body { flex: 1; min-width: 0; }
+.ms-title { font-size: 14px; font-weight: 700; color: var(--text); margin-bottom: 4px; }
+.ms-bar-wrap { height: 6px; background: rgba(0,0,0,.08); border-radius: 999px; overflow: hidden; }
+@media (prefers-color-scheme: dark) { .ms-bar-wrap { background: rgba(255,255,255,.1); } }
+.ms-bar {
+  height: 100%;
+  background: linear-gradient(90deg, #FFCC00, #FF9500);
+  border-radius: 999px;
+  transition: width .35s ease;
+}
+.mission-item.done .ms-bar { background: var(--good); }
+.ms-count { font-size: 12px; font-weight: 800; color: var(--sub); }
+.ms-check { font-size: 18px; color: var(--good); font-weight: 900; }
+.mission-congrat {
+  text-align: center;
+  margin-top: 12px;
+  padding: 10px;
+  background: linear-gradient(135deg, #FFD966, #FFA94D);
+  color: #fff;
+  font-weight: 800;
+  border-radius: 10px;
+}
+
+/* 메모 필터 탭 */
+.memo-filter-row {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  margin: 6px 0 8px;
+}
+.memo-filter {
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  cursor: pointer;
+  font-family: inherit;
+}
+.memo-filter.active { background: var(--primary); color: #fff; border-color: var(--primary); }
+
 /* ========== 가족 공용 일정 ========== */
 .events-card {
   background: linear-gradient(135deg, #E6F9FF 0%, #F0E6FF 100%);

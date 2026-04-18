@@ -113,6 +113,83 @@ app.get('/api/me', async (req, res) => {
   res.json({ authed: true, user: publicUser(u) });
 });
 
+// ---------- 내 프로필 편집 (본인 전용) ----------
+app.patch('/api/me', requireAuth, async (req, res) => {
+  try {
+    const updates = [];
+    const args = [];
+    const { displayName, icon, birthYear, birthMonth, birthDay, isLunar, phone, password, currentPassword } = req.body || {};
+
+    if (displayName !== undefined) {
+      const d = String(displayName).trim().slice(0, 50);
+      if (!d) return res.status(400).json({ error: 'name-required' });
+      updates.push('display_name = ?'); args.push(d);
+    }
+    if (icon !== undefined) { updates.push('icon = ?'); args.push(String(icon).trim().slice(0, 30) || 'star'); }
+    if (birthYear !== undefined)  { updates.push('birth_year = ?');  args.push(Number(birthYear)  || null); }
+    if (birthMonth !== undefined) { updates.push('birth_month = ?'); args.push(Number(birthMonth) || null); }
+    if (birthDay !== undefined)   { updates.push('birth_day = ?');   args.push(Number(birthDay)   || null); }
+    if (isLunar !== undefined)    { updates.push('is_lunar = ?');    args.push(isLunar ? 1 : 0); }
+    if (phone !== undefined)      { updates.push('phone = ?');       args.push(String(phone).trim() || null); }
+
+    if (password) {
+      if (String(password).length < 4) return res.status(400).json({ error: 'password-too-short' });
+      if (!currentPassword) return res.status(400).json({ error: 'current-password-required' });
+      const [cur] = await getPool().query('SELECT password_hash FROM users WHERE id = ? LIMIT 1', [req.user.id]);
+      if (!cur.length || !bcrypt.compareSync(currentPassword, cur[0].password_hash)) {
+        return res.status(401).json({ error: 'current-password-wrong' });
+      }
+      updates.push('password_hash = ?'); args.push(bcrypt.hashSync(password, 10));
+    }
+
+    if (!updates.length) return res.json({ ok: true });
+    args.push(req.user.id);
+    await getPool().query(`UPDATE users SET ${updates.join(', ')} WHERE id = ?`, args);
+    res.json({ ok: true });
+  } catch (e) {
+    if (e.code === 'ER_DUP_ENTRY') return res.status(409).json({ error: 'display-exists' });
+    res.status(500).json({ error: 'internal', message: e.message });
+  }
+});
+
+// ---------- 주간 미션 ----------
+app.get('/api/missions/week', requireAuth, async (req, res) => {
+  try {
+    const [ans] = await getPool().query(
+      `SELECT COUNT(*) AS c FROM daily_answers a
+         JOIN daily_questions q ON q.id = a.question_id
+        WHERE a.user_id = ? AND q.family_id = ?
+          AND a.answer_text IS NOT NULL AND a.is_skip = 0
+          AND q.question_date >= DATE_SUB(CURDATE(), INTERVAL 6 DAY)`,
+      [req.user.id, req.user.family_id]
+    );
+    const [memos] = await getPool().query(
+      `SELECT COUNT(*) AS c FROM memos
+        WHERE family_id = ? AND created_by = ?
+          AND created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)`,
+      [req.user.family_id, req.user.id]
+    );
+    const [stkSent] = await getPool().query(
+      `SELECT COUNT(*) AS c FROM family_stickers
+        WHERE family_id = ? AND sender_id = ?
+          AND sticker_date >= DATE_SUB(CURDATE(), INTERVAL 6 DAY)`,
+      [req.user.family_id, req.user.id]
+    );
+    const [moodCnt] = await getPool().query(
+      `SELECT COUNT(*) AS c FROM mood_history
+        WHERE user_id = ? AND mood_date >= DATE_SUB(CURDATE(), INTERVAL 6 DAY)`,
+      [req.user.id]
+    );
+    const missions = [
+      { key: 'answer3', emoji: '💬', title: '가족 질문에 3번 답하기', target: 3, progress: Math.min(3, Number(ans[0].c)) },
+      { key: 'sticker5', emoji: '💖', title: '응원 스티커 5개 보내기', target: 5, progress: Math.min(5, Number(stkSent[0].c)) },
+      { key: 'memo3', emoji: '📝', title: '메모 3개 작성하기', target: 3, progress: Math.min(3, Number(memos[0].c)) },
+      { key: 'mood5', emoji: '😊', title: '기분 체크인 5일', target: 5, progress: Math.min(5, Number(moodCnt[0].c)) },
+    ];
+    res.json(missions);
+  } catch (e) { res.status(500).json({ error: 'internal', message: e.message }); }
+});
+
 app.post('/api/me/mood', requireAuth, async (req, res) => {
   try {
     const mood = (req.body?.mood || '').toString().trim();

@@ -421,6 +421,40 @@
     </div>
   </div>
 
+  <!-- 내 정보 편집 시트 -->
+  <div id="myProfileSheet" class="sheet-backdrop hidden" role="dialog">
+    <div class="sheet sheet-tall" role="document">
+      <div class="sheet-handle"></div>
+      <h2 class="sheet-title">👤 내 정보 편집</h2>
+      <label class="admin-label">이름</label>
+      <input id="myDisplay" class="ufi" type="text" maxlength="50" />
+      <label class="admin-label" style="margin-top: 12px">내 아이콘</label>
+      <div id="myIconPicker" class="icon-picker"></div>
+      <label class="admin-label" style="margin-top: 12px">생일</label>
+      <div class="ufi-row">
+        <input id="myYear"  class="ufi-s" type="number" placeholder="년도" />
+        <input id="myMonth" class="ufi-s" type="number" placeholder="월" min="1" max="12" />
+        <input id="myDay"   class="ufi-s" type="number" placeholder="일" min="1" max="31" />
+      </div>
+      <label class="ufi-check" style="margin-top: 8px">
+        <input id="myLunar" type="checkbox" /> 음력
+      </label>
+      <label class="admin-label" style="margin-top: 12px">전화번호 (선택)</label>
+      <input id="myPhone" class="ufi" type="tel" placeholder="010-1234-5678" />
+      <label class="admin-label" style="margin-top: 18px">비밀번호 변경 (선택)</label>
+      <input id="myCurrentPw" class="ufi" type="password" placeholder="현재 비밀번호" style="margin-bottom: 8px" />
+      <input id="myNewPw" class="ufi" type="password" placeholder="새 비밀번호 (최소 4자)" />
+      <button id="mySave" type="button" class="user-add" style="margin-top: 16px">저장</button>
+      <button class="sheet-close" id="myProfileClose">취소</button>
+    </div>
+  </div>
+
+  <!-- 주간 미션 -->
+  <section class="card missions-card hidden" data-card-id="missions" id="missionsCard">
+    <p class="card-title">🎯 이번 주 미션</p>
+    <ul class="missions-list" id="missionsList"></ul>
+  </section>
+
   <!-- 질문 제안 바텀시트 -->
   <div id="suggestSheet" class="sheet-backdrop hidden" role="dialog">
     <div class="sheet sheet-tall" role="document">
@@ -593,6 +627,14 @@
         <option value="oldest">오래된 순</option>
         <option value="author">작성자별</option>
       </select>
+    </div>
+    <div class="memo-filter-row" id="memoFilterRow">
+      <button type="button" class="memo-filter active" data-filter="all">전체</button>
+      <button type="button" class="memo-filter" data-filter="important">⭐ 중요</button>
+      <button type="button" class="memo-filter" data-filter="🛒">🛒</button>
+      <button type="button" class="memo-filter" data-filter="💊">💊</button>
+      <button type="button" class="memo-filter" data-filter="🏥">🏥</button>
+      <button type="button" class="memo-filter" data-filter="📞">📞</button>
     </div>
     <div class="memo-bulk-bar hidden" id="memoBulkBar">
       <span class="memo-bulk-count" id="memoBulkCount">0개 선택</span>
@@ -862,6 +904,7 @@
       </div>
     </div>
     <div class="account-menu">
+      <button id="myProfileBtn" type="button" class="account-menu-btn">👤 내 정보 편집</button>
       <button id="helpBtn" type="button" class="account-menu-btn">❓ 도움말</button>
       <button id="reorderToggleBtn" type="button" class="account-menu-btn">🧩 카드 순서·표시 편집</button>
       <button id="openSettingsBtn" type="button" class="account-menu-btn hidden">⚙️ 가족 관리 설정</button>
