@@ -370,32 +370,131 @@ body {
 }
 .memo-add:active { transform: scale(0.96); }
 
-/* ---------- 음악 ---------- */
-.music-list { list-style: none; margin: 10px 0 0; padding: 0; }
-.music-list li {
+/* ---------- 건강 조언 4개 ---------- */
+.tips-card .card-title { font-size: 16px; color: var(--text); font-weight: 600; }
+.tips { list-style: none; margin: 0; padding: 0; }
+.tips li {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 12px;
-  padding: 14px 4px;
+  padding: 12px 0;
   border-bottom: 1px solid var(--line);
-  cursor: pointer;
-  transition: transform .1s ease;
 }
-.music-list li:last-child { border-bottom: none; }
-.music-list li:active { transform: scale(0.99); }
-.music-play {
-  width: 40px; height: 40px;
-  border-radius: 50%;
+.tips li:last-child { border-bottom: none; }
+.tip-ico { font-size: 22px; line-height: 1.2; flex-shrink: 0; }
+.tip-text { font-size: 16px; line-height: 1.5; color: var(--text); }
+
+/* ---------- 띠별 운세 ---------- */
+.zodiac-list { list-style: none; margin: 0; padding: 0; }
+.zodiac-list li {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line);
+}
+.zodiac-list li:last-child { border-bottom: none; }
+.zodiac-empty {
+  display: block !important;
+  color: var(--sub);
+  font-size: 14px;
+  text-align: center;
+  padding: 14px 0 !important;
+  border: none !important;
+}
+.zodiac-emoji { font-size: 30px; line-height: 1; flex-shrink: 0; }
+.zodiac-body { flex: 1; }
+.zodiac-top { display: flex; gap: 8px; align-items: baseline; }
+.zodiac-name { font-size: 16px; font-weight: 600; }
+.zodiac-tag {
+  font-size: 12px;
+  color: var(--sub);
+  background: var(--bg);
+  border-radius: 999px;
+  padding: 2px 8px;
+}
+.zodiac-fortune {
+  font-size: 15px;
+  color: var(--text);
+  margin-top: 4px;
+  line-height: 1.45;
+}
+
+/* ---------- 가족 관리 ---------- */
+.admin-card { padding: 0; overflow: hidden; }
+.admin-toggle {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: none;
+  border: none;
+  padding: 16px 18px;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text);
+  cursor: pointer;
+}
+.admin-chevron { color: var(--sub); transition: transform .2s; }
+.admin-toggle.open .admin-chevron { transform: rotate(180deg); }
+.admin-body { padding: 0 18px 18px; }
+.user-list { list-style: none; margin: 0 0 14px; padding: 0; }
+.user-list li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+}
+.user-list li:last-child { border-bottom: none; }
+.user-name { font-size: 15px; font-weight: 600; }
+.user-sub { font-size: 12px; color: var(--sub); margin-top: 2px; }
+.user-del {
+  background: none;
+  border: 1px solid var(--line);
+  color: var(--sub);
+  border-radius: 999px;
+  width: 28px; height: 28px;
+  font-size: 13px;
+  cursor: pointer;
+}
+.user-del:disabled { opacity: .3; cursor: not-allowed; }
+
+.user-form { display: flex; flex-direction: column; gap: 8px; }
+.ufi, .ufi-s {
+  height: 44px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--bg);
+  color: var(--text);
+  padding: 0 12px;
+  font-size: 15px;
+  outline: none;
+}
+.ufi:focus, .ufi-s:focus { border-color: var(--primary); background: var(--card); }
+.ufi-row { display: flex; gap: 8px; }
+.ufi-s { flex: 1; min-width: 0; }
+.ufi-check {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 14px; color: var(--sub);
+  padding: 4px 0;
+}
+.user-add {
+  height: 48px;
+  border: none;
+  border-radius: var(--r-sm);
   background: var(--primary);
   color: #fff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
   font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  margin-top: 4px;
 }
-.music-title { font-size: 17px; font-weight: 600; }
-.music-sub { font-size: 13px; color: var(--sub); margin-top: 1px; }
+.user-add:active { transform: scale(.98); }
+
+/* ---------- 메모 작성자 표시 ---------- */
+.memo-body { flex: 1; display: flex; flex-direction: column; }
+.memo-author { font-size: 12px; color: var(--sub); margin-top: 2px; }
 
 /* ---------- Footer ---------- */
 .foot {

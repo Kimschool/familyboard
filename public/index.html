@@ -15,19 +15,20 @@
 </head>
 <body>
 
-<!-- 로그인 화면 -->
+<!-- 로그인 -->
 <section id="login" class="screen login-screen hidden">
   <div class="login-inner">
     <div class="login-emoji">🌿</div>
     <h1 class="login-title">가족보드</h1>
-    <p class="login-sub">가족 비밀번호를 입력해 주세요</p>
-    <input id="pw" class="pw-input" type="password" inputmode="numeric" placeholder="비밀번호" autocomplete="current-password" />
+    <p class="login-sub">아이디와 비밀번호를 입력해 주세요</p>
+    <input id="un" class="pw-input" type="text" placeholder="아이디" autocomplete="username" autocapitalize="off" />
+    <input id="pw" class="pw-input" type="password" placeholder="비밀번호" autocomplete="current-password" />
     <button id="loginBtn" class="pw-btn">들어가기</button>
     <p id="loginErr" class="pw-err"></p>
   </div>
 </section>
 
-<!-- 메인 화면 -->
+<!-- 메인 -->
 <main id="app" class="screen hidden">
 
   <header class="hero">
@@ -44,7 +45,7 @@
     </div>
   </section>
 
-  <!-- 오늘 날씨/대기 카드 -->
+  <!-- 오늘 날씨/대기 -->
   <section class="card weather-card">
     <div class="weather-top">
       <div>
@@ -65,44 +66,52 @@
       <span>체감 <b id="wFeel">--°</b></span>
     </div>
 
-    <div class="chip-row" id="chipRow">
+    <div class="chip-row">
       <span class="chip"><span class="chip-k">습도</span><b id="wHum">--%</b></span>
       <span class="chip"><span class="chip-k">미세</span><b id="aPm10">--</b><i class="lvl" id="aPm10L"></i></span>
       <span class="chip"><span class="chip-k">초미세</span><b id="aPm25">--</b><i class="lvl" id="aPm25L"></i></span>
       <span class="chip"><span class="chip-k">꽃가루</span><b id="aPol">--</b><i class="lvl" id="aPolL"></i></span>
     </div>
-
-    <div class="tip" id="wTip">오늘의 안내를 불러오고 있어요.</div>
   </section>
 
-  <!-- 환율 카드 -->
+  <!-- 부모님 건강 조언 4개 -->
+  <section class="card tips-card">
+    <p class="card-title" id="tipsTitle">오늘의 안내</p>
+    <ul class="tips">
+      <li><span class="tip-ico">👕</span><span class="tip-text" id="tipDress">—</span></li>
+      <li><span class="tip-ico">💧</span><span class="tip-text" id="tipHum">—</span></li>
+      <li><span class="tip-ico">😷</span><span class="tip-text" id="tipAir">—</span></li>
+      <li><span class="tip-ico">🌼</span><span class="tip-text" id="tipPollen">—</span></li>
+    </ul>
+  </section>
+
+  <!-- 띠별 운세 -->
+  <section class="card zodiac-card">
+    <p class="card-title">오늘의 띠별 운세</p>
+    <ul class="zodiac-list" id="zodiacList">
+      <li class="zodiac-empty">가족을 등록하면 운세를 보여드려요</li>
+    </ul>
+  </section>
+
+  <!-- 환율 -->
   <section class="card fx-card">
     <p class="card-title">오늘의 환율</p>
     <ul class="fx-list">
-      <li>
-        <span class="fx-label">100엔 → 원</span>
-        <span class="fx-val" id="fxJpyKrw">—</span>
-      </li>
-      <li>
-        <span class="fx-label">1달러 → 엔</span>
-        <span class="fx-val" id="fxUsdJpy">—</span>
-      </li>
-      <li>
-        <span class="fx-label">1달러 → 원</span>
-        <span class="fx-val" id="fxUsdKrw">—</span>
-      </li>
+      <li><span class="fx-label">100엔 → 원</span><span class="fx-val" id="fxJpyKrw">—</span></li>
+      <li><span class="fx-label">1달러 → 엔</span><span class="fx-val" id="fxUsdJpy">—</span></li>
+      <li><span class="fx-label">1달러 → 원</span><span class="fx-val" id="fxUsdKrw">—</span></li>
     </ul>
     <p class="card-foot" id="fxTs">—</p>
   </section>
 
-  <!-- 계산기 카드 -->
+  <!-- 환율 계산기 -->
   <section class="card calc-card">
     <p class="card-title">환율 계산기</p>
     <div class="calc-row">
       <input id="calcAmt" class="calc-input" type="number" inputmode="decimal" placeholder="금액" />
       <select id="calcFrom" class="calc-sel">
-        <option value="KRW">원</option>
         <option value="JPY">엔</option>
+        <option value="KRW">원</option>
         <option value="USD">달러</option>
       </select>
     </div>
@@ -110,14 +119,14 @@
     <div class="calc-row">
       <div class="calc-result" id="calcResult">—</div>
       <select id="calcTo" class="calc-sel">
-        <option value="JPY">엔</option>
         <option value="KRW">원</option>
+        <option value="JPY">엔</option>
         <option value="USD">달러</option>
       </select>
     </div>
   </section>
 
-  <!-- 메모 카드 -->
+  <!-- 메모 -->
   <section class="card memo-card">
     <p class="card-title">오늘의 메모</p>
     <ul class="memo-list" id="memoList"></ul>
@@ -127,11 +136,29 @@
     </form>
   </section>
 
-  <!-- 음악 카드 -->
-  <section class="card music-card">
-    <p class="card-title">오늘의 음악</p>
-    <p class="card-eyebrow" id="musicMood">비 오는 날, 조용한 음악 어떠세요</p>
-    <ul class="music-list" id="musicList"></ul>
+  <!-- 가족 관리 (관리자만) -->
+  <section id="adminCard" class="card admin-card hidden">
+    <button class="admin-toggle" id="adminToggle">
+      <span>가족 관리</span>
+      <span class="admin-chevron">▾</span>
+    </button>
+    <div class="admin-body hidden" id="adminBody">
+      <ul class="user-list" id="userList"></ul>
+      <form id="userForm" class="user-form">
+        <input id="uUsername"  class="ufi" type="text"     placeholder="아이디 (예: mom)" autocapitalize="off" />
+        <input id="uDisplay"   class="ufi" type="text"     placeholder="표시 이름 (예: 엄마)" />
+        <input id="uPassword"  class="ufi" type="password" placeholder="비밀번호 (최소 4자)" />
+        <div class="ufi-row">
+          <input id="uYear"  class="ufi-s" type="number" placeholder="출생년도 (예: 1960)" />
+          <input id="uMonth" class="ufi-s" type="number" placeholder="월" min="1" max="12" />
+          <input id="uDay"   class="ufi-s" type="number" placeholder="일" min="1" max="31" />
+        </div>
+        <label class="ufi-check">
+          <input id="uLunar" type="checkbox" /> 음력
+        </label>
+        <button type="submit" class="user-add">가족 추가</button>
+      </form>
+    </div>
   </section>
 
   <footer class="foot">
