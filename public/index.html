@@ -370,6 +370,8 @@
     </div>
     <div class="question-actions-row">
       <button id="questionSubmit" type="button" class="question-submit">답변 저장</button>
+    </div>
+    <div class="question-skip-wrap">
       <button id="questionSkip" type="button" class="question-skip">오늘은 건너뛸게요</button>
     </div>
     <div class="streak-row hidden" id="streakRow">
@@ -1115,6 +1117,6 @@
     caches.keys().then((ks) => ks.forEach((k) => caches.delete(k))).catch(() => {});
   }
 </script>
-<script src="/app.js?v=24" defer></script>
+<script src="/app.js?v=25" defer></script>
 </body>
 </html>

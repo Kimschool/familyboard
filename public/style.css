@@ -2321,20 +2321,29 @@ body.tod-night .hero-weather { color: rgba(242,242,247,.8); }
   margin-top: 10px;
 }
 .question-submit { flex: 1; margin-top: 0 !important; }
+.question-skip-wrap {
+  text-align: center;
+  margin-top: 6px;
+}
 .question-skip {
-  height: 52px;
-  padding: 0 14px;
-  border-radius: var(--r-sm);
   background: transparent;
-  border: 1.5px solid var(--line);
+  border: none;
+  padding: 6px 10px;
   color: var(--sub);
   font-family: inherit;
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 500;
   cursor: pointer;
-  white-space: nowrap;
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  border-radius: 6px;
+  -webkit-tap-highlight-color: transparent;
 }
-.question-skip:active { background: var(--bg); }
+.question-skip:hover,
+.question-skip:focus-visible { color: var(--text); text-decoration-color: currentColor; }
+.question-skip:active { transform: scale(.96); }
 
 .streak-row {
   display: flex;
