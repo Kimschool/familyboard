@@ -2898,13 +2898,38 @@ body.tod-night .hero-weather { color: rgba(242,242,247,.8); }
 .user-name { font-size: 15px; font-weight: 600; }
 .user-sub  { font-size: 12px; color: var(--sub); margin-top: 2px; }
 .pending-dot { color: var(--normal); font-weight: 600; }
-.user-actions { display: flex; gap: 6px; }
-.user-del, .user-reinvite {
-  background: none; border: 1px solid var(--line); color: var(--sub);
-  border-radius: 999px; width: 32px; height: 32px; cursor: pointer;
-  display: inline-flex; align-items: center; justify-content: center;
+.user-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.user-actions .ufi-btn,
+.user-actions .user-del {
+  height: 34px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  font-family: inherit;
 }
+.user-actions .ufi-btn { background: var(--card); border: 1px solid var(--line); color: var(--text); }
+.user-actions .user-del {
+  background: transparent;
+  border: 1px solid rgba(255, 59, 48, 0.35);
+  color: var(--bad);
+}
+.user-actions .ua-icon { font-size: 14px; line-height: 1; }
+.user-actions .ua-label { letter-spacing: -0.2px; }
 .user-del:disabled { opacity: .3; cursor: not-allowed; }
+/* 작은 화면(≤360px)에선 라벨 숨기고 아이콘만 — 줄바꿈 방지 */
+@media (max-width: 360px) {
+  .user-actions .ua-label { display: none; }
+  .user-actions .ufi-btn,
+  .user-actions .user-del {
+    width: 34px; padding: 0; justify-content: center;
+  }
+}
 
 .user-form { display: flex; flex-direction: column; gap: 8px; }
 .ufi, .ufi-s {

@@ -1137,7 +1137,7 @@ async function loadSosAdmin() {
           <div class="user-sub"></div>
         </div>
         <div class="user-actions">
-          <button class="user-del" title="삭제">✕</button>
+          <button class="user-del" aria-label="삭제"><span class="ua-icon">🗑</span><span class="ua-label">삭제</span></button>
         </div>`;
       li.querySelector('.user-name').textContent = c.name;
       li.querySelector('.user-sub').textContent = displayPhone(c.phone) || '—';
@@ -3791,9 +3791,9 @@ async function loadUsers() {
           <div class="user-sub">${u.role === 'admin' ? '관리자' : '가족'} · ${dob}${status}</div>
         </div>
         <div class="user-actions">
-          <button class="ufi-btn user-edit" title="편집">✏️</button>
-          <button class="ufi-btn user-reinvite" title="초대 링크 재발급">🔗</button>
-          <button class="user-del" title="삭제"${u.id === ME.id ? ' disabled' : ''}>✕</button>
+          <button class="ufi-btn user-edit" aria-label="편집"><span class="ua-icon">✏️</span><span class="ua-label">편집</span></button>
+          <button class="ufi-btn user-reinvite" aria-label="초대 링크 재발급"><span class="ua-icon">🔗</span><span class="ua-label">초대</span></button>
+          <button class="user-del" aria-label="삭제"${u.id === ME.id ? ' disabled' : ''}><span class="ua-icon">🗑</span><span class="ua-label">삭제</span></button>
         </div>`;
       li.querySelector('.user-name').textContent = `${u.displayName} (${u.username})`;
       li.querySelector('.user-edit').onclick = () => openEditSheet(u);
