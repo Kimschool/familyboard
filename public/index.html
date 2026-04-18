@@ -15,7 +15,7 @@
 </head>
 <body>
 
-<!-- 로그인 -->
+<!-- 로그인 (테스트 중 임시 비활성화 — 되살리려면 주석 해제 + app.js 의 AUTO_LOGIN=false)
 <section id="login" class="screen login-screen hidden">
   <div class="login-inner">
     <div class="login-emoji">🌿</div>
@@ -27,6 +27,11 @@
     <p id="loginErr" class="pw-err"></p>
   </div>
 </section>
+-->
+<!-- 로그인 DOM 자리 보전용 숨김 input (app.js 가 참조) -->
+<div style="display:none">
+  <input id="un" /><input id="pw" /><button id="loginBtn"></button><span id="loginErr"></span>
+</div>
 
 <!-- 메인 -->
 <main id="app" class="screen hidden">

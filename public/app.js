@@ -16,19 +16,38 @@ function api(path, opts = {}) {
 
 let ME = null;
 
+// 테스트 중 임시: 로그인 화면 생략하고 admin 자동 로그인.
+// 로그인 복구 시: AUTO_LOGIN=false + index.html 의 로그인 섹션 주석 해제.
+const AUTO_LOGIN = true;
+const AUTO_LOGIN_USER = 'admin';
+const AUTO_LOGIN_PASS = 'admin1234';
+
 // ---------- 화면 전환 ----------
 async function boot() {
   try {
     const me = await api('/api/me');
-    if (me.authed) { ME = me.user; enterApp(); }
-    else showLogin();
-  } catch { showLogin(); }
+    if (me.authed) { ME = me.user; enterApp(); return; }
+  } catch {}
+  if (AUTO_LOGIN) {
+    try {
+      const r = await api('/api/login', {
+        method: 'POST',
+        body: JSON.stringify({ username: AUTO_LOGIN_USER, password: AUTO_LOGIN_PASS }),
+      });
+      ME = r.user;
+      enterApp();
+      return;
+    } catch {
+      document.body.innerHTML = '<pre style="padding:20px">자동 로그인 실패 — admin 비밀번호가 바뀐 듯합니다. app.js 의 AUTO_LOGIN_PASS 수정.</pre>';
+      return;
+    }
+  }
+  showLogin();
 }
 
 function showLogin() {
-  $('login').classList.remove('hidden');
-  $('app').classList.add('hidden');
-  setTimeout(() => $('un').focus(), 50);
+  const el = document.getElementById('login');
+  if (el) { el.classList.remove('hidden'); $('app').classList.add('hidden'); setTimeout(() => $('un').focus(), 50); }
 }
 
 function enterApp() {
