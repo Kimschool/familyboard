@@ -108,6 +108,16 @@
   </section>
 
   <!-- 우리 가족 요약 -->
+  <!-- 오늘 가족 기분 -->
+  <section class="card mood-card" data-card-id="mood" id="moodCard">
+    <p class="card-title">오늘 우리 가족 기분</p>
+    <div class="mood-my">
+      <span class="mood-my-label">나는 오늘</span>
+      <div class="mood-picker" id="moodPicker"></div>
+    </div>
+    <div class="mood-family" id="moodFamily"></div>
+  </section>
+
   <section class="card family-card" data-card-id="family" id="familyCard">
     <p class="card-title" id="familyCardTitle">우리 가족</p>
     <div class="family-row" id="familyRow"></div>
@@ -131,7 +141,9 @@
       <label class="ufi-check" style="margin-top:8px">
         <input id="edLunar" type="checkbox" /> 음력
       </label>
-      <label class="ufi-check">
+      <label class="admin-label" style="margin-top:12px">전화번호 (선택)</label>
+      <input id="edPhone" class="ufi" type="tel" placeholder="예: 010-1234-5678" />
+      <label class="ufi-check" style="margin-top:8px">
         <input id="edAdmin" type="checkbox" /> 관리자 권한
       </label>
       <label class="admin-label" style="margin-top:12px">새 비밀번호 (바꾸려면 입력, 비우면 유지)</label>
@@ -157,6 +169,7 @@
       <div class="sheet-row" id="profFortuneRow"><span class="sheet-k">오늘 운세</span><span id="profFortune">—</span></div>
       <div class="sheet-row" id="profTodayAnswerRow"><span class="sheet-k">오늘 질문</span><span id="profTodayAnswer">—</span></div>
       <div class="sheet-row" id="profMemoCountRow"><span class="sheet-k">오늘 메모</span><span id="profMemoCount">—</span></div>
+      <a id="profCallBtn" class="sheet-call hidden" href="tel:">📞 전화 걸기</a>
       <button class="sheet-close" id="sheetClose">닫기</button>
     </div>
   </div>

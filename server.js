@@ -54,23 +54,36 @@ app.get('/api/family/:alias', async (req, res) => {
     if (!f.length) return res.status(404).json({ error: 'not-found' });
     const [users] = await getPool().query(
       `SELECT id, display_name, icon, role, birth_year, birth_month, birth_day,
+              phone, mood, mood_date,
               (password_hash IS NOT NULL) AS activated
          FROM users WHERE family_id = ?
          ORDER BY role DESC, id ASC`,
       [f[0].id]
     );
+    const todayStr = new Intl.DateTimeFormat('sv-SE', {
+      timeZone: process.env.DEFAULT_TZ || 'Asia/Tokyo',
+      year: 'numeric', month: '2-digit', day: '2-digit'
+    }).format(new Date());
     res.json({
       family: { alias: f[0].alias, displayName: f[0].display_name },
-      members: users.map((u) => ({
-        id: u.id,
-        displayName: u.display_name,
-        icon: u.icon,
-        role: u.role,
-        birthYear: u.birth_year,
-        birthMonth: u.birth_month,
-        birthDay: u.birth_day,
-        activated: !!u.activated,
-      })),
+      members: users.map((u) => {
+        const moodYmd = u.mood_date
+          ? new Intl.DateTimeFormat('sv-SE', { year:'numeric', month:'2-digit', day:'2-digit' }).format(new Date(u.mood_date))
+          : null;
+        const moodToday = moodYmd === todayStr ? u.mood : null;
+        return {
+          id: u.id,
+          displayName: u.display_name,
+          icon: u.icon,
+          role: u.role,
+          birthYear: u.birth_year,
+          birthMonth: u.birth_month,
+          birthDay: u.birth_day,
+          phone: u.phone || null,
+          mood: moodToday,
+          activated: !!u.activated,
+        };
+      }),
     });
   } catch (e) { res.status(500).json({ error: 'internal', message: e.message }); }
 });
@@ -98,6 +111,20 @@ app.get('/api/me', async (req, res) => {
   const u = await verify(req.cookies?.fb_token);
   if (!u) return res.json({ authed: false });
   res.json({ authed: true, user: publicUser(u) });
+});
+
+app.post('/api/me/mood', requireAuth, async (req, res) => {
+  try {
+    const mood = (req.body?.mood || '').toString().trim();
+    if (mood && mood.length > 20) return res.status(400).json({ error: 'too-long' });
+    const tz = process.env.DEFAULT_TZ || 'Asia/Tokyo';
+    const today = new Intl.DateTimeFormat('sv-SE', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+    await getPool().query(
+      'UPDATE users SET mood = ?, mood_date = ? WHERE id = ?',
+      [mood || null, mood ? today : null, req.user.id]
+    );
+    res.json({ ok: true, mood: mood || null });
+  } catch (e) { res.status(500).json({ error: 'internal', message: e.message }); }
 });
 
 app.post('/api/logout', async (req, res) => {
@@ -231,7 +258,7 @@ app.patch('/api/users/:id', requireAdmin, async (req, res) => {
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'bad-id' });
 
   const updates = [], args = [];
-  const { displayName, role, icon, birthYear, birthMonth, birthDay, isLunar, password } = req.body || {};
+  const { displayName, role, icon, birthYear, birthMonth, birthDay, isLunar, password, phone } = req.body || {};
   if (displayName !== undefined) { updates.push('display_name = ?'); args.push(String(displayName).trim()); }
   if (role !== undefined && (role === 'admin' || role === 'member')) { updates.push('role = ?'); args.push(role); }
   if (icon !== undefined) { updates.push('icon = ?'); args.push(String(icon).trim() || 'star'); }
@@ -239,6 +266,7 @@ app.patch('/api/users/:id', requireAdmin, async (req, res) => {
   if (birthMonth !== undefined) { updates.push('birth_month = ?'); args.push(Number(birthMonth) || null); }
   if (birthDay !== undefined)   { updates.push('birth_day = ?');   args.push(Number(birthDay)   || null); }
   if (isLunar !== undefined)    { updates.push('is_lunar = ?');    args.push(isLunar ? 1 : 0); }
+  if (phone !== undefined)      { updates.push('phone = ?');       args.push(String(phone).trim() || null); }
   if (password) { updates.push('password_hash = ?'); args.push(bcrypt.hashSync(password, 10)); }
 
   if (!updates.length) return res.json({ ok: true });
@@ -443,6 +471,12 @@ app.patch('/api/memos/:id', requireAuth, async (req, res) => {
   const args = [];
   if (req.body?.done !== undefined)      { updates.push('done = ?');      args.push(req.body.done ? 1 : 0); }
   if (req.body?.important !== undefined) { updates.push('important = ?'); args.push(req.body.important ? 1 : 0); }
+  if (req.body?.content !== undefined) {
+    const c = String(req.body.content).trim();
+    if (!c) return res.status(400).json({ error: 'content-required' });
+    if (c.length > 500) return res.status(400).json({ error: 'too-long' });
+    updates.push('content = ?'); args.push(c);
+  }
   if (!updates.length) return res.json({ ok: true });
   args.push(id, req.user.family_id);
   await getPool().query(

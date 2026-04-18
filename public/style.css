@@ -457,6 +457,100 @@ body.tod-night .hero-weather { color: rgba(242,242,247,.8); }
   background: linear-gradient(135deg, #FF3B30, #FF9500);
 }
 
+/* ========== 오늘 기분 ========== */
+.mood-card {
+  background: linear-gradient(135deg, #E8F4FF 0%, #FFE9F4 100%);
+}
+@media (prefers-color-scheme: dark) {
+  .mood-card { background: linear-gradient(135deg, #1A2430 0%, #2A1E2A 100%); }
+}
+.mood-card .card-title { color: #3A6B9A; }
+@media (prefers-color-scheme: dark) { .mood-card .card-title { color: #8FB5DD; } }
+.mood-my {
+  display: flex; align-items: center; gap: 12px;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+}
+.mood-my-label { font-size: 14px; font-weight: 700; color: var(--sub); flex-shrink: 0; }
+.mood-picker {
+  display: flex; gap: 6px; flex-wrap: wrap; flex: 1;
+}
+.mood-opt {
+  width: 44px; height: 44px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  background: rgba(255,255,255,.7);
+  font-size: 22px;
+  cursor: pointer;
+  transition: transform .12s, border-color .12s;
+  padding: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+@media (prefers-color-scheme: dark) {
+  .mood-opt { background: rgba(255,255,255,.08); }
+}
+.mood-opt.selected {
+  border-color: var(--primary);
+  background: #fff;
+  transform: scale(1.08);
+}
+@media (prefers-color-scheme: dark) {
+  .mood-opt.selected { background: var(--card); }
+}
+.mood-opt:active { transform: scale(.92); }
+
+.mood-family {
+  display: flex; gap: 8px; flex-wrap: wrap;
+  padding-top: 12px;
+  border-top: 1px solid rgba(0,0,0,.08);
+}
+@media (prefers-color-scheme: dark) { .mood-family { border-top-color: rgba(255,255,255,.08); } }
+.mood-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 5px 12px 5px 8px;
+  background: rgba(255,255,255,.75);
+  border-radius: 999px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+}
+@media (prefers-color-scheme: dark) { .mood-chip { background: rgba(255,255,255,.08); } }
+.mood-chip-emoji { font-size: 18px; }
+.mood-chip-mood { font-size: 18px; }
+.mood-empty { margin: 0; font-size: 13px; color: var(--sub); text-align: center; }
+
+/* ========== 메모 편집 입력창 ========== */
+.memo-edit-input {
+  flex: 1;
+  height: 40px;
+  font-size: 19px;
+  padding: 0 10px;
+  border: 1.5px solid var(--primary);
+  border-radius: 8px;
+  background: var(--card);
+  color: var(--text);
+  font-family: inherit;
+  outline: none;
+}
+
+/* ========== 프로필 시트 전화걸기 ========== */
+.sheet-call {
+  display: block;
+  width: 100%;
+  margin-top: 18px;
+  height: 52px;
+  line-height: 52px;
+  text-align: center;
+  background: var(--good);
+  color: #fff;
+  text-decoration: none;
+  border-radius: var(--r-sm);
+  font-size: 17px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.sheet-call:active { opacity: .85; }
+
 /* ========== 우리 가족 요약 (뱃지) ========== */
 .family-card { background: linear-gradient(135deg, #FFF7E6 0%, #FFE8EC 100%); }
 @media (prefers-color-scheme: dark) {

@@ -249,6 +249,7 @@ function enterApp() {
 
   // 가족 공통 데이터 — 하나 실패해도 다른 카드는 로드되게
   loadFamilyNotice();
+  loadMoodCard();
   loadFamilySummary();
   loadBirthday();
   loadWeatherAndAir();
@@ -318,6 +319,66 @@ $('logoutBtn').addEventListener('click', async () => {
   // 가족별칭은 기억 (다음 로그인 편의)
   location.reload();
 });
+
+// ---------- 오늘 기분 ----------
+const MOODS = [
+  { code: '😊', label: '좋아요' },
+  { code: '😌', label: '편안해요' },
+  { code: '🥰', label: '사랑해요' },
+  { code: '😄', label: '신나요' },
+  { code: '😴', label: '피곤해요' },
+  { code: '🤒', label: '아파요' },
+  { code: '😢', label: '속상해요' },
+  { code: '😮‍💨', label: '힘들어요' },
+];
+async function loadMoodCard() {
+  try {
+    const alias = ME?.familyAlias;
+    if (!alias) return;
+    const r = await fetch(`/api/family/${encodeURIComponent(alias)}`).then((r) => r.json());
+    renderMoodPicker(r.members.find((m) => m.id === ME.id)?.mood);
+    renderMoodFamily(r.members);
+  } catch {}
+}
+function renderMoodPicker(currentMood) {
+  const pick = $('moodPicker');
+  pick.innerHTML = '';
+  for (const m of MOODS) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'mood-opt' + (m.code === currentMood ? ' selected' : '');
+    b.title = m.label;
+    b.innerHTML = `<span class="mood-e">${m.code}</span>`;
+    b.onclick = async () => {
+      const next = m.code === currentMood ? '' : m.code;
+      try {
+        await api('/api/me/mood', { method: 'POST', body: JSON.stringify({ mood: next }) });
+        loadMoodCard();
+        loadFamilySummary();
+      } catch {}
+    };
+    pick.appendChild(b);
+  }
+}
+function renderMoodFamily(members) {
+  const row = $('moodFamily');
+  row.innerHTML = '';
+  const withMood = members.filter((m) => m.mood && m.id !== ME.id);
+  if (!withMood.length) {
+    row.innerHTML = '<p class="mood-empty">아직 다른 가족이 오늘 기분을 남기지 않았어요</p>';
+    return;
+  }
+  for (const m of withMood) {
+    const d = document.createElement('div');
+    d.className = 'mood-chip';
+    d.innerHTML = `
+      <span class="mood-chip-emoji">${iconEmoji(m.icon)}</span>
+      <span class="mood-chip-mood">${m.mood}</span>
+      <span class="mood-chip-name"></span>`;
+    d.querySelector('.mood-chip-name').textContent = m.displayName;
+    row.appendChild(d);
+  }
+}
 
 // ---------- 우리 가족 요약 ----------
 function koreanAge(birthYear, birthMonth, birthDay) {
@@ -408,6 +469,16 @@ function openProfileSheet(m) {
   }).length;
   $('profMemoCount').textContent = memoCount > 0 ? `${memoCount}개 작성` : '없음';
   $('profMemoCountRow').classList.remove('hidden');
+
+  // 전화걸기 버튼
+  const callBtn = $('profCallBtn');
+  if (m.phone && m.id !== ME.id) {
+    callBtn.href = `tel:${m.phone.replace(/[^0-9+]/g, '')}`;
+    callBtn.textContent = `📞 ${m.displayName}님에게 전화`;
+    callBtn.classList.remove('hidden');
+  } else {
+    callBtn.classList.add('hidden');
+  }
 
   $('profileSheet').classList.remove('hidden');
 }
@@ -682,7 +753,11 @@ function renderMemos(list) {
       </div>
       <button class="memo-star ${m.important ? 'on' : ''}" aria-label="중요">${m.important ? '⭐' : '☆'}</button>
       <button class="memo-del" aria-label="삭제">✕</button>`;
-    li.querySelector('.memo-text').textContent = m.content;
+    const textEl = li.querySelector('.memo-text');
+    textEl.textContent = m.content;
+    textEl.title = '탭해서 수정';
+    textEl.style.cursor = 'pointer';
+    textEl.onclick = () => startMemoEdit(textEl, m);
     if (m.created_by_name) {
       li.querySelector('.memo-author-avatar').textContent = iconEmoji(m.created_by_icon);
       li.querySelector('.memo-author-name').textContent = m.created_by_name;
@@ -741,6 +816,35 @@ if (SpeechRecognition) {
   });
 } else {
   $('memoMic').style.display = 'none';
+}
+
+function startMemoEdit(span, memo) {
+  if (span.dataset.editing === '1') return;
+  span.dataset.editing = '1';
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.value = memo.content;
+  input.maxLength = 500;
+  input.className = 'memo-edit-input';
+  span.replaceWith(input);
+  input.focus();
+  input.select();
+  const finish = async (save) => {
+    const newVal = input.value.trim();
+    if (save && newVal && newVal !== memo.content) {
+      try {
+        await api(`/api/memos/${memo.id}`, {
+          method: 'PATCH', body: JSON.stringify({ content: newVal }),
+        });
+      } catch {}
+    }
+    loadMemos();
+  };
+  input.addEventListener('blur', () => finish(true));
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); input.blur(); }
+    if (e.key === 'Escape') { input.value = memo.content; finish(false); }
+  });
 }
 
 $('memoDoneToggle').addEventListener('click', () => {
@@ -1295,6 +1399,7 @@ function openEditSheet(u) {
   $('edMonth').value = u.birthMonth || '';
   $('edDay').value   = u.birthDay || '';
   $('edLunar').checked = !!u.isLunar;
+  $('edPhone').value = u.phone || '';
   $('edAdmin').checked = u.role === 'admin';
   $('edPassword').value = '';
   // 아이콘 픽커 (미니)
@@ -1328,6 +1433,7 @@ $('edSave').addEventListener('click', async () => {
     birthMonth: $('edMonth').value || null,
     birthDay:   $('edDay').value   || null,
     isLunar: $('edLunar').checked,
+    phone: $('edPhone').value.trim(),
     role: $('edAdmin').checked ? 'admin' : 'member',
   };
   const pw = $('edPassword').value;
