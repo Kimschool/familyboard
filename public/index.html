@@ -15,7 +15,9 @@
 </head>
 <body>
 
-<!-- 로그인 (테스트 중 임시 비활성화 — 되살리려면 주석 해제 + app.js 의 AUTO_LOGIN=false)
+<!-- 로그인 (테스트 중 임시 비활성화 — 되살리려면:
+     1) 아래 <section> 주석 해제
+     2) app.js 에서 AUTO_LOGIN=false
 <section id="login" class="screen login-screen hidden">
   <div class="login-inner">
     <div class="login-emoji">🌿</div>
@@ -28,10 +30,7 @@
   </div>
 </section>
 -->
-<!-- 로그인 DOM 자리 보전용 숨김 input (app.js 가 참조) -->
-<div style="display:none">
-  <input id="un" /><input id="pw" /><button id="loginBtn"></button><span id="loginErr"></span>
-</div>
+
 
 <!-- 메인 -->
 <main id="app" class="screen hidden">
@@ -172,6 +171,16 @@
   </footer>
 </main>
 
-<script src="/app.js" defer></script>
+<script>
+  // 테스트 중: 과거 SW/캐시 흔적을 부팅 직전에 털어냄
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.getRegistrations()
+      .then((rs) => rs.forEach((r) => r.unregister())).catch(() => {});
+  }
+  if (window.caches) {
+    caches.keys().then((ks) => ks.forEach((k) => caches.delete(k))).catch(() => {});
+  }
+</script>
+<script src="/app.js?v=4" defer></script>
 </body>
 </html>

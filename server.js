@@ -349,7 +349,12 @@ app.use(express.static(path.join(__dirname, 'public'), {
   etag: true,
   maxAge: '1h',
   setHeaders: (res, p) => {
-    if (p.endsWith('service-worker.js')) res.setHeader('Cache-Control', 'no-cache');
+    // 테스트 중: SW / HTML / app.js 는 캐싱 금지 (Cloudflare 우회)
+    if (p.endsWith('service-worker.js') || p.endsWith('index.html') || p.endsWith('app.js')) {
+      res.setHeader('Cache-Control', 'private, no-cache, no-store, must-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
+    }
   },
 }));
 

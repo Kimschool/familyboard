@@ -66,22 +66,29 @@ function enterApp() {
   loadZodiac();
 }
 
-// ---------- 로그인 ----------
-$('loginBtn').addEventListener('click', doLogin);
-$('un').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('pw').focus(); });
-$('pw').addEventListener('keydown', (e) => { if (e.key === 'Enter') doLogin(); });
+// ---------- 로그인 (AUTO_LOGIN=false 로 되돌리면 활성화) ----------
+function bindLoginForm() {
+  const btn = $('loginBtn'), un = $('un'), pw = $('pw');
+  if (!btn || !un || !pw) return;
+  btn.addEventListener('click', doLogin);
+  un.addEventListener('keydown', (e) => { if (e.key === 'Enter') pw.focus(); });
+  pw.addEventListener('keydown', (e) => { if (e.key === 'Enter') doLogin(); });
+}
+bindLoginForm();
 
 async function doLogin() {
-  const username = $('un').value.trim();
-  const password = $('pw').value;
-  $('loginErr').textContent = '';
+  const un = $('un'), pw = $('pw'), errEl = $('loginErr');
+  if (!un || !pw) return;
+  const username = un.value.trim();
+  const password = pw.value;
+  if (errEl) errEl.textContent = '';
   try {
     const r = await api('/api/login', { method: 'POST', body: JSON.stringify({ username, password }) });
     ME = r.user;
     enterApp();
   } catch {
-    $('loginErr').textContent = '아이디 또는 비밀번호가 맞지 않아요.';
-    $('pw').select();
+    if (errEl) errEl.textContent = '아이디 또는 비밀번호가 맞지 않아요.';
+    pw.select();
   }
 }
 
@@ -397,11 +404,14 @@ $('userForm').addEventListener('submit', async (e) => {
   }
 });
 
-// ---------- SW ----------
+// ---------- SW (테스트 중: 언레지스터 + 캐시 삭제) ----------
 if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/service-worker.js').catch(() => {});
-  });
+  navigator.serviceWorker.getRegistrations()
+    .then((regs) => Promise.all(regs.map((r) => r.unregister())))
+    .catch(() => {});
+  if (window.caches) {
+    caches.keys().then((ks) => ks.forEach((k) => caches.delete(k))).catch(() => {});
+  }
 }
 
 boot();
