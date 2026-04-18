@@ -1144,6 +1144,28 @@ function openProfileSheet(m) {
   $('profMemoCount').textContent = memoCount > 0 ? `${memoCount}개 작성` : '없음';
   $('profMemoCountRow').classList.remove('hidden');
 
+  // 오늘 메모 목록 (최대 5개)
+  const profMemos = (MEMO_CACHE || []).filter((x) => {
+    if (!x.created_at || x.created_by_name !== m.displayName) return false;
+    const d = new Date(x.created_at);
+    const ymd = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    return ymd === todayYMD;
+  }).slice(0, 5);
+  const ul = $('profMemoList');
+  ul.innerHTML = '';
+  if (profMemos.length) {
+    for (const pm of profMemos) {
+      const li = document.createElement('li');
+      li.className = 'prof-memo-item' + (pm.done ? ' done' : '');
+      li.innerHTML = `<span class="pm-dot ${pm.done ? 'done' : ''}"></span><span class="pm-text"></span>`;
+      li.querySelector('.pm-text').textContent = pm.content;
+      ul.appendChild(li);
+    }
+    ul.classList.remove('hidden');
+  } else {
+    ul.classList.add('hidden');
+  }
+
   // 전화걸기 버튼
   const callBtn = $('profCallBtn');
   if (m.phone && m.id !== ME.id) {
@@ -1593,6 +1615,16 @@ async function loadFx() {
     $('fxJpyKrw').textContent = $('fxUsdJpy').textContent = $('fxUsdKrw').textContent = '—';
   }
 }
+// 메모 반복 주기 선택
+let MEMO_RECUR = 'none';
+document.querySelectorAll('.recur-btn').forEach((b) => {
+  b.addEventListener('click', () => {
+    MEMO_RECUR = b.dataset.recur;
+    document.querySelectorAll('.recur-btn').forEach((x) => x.classList.remove('active'));
+    b.classList.add('active');
+  });
+});
+
 ['calcAmt','calcFrom','calcTo'].forEach((id) => {
   $(id).addEventListener('input', calcUpdate);
   $(id).addEventListener('change', calcUpdate);
@@ -1750,6 +1782,13 @@ function renderMemos(list) {
     textEl.title = '탭해서 수정';
     textEl.style.cursor = 'pointer';
     textEl.onclick = () => startMemoEdit(textEl, m);
+    // 반복 배지
+    if (m.recurring) {
+      const r = document.createElement('span');
+      r.className = 'memo-recur-badge';
+      r.textContent = m.recurring === 'daily' ? '🔁 매일' : '🔁 매주';
+      li.querySelector('.memo-author').prepend(r);
+    }
     // 기한 뱃지
     if (m.due_date) {
       const due = new Date(m.due_date);
@@ -2043,12 +2082,15 @@ $('memoForm').addEventListener('submit', async (e) => {
   e.preventDefault();
   const v = $('memoInput').value.trim(); if (!v) return;
   const dueDate = computeDueDate(MEMO_DUE_DAYS);
-  await api('/api/memos', { method: 'POST', body: JSON.stringify({ content: v, dueDate }) });
+  const recurring = MEMO_RECUR === 'none' ? null : MEMO_RECUR;
+  await api('/api/memos', { method: 'POST', body: JSON.stringify({ content: v, dueDate, recurring }) });
   $('memoInput').value = '';
-  // 기한 리셋
   MEMO_DUE_DAYS = 'none';
+  MEMO_RECUR = 'none';
   document.querySelectorAll('.due-btn').forEach((x) => x.classList.remove('active'));
   document.querySelector('.due-btn[data-days="none"]')?.classList.add('active');
+  document.querySelectorAll('.recur-btn').forEach((x) => x.classList.remove('active'));
+  document.querySelector('.recur-btn[data-recur="none"]')?.classList.add('active');
   loadMemos();
 });
 
@@ -3153,6 +3195,20 @@ document.getElementById('sheetClose').addEventListener('click', closeProfileShee
 document.getElementById('profileSheet').addEventListener('click', (e) => {
   if (e.target.id === 'profileSheet') closeProfileSheet();
 });
+
+// 화면 톤 테마
+function applyTheme(theme) {
+  document.body.classList.remove('theme-default','theme-spring','theme-summer','theme-autumn','theme-winter');
+  document.body.classList.add('theme-' + (theme || 'default'));
+  document.querySelectorAll('.th-btn').forEach((b) => {
+    b.classList.toggle('active', b.dataset.theme === (theme || 'default'));
+  });
+  localStorage.setItem('fb_theme', theme || 'default');
+}
+document.querySelectorAll('.th-btn').forEach((b) => {
+  b.addEventListener('click', () => applyTheme(b.dataset.theme));
+});
+setTimeout(() => applyTheme(localStorage.getItem('fb_theme') || 'default'), 0);
 
 // 글자 크기 조절
 function applyFontScale(scale) {

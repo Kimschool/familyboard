@@ -2907,6 +2907,105 @@ body.reorder-mode #app #birthdayBanner { padding-top: 28px; }
   .memo-due-badge.overdue { color: #FF8A7A; }
 }
 
+/* 메모 반복 주기 */
+.memo-recur-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+  align-items: center;
+}
+.recur-btn {
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  cursor: pointer;
+  font-family: inherit;
+}
+.recur-btn.active { background: var(--primary); color: #fff; border-color: var(--primary); }
+.memo-recur-badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(10,132,255,.12);
+  color: var(--primary);
+  margin-right: 6px;
+}
+
+/* 프로필 시트 내 오늘 메모 목록 */
+.prof-memo-list {
+  list-style: none;
+  padding: 8px 14px;
+  margin: 4px 0 0;
+  background: var(--bg);
+  border-radius: 10px;
+}
+.prof-memo-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 0;
+  font-size: 14px;
+  color: var(--text);
+}
+.prof-memo-item.done .pm-text {
+  text-decoration: line-through;
+  color: var(--sub);
+}
+.pm-dot {
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  background: var(--line);
+  flex-shrink: 0;
+}
+.pm-dot.done { background: var(--good); }
+.pm-text { flex: 1; word-break: break-word; }
+
+/* 화면 톤 테마 (계정 카드 버튼) */
+.theme-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  margin-bottom: 8px;
+  border-bottom: 1px solid var(--line);
+}
+.theme-buttons { display: flex; gap: 6px; margin-left: auto; }
+.th-btn {
+  width: 40px; height: 40px;
+  border: 1.5px solid var(--line);
+  border-radius: 50%;
+  background: var(--card);
+  font-size: 18px;
+  cursor: pointer;
+  font-family: inherit;
+  transition: transform .12s;
+}
+.th-btn.active { border-color: var(--primary); transform: scale(1.1); box-shadow: 0 2px 8px rgba(10,132,255,.2); }
+
+/* 테마별 body 배경 */
+body.theme-default { background: var(--bg); }
+body.theme-spring  { background: linear-gradient(180deg, #FFE8EE 0%, var(--bg) 260px); }
+body.theme-summer  { background: linear-gradient(180deg, #E0F4FF 0%, var(--bg) 260px); }
+body.theme-autumn  { background: linear-gradient(180deg, #FFE6D0 0%, var(--bg) 260px); }
+body.theme-winter  { background: linear-gradient(180deg, #E8F0FF 0%, var(--bg) 260px); }
+body.theme-spring, body.theme-summer, body.theme-autumn, body.theme-winter {
+  background-attachment: fixed;
+}
+@media (prefers-color-scheme: dark) {
+  body.theme-spring  { background: linear-gradient(180deg, #2E1A20 0%, var(--bg) 260px); }
+  body.theme-summer  { background: linear-gradient(180deg, #162430 0%, var(--bg) 260px); }
+  body.theme-autumn  { background: linear-gradient(180deg, #2A1E10 0%, var(--bg) 260px); }
+  body.theme-winter  { background: linear-gradient(180deg, #1A2030 0%, var(--bg) 260px); }
+}
+
 /* ========== 공지 히스토리 ========== */
 .notice-history-btn {
   width: 100%;

@@ -780,7 +780,7 @@ app.get('/api/fx', async (_req, res) => {
 // ---------- 메모 (가족 단위) ----------
 app.get('/api/memos', requireAuth, async (req, res) => {
   const [rows] = await getPool().query(
-    `SELECT m.id, m.content, m.done, m.important, m.due_date, m.created_at,
+    `SELECT m.id, m.content, m.done, m.important, m.due_date, m.recurring, m.created_at,
             COALESCE(u.display_name, '') AS created_by_name, u.icon AS created_by_icon
        FROM memos m LEFT JOIN users u ON u.id = m.created_by
       WHERE m.family_id = ?
@@ -795,11 +795,12 @@ app.post('/api/memos', requireAuth, async (req, res) => {
   if (!content) return res.status(400).json({ error: 'content-required' });
   if (content.length > 500) return res.status(400).json({ error: 'too-long' });
   const dueDate = req.body?.dueDate ? String(req.body.dueDate).slice(0, 10) : null;
+  const recurring = ['daily','weekly'].includes(req.body?.recurring) ? req.body.recurring : null;
   const [r] = await getPool().query(
-    'INSERT INTO memos (family_id, content, created_by, due_date) VALUES (?, ?, ?, ?)',
-    [req.user.family_id, content, req.user.id, dueDate]
+    'INSERT INTO memos (family_id, content, created_by, due_date, recurring) VALUES (?, ?, ?, ?, ?)',
+    [req.user.family_id, content, req.user.id, dueDate, recurring]
   );
-  res.json({ id: r.insertId, content, done: 0, due_date: dueDate,
+  res.json({ id: r.insertId, content, done: 0, due_date: dueDate, recurring,
             created_by_name: req.user.display_name, created_by_icon: req.user.icon });
 });
 
@@ -808,6 +809,28 @@ app.patch('/api/memos/:id', requireAuth, async (req, res) => {
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'bad-id' });
   const updates = [];
   const args = [];
+
+  // 반복 메모: 완료 시 다음 회차 자동 생성
+  if (req.body?.done === true) {
+    const [cur] = await getPool().query(
+      'SELECT id, content, created_by, recurring FROM memos WHERE id = ? AND family_id = ? LIMIT 1',
+      [id, req.user.family_id]
+    );
+    if (cur.length && cur[0].recurring && cur[0].done === 0) {
+      // 이미 다음 회차가 만들어져 있는지 확인 (같은 content + recurring + done=0)
+      const [existing] = await getPool().query(
+        `SELECT id FROM memos WHERE family_id = ? AND content = ? AND recurring = ? AND done = 0 AND id <> ? LIMIT 1`,
+        [req.user.family_id, cur[0].content, cur[0].recurring, id]
+      );
+      if (!existing.length) {
+        await getPool().query(
+          `INSERT INTO memos (family_id, content, created_by, recurring) VALUES (?, ?, ?, ?)`,
+          [req.user.family_id, cur[0].content, cur[0].created_by, cur[0].recurring]
+        );
+      }
+    }
+  }
+
   if (req.body?.done !== undefined)      { updates.push('done = ?');      args.push(req.body.done ? 1 : 0); }
   if (req.body?.important !== undefined) { updates.push('important = ?'); args.push(req.body.important ? 1 : 0); }
   if (req.body?.content !== undefined) {
@@ -819,6 +842,10 @@ app.patch('/api/memos/:id', requireAuth, async (req, res) => {
   if (req.body?.dueDate !== undefined) {
     const d = req.body.dueDate ? String(req.body.dueDate).slice(0, 10) : null;
     updates.push('due_date = ?'); args.push(d);
+  }
+  if (req.body?.recurring !== undefined) {
+    const r = ['daily','weekly'].includes(req.body.recurring) ? req.body.recurring : null;
+    updates.push('recurring = ?'); args.push(r);
   }
   if (!updates.length) return res.json({ ok: true });
   args.push(id, req.user.family_id);

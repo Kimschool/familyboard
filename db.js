@@ -83,6 +83,7 @@ async function ensureSchema() {
   await ensureColumn('memos', 'family_id', 'INT NULL');
   await ensureColumn('memos', 'important', 'TINYINT(1) NOT NULL DEFAULT 0');
   await ensureColumn('memos', 'due_date', 'DATE NULL');
+  await ensureColumn('memos', 'recurring', 'VARCHAR(20) NULL');
   await ensureColumn('users', 'mood', 'VARCHAR(20) NULL');
   await ensureColumn('users', 'last_recovery_week', 'VARCHAR(10) NULL');
   await ensureColumn('users', 'mood_date', 'DATE NULL');
