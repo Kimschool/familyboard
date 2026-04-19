@@ -3183,7 +3183,7 @@ const DEFAULT_CARD_ORDER = [
   // 3) 매일 새로움: 어제 답변 공개
   'reveal',
   // 4) 소통·일정 묶음 + 빠른 연락처(긴급 상황 빠른 접근)
-  'upcoming','family','sos','chat','birthday',
+  'upcoming','family','mood','sos','chat','birthday',
   // 5) 보조 정보
   'weather','tips','gallery',
   // 6) 엔터·유틸·메모 (아래로)
@@ -5204,17 +5204,23 @@ async function loadChatPeek() {
       peek.innerHTML = '<li class="chat-peek-empty">아직 대화가 없어요. 가족에게 첫 메시지를 보내 보세요.</li>';
       return;
     }
-    // 최근 3개만 미리보기
+    // 최근 3개만 미리보기 (오래된 → 최신 정렬 유지)
     const recent = list.slice(-3);
     for (const m of recent) {
       const li = document.createElement('li');
-      const name = document.createElement('span');
-      name.className = 'cp-name';
-      name.textContent = (m.userName || '가족') + ':';
-      const text = document.createElement('span');
-      text.className = 'cp-text';
-      text.textContent = m.text;
-      li.appendChild(name); li.appendChild(text);
+      const avatar = m.userPhoto
+        ? `<img src="${m.userPhoto.replace(/"/g, '')}" alt="" />`
+        : iconEmoji(m.userIcon);
+      const timeStr = m.createdAt ? relativeTime(m.createdAt) : '';
+      li.innerHTML = `
+        <span class="cp-avatar">${avatar}</span>
+        <span class="cp-main">
+          <span class="cp-name"></span>
+          <span class="cp-text"></span>
+        </span>
+        <span class="cp-time">${timeStr}</span>`;
+      li.querySelector('.cp-name').textContent = m.userName || '가족';
+      li.querySelector('.cp-text').textContent = m.text;
       peek.appendChild(li);
     }
   } catch {}
@@ -5236,22 +5242,60 @@ async function refreshChatUnread() {
 
 function renderChatMessages() {
   const ul = $('chatMessages');
+  const emptyEl = $('chatEmpty');
   if (!ul) return;
   ul.innerHTML = '';
-  let lastDate = '';
-  for (const m of CHAT_MESSAGES) {
+  if (!CHAT_MESSAGES.length) {
+    emptyEl?.classList.remove('hidden');
+    ul.style.display = 'none';
+    return;
+  }
+  emptyEl?.classList.add('hidden');
+  ul.style.display = '';
+
+  // 그룹핑 기준: 같은 userId + 5분 이내 + 같은 날짜 → 연속 메시지
+  const GROUP_GAP_MS = 5 * 60 * 1000;
+  let prev = null;
+  let lastDateKey = '';
+  const items = [];
+
+  for (let i = 0; i < CHAT_MESSAGES.length; i++) {
+    const m = CHAT_MESSAGES[i];
+    const next = CHAT_MESSAGES[i + 1];
     const d = m.createdAt ? new Date(m.createdAt) : new Date();
     const dateKey = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
-    if (dateKey !== lastDate) {
-      lastDate = dateKey;
+
+    // 날짜 구분선
+    if (dateKey !== lastDateKey) {
       const sep = document.createElement('li');
       sep.className = 'chat-divider';
       sep.textContent = `${d.getFullYear()}년 ${d.getMonth() + 1}월 ${d.getDate()}일`;
       ul.appendChild(sep);
+      lastDateKey = dateKey;
+      prev = null; // 날짜 바뀌면 그룹 리셋
     }
+
+    // 이 메시지가 앞 메시지와 연속인지 판단
+    const sameAuthor = prev && prev.userId === m.userId;
+    const withinGap = prev && m.createdAt && prev.createdAt &&
+      (new Date(m.createdAt) - new Date(prev.createdAt) < GROUP_GAP_MS);
+    const isCont = sameAuthor && withinGap;
+    const groupClass = isCont ? 'group-cont' : 'group-start';
+
+    // 다음 메시지가 같은 그룹인지 (시간 숨김 조건용)
+    const nextSameAuthor = next && next.userId === m.userId &&
+      next.createdAt && m.createdAt &&
+      (new Date(next.createdAt) - new Date(m.createdAt) < GROUP_GAP_MS);
+
     const li = document.createElement('li');
-    li.className = 'chat-msg' + (m.userId === ME.id ? ' mine' : '');
+    li.className = 'chat-msg ' + groupClass +
+      (m.userId === ME.id ? ' mine' : '') +
+      (nextSameAuthor ? ' has-next-same-author' : '') +
+      (m.pending ? ' sending' : '') +
+      (m.failed ? ' failed' : '');
     li.dataset.mid = String(m.id);
+    if (m.tempKey) li.dataset.temp = m.tempKey;
+
     const avatarInner = m.userPhoto
       ? `<img src="${m.userPhoto.replace(/"/g, '')}" alt="" />`
       : iconEmoji(m.userIcon);
@@ -5260,6 +5304,7 @@ function renderChatMessages() {
     const ampm = hour < 12 ? '오전' : '오후';
     const h12 = hour === 0 ? 12 : (hour > 12 ? hour - 12 : hour);
     const timeStr = `${ampm} ${h12}:${mm}`;
+
     li.innerHTML = `
       <div class="chat-msg-avatar">${avatarInner}</div>
       <div class="chat-msg-body">
@@ -5270,13 +5315,19 @@ function renderChatMessages() {
       <button class="chat-msg-del hidden" aria-label="삭제" title="삭제">✕</button>`;
     li.querySelector('.chat-msg-name').textContent = m.userName || '';
     li.querySelector('.chat-bubble').textContent = m.text;
-    // 본인 또는 admin 이면 삭제 가능
-    if (m.userId === ME.id || ME.role === 'admin') {
+
+    // 실패한 메시지는 탭해서 재시도
+    if (m.failed && m.tempKey) {
+      li.onclick = () => retryChatMessage(m.tempKey);
+      li.style.cursor = 'pointer';
+    } else if ((m.userId === ME.id || ME.role === 'admin') && !m.pending) {
       const del = li.querySelector('.chat-msg-del');
       del.classList.remove('hidden');
-      del.onclick = () => deleteChatMessage(m.id);
+      del.onclick = (e) => { e.stopPropagation(); deleteChatMessage(m.id); };
     }
+    items.push(li);
     ul.appendChild(li);
+    prev = m;
   }
 }
 
@@ -5289,6 +5340,10 @@ function scrollChatToBottom(smooth = false) {
 async function openChatSheet() {
   CHAT_SHEET_OPEN = true;
   $('chatSheet').classList.remove('hidden');
+  // 활성 가족 수 subtitle
+  const activeCount = (FAMILY_CACHE || []).filter((m) => m.activated).length;
+  const sub = $('chatSubtitle');
+  if (sub) sub.textContent = activeCount ? `${activeCount}명 참여 중` : '실시간으로 가족과 대화해요';
   // 초기 로드
   try {
     const list = await api('/api/chat?limit=50');
@@ -5303,6 +5358,26 @@ async function openChatSheet() {
     markChatRead();
   } catch {}
   startChatPolling(4000);
+  // 입력창 자동 포커스 (모바일 키보드는 사용자 탭 때문에 열려야 자연스러움 — focus 만 예약)
+  setTimeout(() => {
+    const input = $('chatInput');
+    if (input && !/Mobi|Android/i.test(navigator.userAgent)) input.focus();
+  }, 200);
+  // 스크롤 감지 → 새 메시지 pill 관리
+  setupChatScrollListener();
+}
+
+// 스크롤 위치에 따라 '새 메시지' pill 노출 판단용
+let _chatNearBottom = true;
+function setupChatScrollListener() {
+  const ul = $('chatMessages');
+  if (!ul || ul._chatScrollBound) return;
+  ul._chatScrollBound = true;
+  ul.addEventListener('scroll', () => {
+    const nearBottom = (ul.scrollHeight - ul.scrollTop - ul.clientHeight) < 80;
+    _chatNearBottom = nearBottom;
+    if (nearBottom) $('chatNewMsgPill')?.classList.add('hidden');
+  }, { passive: true });
 }
 
 function closeChatSheet() {
@@ -5327,14 +5402,35 @@ async function pollChatNew() {
     const after = CHAT_LAST_ID || 0;
     const list = await api(`/api/chat?after=${after}&limit=50`);
     if (list && list.length) {
-      // 스크롤 위치 확인 (거의 바닥이면 자동 스크롤)
       const ul = $('chatMessages');
       const nearBottom = ul && (ul.scrollHeight - ul.scrollTop - ul.clientHeight < 80);
-      CHAT_MESSAGES = CHAT_MESSAGES.concat(list);
-      CHAT_LAST_ID = list[list.length - 1].id;
-      renderChatMessages();
-      if (nearBottom) setTimeout(() => scrollChatToBottom(true), 20);
-      markChatRead();
+      // 내 낙관적 메시지가 이미 큐에 있으면 서버 응답과 매칭해 id/createdAt 로 교체
+      const serverIds = new Set(list.map(m => m.id));
+      const newMsgs = list.filter((m) => !CHAT_MESSAGES.some((x) => x.id === m.id));
+      if (newMsgs.length) {
+        // 내 pending 메시지 중 텍스트가 일치하면 서버 응답으로 교체
+        for (const sm of newMsgs) {
+          if (sm.userId === ME.id) {
+            const pendingIdx = CHAT_MESSAGES.findIndex((x) => x.pending && !x.failed && x.text === sm.text);
+            if (pendingIdx >= 0) {
+              CHAT_MESSAGES[pendingIdx] = sm;
+              continue;
+            }
+          }
+          CHAT_MESSAGES.push(sm);
+        }
+        CHAT_LAST_ID = list[list.length - 1].id;
+        renderChatMessages();
+        // 상대방이 보낸 새 메시지? (내 메시지는 자동 스크롤, 다른 사람건 near-bottom 일때만)
+        const othersNew = newMsgs.some((m) => m.userId !== ME.id);
+        if (nearBottom) {
+          setTimeout(() => scrollChatToBottom(true), 20);
+          $('chatNewMsgPill')?.classList.add('hidden');
+        } else if (othersNew) {
+          $('chatNewMsgPill')?.classList.remove('hidden');
+        }
+        markChatRead();
+      }
     }
   } catch {}
 }
@@ -5367,17 +5463,74 @@ async function sendChatMessage() {
   const text = input.value.trim();
   if (!text) return;
   const sendBtn = $('chatSendBtn');
+  // 낙관적 표시 — 서버 응답 기다리지 않고 즉시 말풍선 띄움
+  const tempKey = 'tmp-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8);
+  const myPhotoUrl = (FAMILY_CACHE || []).find((m) => m.id === ME.id)?.photoUrl || null;
+  const optimistic = {
+    id: tempKey,                     // 임시 id (서버 응답 받으면 교체)
+    tempKey,
+    userId: ME.id,
+    userName: ME.displayName,
+    userIcon: ME.icon,
+    userPhoto: myPhotoUrl,
+    text,
+    createdAt: new Date().toISOString(),
+    pending: true,
+  };
+  CHAT_MESSAGES.push(optimistic);
+  renderChatMessages();
+  // 입력창 리셋 + 포커스 유지
+  input.value = '';
+  input.style.height = '';
   if (sendBtn) sendBtn.disabled = true;
+  setTimeout(() => scrollChatToBottom(true), 10);
+
   try {
-    await api('/api/chat', { method: 'POST', body: JSON.stringify({ text }) });
-    input.value = '';
-    input.style.height = '';
-    // 즉시 폴링 당겨 보기
+    const res = await api('/api/chat', { method: 'POST', body: JSON.stringify({ text }) });
+    // 서버 응답으로 pending 메시지 확정 (pollChatNew 가 잠시 후 더 풍부한 정보로 교체)
+    const idx = CHAT_MESSAGES.findIndex((x) => x.tempKey === tempKey);
+    if (idx >= 0) {
+      CHAT_MESSAGES[idx] = {
+        ...CHAT_MESSAGES[idx],
+        id: res.id || CHAT_MESSAGES[idx].id,
+        pending: false,
+      };
+      renderChatMessages();
+    }
+    // 즉시 폴링으로 서버 상태 동기화 (마지막 id 업데이트 등)
+    if (res.id && res.id > CHAT_LAST_ID) CHAT_LAST_ID = res.id;
     pollChatNew();
   } catch (e) {
-    alert(e.status === 400 ? '메시지를 확인해 주세요' : '전송 실패');
-  } finally {
-    if (sendBtn) sendBtn.disabled = false;
+    // 실패한 메시지는 실패 표시 — 탭해서 재시도
+    const idx = CHAT_MESSAGES.findIndex((x) => x.tempKey === tempKey);
+    if (idx >= 0) {
+      CHAT_MESSAGES[idx] = { ...CHAT_MESSAGES[idx], pending: false, failed: true };
+      renderChatMessages();
+    }
+  }
+}
+
+async function retryChatMessage(tempKey) {
+  const msg = CHAT_MESSAGES.find((x) => x.tempKey === tempKey);
+  if (!msg || !msg.failed) return;
+  msg.failed = false;
+  msg.pending = true;
+  renderChatMessages();
+  try {
+    const res = await api('/api/chat', { method: 'POST', body: JSON.stringify({ text: msg.text }) });
+    const idx = CHAT_MESSAGES.findIndex((x) => x.tempKey === tempKey);
+    if (idx >= 0) {
+      CHAT_MESSAGES[idx] = { ...CHAT_MESSAGES[idx], id: res.id || CHAT_MESSAGES[idx].id, pending: false };
+      renderChatMessages();
+    }
+    if (res.id && res.id > CHAT_LAST_ID) CHAT_LAST_ID = res.id;
+    pollChatNew();
+  } catch {
+    const idx = CHAT_MESSAGES.findIndex((x) => x.tempKey === tempKey);
+    if (idx >= 0) {
+      CHAT_MESSAGES[idx] = { ...CHAT_MESSAGES[idx], pending: false, failed: true };
+      renderChatMessages();
+    }
   }
 }
 
@@ -5416,6 +5569,14 @@ $('chatInput')?.addEventListener('input', (e) => {
   // 자동 높이
   e.target.style.height = 'auto';
   e.target.style.height = Math.min(120, e.target.scrollHeight) + 'px';
+  // 전송 버튼 enable/disable (내용 있을 때만)
+  const sendBtn = $('chatSendBtn');
+  if (sendBtn) sendBtn.disabled = !e.target.value.trim();
+});
+// 새 메시지 pill 탭 → 바닥으로 스크롤
+$('chatNewMsgPill')?.addEventListener('click', () => {
+  scrollChatToBottom(true);
+  $('chatNewMsgPill')?.classList.add('hidden');
 });
 $('chatInput')?.addEventListener('keydown', (e) => {
   // Enter 로 전송 (Shift+Enter 는 줄바꿈). 모바일에선 키보드의 엔터라 신중히.

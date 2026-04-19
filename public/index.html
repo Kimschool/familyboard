@@ -1038,16 +1038,29 @@
 <!-- 가족 채팅 시트 -->
 <div id="chatSheet" class="sheet-backdrop hidden" role="dialog">
   <div class="sheet sheet-tall chat-sheet" role="document">
-    <div class="sheet-handle"></div>
     <div class="chat-head">
-      <h2 class="sheet-title chat-title">💬 가족 채팅</h2>
-      <button type="button" id="chatSheetClose" class="ufi-btn chat-close">닫기</button>
+      <button type="button" id="chatSheetClose" class="chat-close-btn" aria-label="닫기">✕</button>
+      <div class="chat-head-title">
+        <div class="chat-title">💬 가족 채팅</div>
+        <div class="chat-subtitle" id="chatSubtitle">실시간으로 가족과 대화해요</div>
+      </div>
+      <div class="chat-head-spacer"></div>
     </div>
-    <button type="button" id="chatLoadOlderBtn" class="ufi-btn chat-load-older hidden">이전 메시지 보기</button>
-    <ul id="chatMessages" class="chat-messages"></ul>
+    <div class="chat-body">
+      <button type="button" id="chatLoadOlderBtn" class="chat-load-older hidden">이전 메시지 보기</button>
+      <ul id="chatMessages" class="chat-messages"></ul>
+      <div id="chatEmpty" class="chat-empty hidden">
+        <div class="chat-empty-emoji">💬</div>
+        <div class="chat-empty-title">아직 대화가 없어요</div>
+        <div class="chat-empty-sub">가족에게 첫 메시지를 보내 보세요</div>
+      </div>
+      <button type="button" id="chatNewMsgPill" class="chat-new-pill hidden">↓ 새 메시지</button>
+    </div>
     <form id="chatForm" class="chat-composer" autocomplete="off">
-      <textarea id="chatInput" class="chat-input" maxlength="1000" placeholder="메시지를 입력하세요 (최대 1000자)" rows="1"></textarea>
-      <button type="submit" id="chatSendBtn" class="chat-send" aria-label="보내기">↑</button>
+      <textarea id="chatInput" class="chat-input" maxlength="1000" placeholder="메시지 입력" rows="1"></textarea>
+      <button type="submit" id="chatSendBtn" class="chat-send" aria-label="보내기" disabled>
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" aria-hidden="true"><path d="M12 5v14M5 12l7-7 7 7" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
     </form>
   </div>
 </div>
@@ -1120,6 +1133,6 @@
     caches.keys().then((ks) => ks.forEach((k) => caches.delete(k))).catch(() => {});
   }
 </script>
-<script src="/app.js?v=35" defer></script>
+<script src="/app.js?v=36" defer></script>
 </body>
 </html>
