@@ -1402,6 +1402,11 @@ app.get('/api/weather', async (_req, res) => {
     const j = await (await fetch(url)).json();
     const out = {
       city: process.env.DEFAULT_CITY || '도쿄',
+      lat: Number(lat),
+      lon: Number(lon),
+      tz: process.env.DEFAULT_TZ || 'Asia/Tokyo',
+      updatedAt: j.current?.time || new Date().toISOString(),
+      source: 'Open-Meteo',
       temp: Math.round(j.current?.temperature_2m ?? 0),
       feels: Math.round(j.current?.apparent_temperature ?? 0),
       humidity: Math.round(j.current?.relative_humidity_2m ?? 0),

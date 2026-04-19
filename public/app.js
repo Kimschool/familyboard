@@ -440,9 +440,10 @@ function photoUrlFor({ id, name } = {}) {
 }
 
 /** 인라인 아바타 HTML 문자열 — 사진 있으면 원형 <img>, 없으면 이모지 텍스트.
+ *  photoUrl 을 직접 전달하면 FAMILY_CACHE 조회 없이 바로 사용 (FAMILY_CACHE 미로드 상태에도 작동).
  *  px: 이미지 지름(px). emoji fallback 은 부모의 font-size 를 그대로 따름. */
-function inlineAvatarHtml({ id, name, icon } = {}, px = 22) {
-  const url = photoUrlFor({ id, name });
+function inlineAvatarHtml({ id, name, icon, photoUrl } = {}, px = 22) {
+  const url = (photoUrl && photoUrl.trim()) || photoUrlFor({ id, name });
   if (url) {
     const safe = url.replace(/"/g, '');
     return `<img src="${safe}" alt="" class="avatar-inline" style="width:${px}px;height:${px}px;border-radius:50%;object-fit:cover;display:inline-block;vertical-align:middle" />`;
@@ -1298,7 +1299,7 @@ function renderMoodFamily(members) {
     const d = document.createElement('div');
     d.className = 'mood-chip';
     d.innerHTML = `
-      <span class="mood-chip-emoji">${iconEmoji(m.icon)}</span>
+      <span class="mood-chip-emoji">${inlineAvatarHtml({ id: m.id, icon: m.icon, photoUrl: m.photoUrl }, 24)}</span>
       <span class="mood-chip-mood">${m.mood}</span>
       <span class="mood-chip-name"></span>`;
     d.querySelector('.mood-chip-name').textContent = m.displayName;
@@ -1977,6 +1978,12 @@ async function loadFamilySummary() {
       badge.onclick = () => openProfileSheet(m);
       row.appendChild(badge);
     }
+    // FAMILY_CACHE 로드가 끝났으니 photoUrl 의존 카드들을 사진으로 새로 그림.
+    // (초기 로드 순서상 이 카드들이 FAMILY_CACHE 가 빈 상태에서 이모지로 렌더됐을 수 있음)
+    try { if (typeof MEMO_CACHE !== 'undefined' && MEMO_CACHE?.length) renderMemos(MEMO_CACHE); } catch {}
+    try { loadZodiac(); } catch {}
+    try { loadYesterdayReveal(); } catch {}
+    try { loadTodayQuestion(); } catch {}
   } catch {}
 }
 
@@ -2361,7 +2368,16 @@ async function loadWeatherAndAir() {
   const [w, a] = await Promise.all([wP, aP]);
 
   if (w) {
-    $('wCity').textContent = `${w.city} 오늘`;
+    // 도시 옆에 시간대 힌트와 업데이트 시각 — '이게 진짜 <도시> 실시간 데이터구나' 바로 확인
+    const tzShort = (w.tz || '').split('/').pop() || '';
+    const updated = w.updatedAt ? new Date(w.updatedAt) : null;
+    const updatedLabel = updated ? (() => {
+      const hh = String(updated.getHours()).padStart(2, '0');
+      const mm = String(updated.getMinutes()).padStart(2, '0');
+      return `${hh}:${mm} 기준`;
+    })() : '';
+    $('wCity').textContent = `${w.city}${tzShort ? ' · ' + tzShort : ''} 오늘`;
+    if (updatedLabel) $('wCity').title = `Open-Meteo · ${updatedLabel}`;
     $('wDesc').textContent = WMO[w.code] || '';
     $('wIcon').textContent = WMO_ICON[w.code] || '🌤️';
     $('wIcon').classList.remove('skel');
