@@ -1441,6 +1441,49 @@ app.get('/api/weather', async (_req, res) => {
   } catch (e) { res.status(502).json({ error: 'weather-fetch-failed', message: e.message }); }
 });
 
+/** Google Pollen API 에서 TREE/GRASS/WEED 꽃가루 지수(UPI 0–5) 가져오기.
+ *  키 미설정·호출 실패 시 null 반환 → 호출자가 Open-Meteo 폴백 사용. */
+async function fetchGooglePollen(lat, lon) {
+  const apiKey = (process.env.GOOGLE_POLLEN_API_KEY || '').trim();
+  if (!apiKey) return null;
+  try {
+    const url = `https://pollen.googleapis.com/v1/forecast:lookup?key=${encodeURIComponent(apiKey)}` +
+      `&location.latitude=${lat}&location.longitude=${lon}&days=1&languageCode=ko`;
+    const r = await fetch(url);
+    if (!r.ok) {
+      console.warn('[google-pollen] HTTP', r.status, await r.text().catch(() => ''));
+      return null;
+    }
+    const j = await r.json();
+    const day = j.dailyInfo?.[0];
+    if (!day) return null;
+    const types = day.pollenTypeInfo || [];
+    const maxValue = types.reduce((mx, t) => {
+      const v = t.indexInfo?.value;
+      return typeof v === 'number' && v > mx ? v : mx;
+    }, 0);
+    // Google UPI 0–5 → 프론트 level 매핑
+    const pollenLevel = maxValue <= 1 ? 'good'
+      : maxValue === 2 ? 'normal'
+      : maxValue <= 4 ? 'bad'
+      : 'worst';
+    return {
+      pollen: maxValue,
+      pollenLevel,
+      pollenSource: 'google',
+      pollenTypes: types.map((t) => ({
+        code: t.code,
+        name: t.displayName,
+        value: t.indexInfo?.value ?? null,
+        category: t.indexInfo?.category ?? null,
+      })),
+    };
+  } catch (e) {
+    console.warn('[google-pollen]', e.message);
+    return null;
+  }
+}
+
 app.get('/api/air', async (_req, res) => {
   try {
     const lat = process.env.DEFAULT_LAT || '35.6895';
@@ -1451,18 +1494,26 @@ app.get('/api/air', async (_req, res) => {
 
     const url = `https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${lat}&longitude=${lon}` +
       `&current=pm10,pm2_5,alder_pollen,birch_pollen,grass_pollen&timezone=${TZ_ENC}`;
-    const j = await (await fetch(url)).json();
+    const [j, google] = await Promise.all([
+      (await fetch(url)).json().catch(() => ({})),
+      fetchGooglePollen(lat, lon),
+    ]);
 
     const pm10 = j.current?.pm10 ?? null;
     const pm25 = j.current?.pm2_5 ?? null;
-    const pollen = Math.max(
+    // Open-Meteo 꽃가루 (동아시아엔 부정확) — Google 실패 시 폴백용
+    const omPollen = Math.max(
       j.current?.alder_pollen ?? 0, j.current?.birch_pollen ?? 0, j.current?.grass_pollen ?? 0
     );
     const out = {
       pm10, pm25,
       pm10Level: level(pm10, [30, 80, 150]),
       pm25Level: level(pm25, [15, 35, 75]),
-      pollen, pollenLevel: level(pollen, [1, 10, 50]),
+      // Google Pollen 우선, 실패 시 Open-Meteo 폴백
+      pollen: google ? google.pollen : omPollen,
+      pollenLevel: google ? google.pollenLevel : level(omPollen, [1, 10, 50]),
+      pollenSource: google ? 'google' : 'open-meteo',
+      pollenTypes: google ? google.pollenTypes : null,
     };
     cacheSet(key, out);
     res.json(out);

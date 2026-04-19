@@ -2404,6 +2404,21 @@ async function loadWeatherAndAir() {
     if (a.pm25 != null) { $('aPm25').textContent = Math.round(a.pm25); $('aPm25L').className = 'lvl ' + a.pm25Level; }
     $('aPol').textContent = a.pollen != null ? Math.round(a.pollen) : '-';
     $('aPolL').className = 'lvl ' + (a.pollenLevel || 'unknown');
+    // 꽃가루 종별 상세 (Google Pollen API) 가 있으면 title 에 힌트 (호버 시 나무/풀 구체 정보)
+    const polChip = $('aPol')?.closest('.chip');
+    if (polChip) {
+      if (a.pollenTypes && a.pollenTypes.length) {
+        const hint = a.pollenTypes
+          .filter((t) => t.value != null)
+          .map((t) => `${t.name}: ${['없음','매우낮음','낮음','보통','높음','매우높음'][t.value] || t.value}`)
+          .join(' · ');
+        polChip.title = `꽃가루 (Google · ${hint})`;
+      } else if (a.pollenSource === 'open-meteo') {
+        polChip.title = '꽃가루 (Open-Meteo · 동아시아엔 부정확할 수 있음)';
+      } else {
+        polChip.title = '꽃가루 지수';
+      }
+    }
   }
 
   renderTips(w, a);
