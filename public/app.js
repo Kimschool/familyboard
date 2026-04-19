@@ -5028,8 +5028,11 @@ async function loadGallery() {
 function renderGalleryCard() {
   const grid = $('galleryGrid');
   const empty = $('galleryEmpty');
+  const openAllBtn = $('galleryOpenAllBtn');
   if (!grid) return;
   grid.innerHTML = '';
+  // '전체보기' 는 카드 밖에 더 있는 경우(>9장) 에만 표시 — 빈 상태·9장 이하엔 의미 없어서 숨김
+  if (openAllBtn) openAllBtn.classList.toggle('hidden', GALLERY_CACHE.length <= 9);
   if (!GALLERY_CACHE.length) {
     empty?.classList.remove('hidden');
     return;
