@@ -5133,18 +5133,42 @@ async function deleteGalleryPhoto(id) {
   }
 }
 
-async function uploadGalleryPhoto(file) {
+// 업로드 시트 상태 — 파일 선택 후 미리보기 + 캡션 입력용
+let _pendingGalleryFile = null;
+let _pendingGalleryObjectUrl = null;
+
+function openGalleryUploadSheet(file) {
+  _pendingGalleryFile = file;
+  if (_pendingGalleryObjectUrl) URL.revokeObjectURL(_pendingGalleryObjectUrl);
+  _pendingGalleryObjectUrl = URL.createObjectURL(file);
+  $('galleryUploadPreview').src = _pendingGalleryObjectUrl;
+  $('galleryUploadCaption').value = '';
+  $('galleryUploadSheet').classList.remove('hidden');
+  setTimeout(() => {
+    if (!/Mobi|Android/i.test(navigator.userAgent)) $('galleryUploadCaption')?.focus();
+  }, 150);
+}
+
+function closeGalleryUploadSheet() {
+  $('galleryUploadSheet').classList.add('hidden');
+  if (_pendingGalleryObjectUrl) {
+    URL.revokeObjectURL(_pendingGalleryObjectUrl);
+    _pendingGalleryObjectUrl = null;
+  }
+  _pendingGalleryFile = null;
+}
+
+async function confirmGalleryUpload() {
+  const file = _pendingGalleryFile;
   if (!file) return;
-  if (!file.type.startsWith('image/')) { alert('이미지 파일을 선택해 주세요'); return; }
-  const addBtn = $('galleryAddBtn');
-  if (addBtn) { addBtn.disabled = true; addBtn.textContent = '올리는 중...'; }
+  const caption = ($('galleryUploadCaption').value || '').trim();
+  const confirmBtn = $('galleryUploadConfirm');
+  if (confirmBtn) { confirmBtn.disabled = true; confirmBtn.textContent = '올리는 중...'; }
   try {
-    // 클라이언트 리사이즈 — 3MB 이하
     const blob = await resizeImageToJpegBlob(file, { maxSide: 2000, targetBytes: 3 * 1024 * 1024 - 1 });
-    const caption = prompt('사진에 짧은 설명을 붙일까요? (취소: 없이)', '') || '';
     const fd = new FormData();
     fd.append('photo', blob, 'photo.jpg');
-    if (caption.trim()) fd.append('caption', caption.trim());
+    if (caption) fd.append('caption', caption);
     const r = await fetch('/api/gallery', { method: 'POST', body: fd, credentials: 'same-origin' });
     if (!r.ok) {
       let msg = '업로드 실패';
@@ -5152,12 +5176,12 @@ async function uploadGalleryPhoto(file) {
       throw new Error(msg);
     }
     await loadGallery();
-    // 열려 있던 시트도 갱신
     if (!$('gallerySheet').classList.contains('hidden')) renderGallerySheet(false);
+    closeGalleryUploadSheet();
   } catch (err) {
     alert(err.message || '업로드 실패');
   } finally {
-    if (addBtn) { addBtn.disabled = false; addBtn.textContent = '＋ 사진'; }
+    if (confirmBtn) { confirmBtn.disabled = false; confirmBtn.textContent = '올리기'; }
   }
 }
 
@@ -5165,7 +5189,21 @@ $('galleryAddBtn')?.addEventListener('click', () => $('galleryFile')?.click());
 $('galleryFile')?.addEventListener('change', (e) => {
   const f = e.target.files?.[0];
   e.target.value = '';
-  if (f) uploadGalleryPhoto(f);
+  if (!f) return;
+  if (!f.type.startsWith('image/')) { alert('이미지 파일을 선택해 주세요'); return; }
+  openGalleryUploadSheet(f);
+});
+$('galleryUploadConfirm')?.addEventListener('click', confirmGalleryUpload);
+$('galleryUploadCancel')?.addEventListener('click', closeGalleryUploadSheet);
+$('galleryUploadSheet')?.addEventListener('click', (e) => {
+  if (e.target.id === 'galleryUploadSheet') closeGalleryUploadSheet();
+});
+$('galleryUploadCaption')?.addEventListener('keydown', (e) => {
+  // Ctrl/Cmd + Enter 로 업로드 확정
+  if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+    e.preventDefault();
+    confirmGalleryUpload();
+  }
 });
 $('galleryOpenAllBtn')?.addEventListener('click', openGallerySheet);
 $('gallerySheetClose')?.addEventListener('click', () => $('gallerySheet').classList.add('hidden'));

@@ -1065,6 +1065,21 @@
   </div>
 </div>
 
+<!-- 갤러리 업로드 미리보기 시트 -->
+<div id="galleryUploadSheet" class="sheet-backdrop hidden" role="dialog">
+  <div class="sheet" role="document">
+    <div class="sheet-handle"></div>
+    <h2 class="sheet-title">사진 올리기</h2>
+    <div class="gup-preview-wrap">
+      <img id="galleryUploadPreview" class="gup-preview" alt="" />
+    </div>
+    <label class="admin-label" style="margin-top: 14px">설명 (선택)</label>
+    <textarea id="galleryUploadCaption" class="ufi gup-caption" maxlength="300" placeholder="사진에 짧은 한 줄 남겨 보세요" rows="2"></textarea>
+    <button type="button" id="galleryUploadConfirm" class="auth-btn">올리기</button>
+    <button class="sheet-close" id="galleryUploadCancel">취소</button>
+  </div>
+</div>
+
 <!-- 갤러리 사진 상세 시트 -->
 <div id="galleryDetailSheet" class="sheet-backdrop hidden" role="dialog">
   <div class="sheet" role="document">
@@ -1133,6 +1148,6 @@
     caches.keys().then((ks) => ks.forEach((k) => caches.delete(k))).catch(() => {});
   }
 </script>
-<script src="/app.js?v=36" defer></script>
+<script src="/app.js?v=37" defer></script>
 </body>
 </html>
