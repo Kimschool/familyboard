@@ -5059,7 +5059,7 @@ function renderGalleryCard() {
   for (const p of shown) {
     const div = document.createElement('div');
     div.className = 'gallery-thumb';
-    div.innerHTML = `<img src="${p.url.replace(/"/g, '')}" alt="" loading="lazy" />`;
+    div.innerHTML = `<img src="${p.url.replace(/"/g, '')}" alt="" loading="lazy" style="width:100%;height:100%;object-fit:cover;display:block" />`;
     div.onclick = () => openGalleryDetail(p);
     grid.appendChild(div);
   }
@@ -5074,7 +5074,7 @@ function renderGallerySheet(append = false) {
     const div = document.createElement('div');
     div.className = 'gallery-thumb';
     div.dataset.gid = String(p.id);
-    div.innerHTML = `<img src="${p.url.replace(/"/g, '')}" alt="" loading="lazy" />`;
+    div.innerHTML = `<img src="${p.url.replace(/"/g, '')}" alt="" loading="lazy" style="width:100%;height:100%;object-fit:cover;display:block" />`;
     div.onclick = () => openGalleryDetail(p);
     grid.appendChild(div);
   }
@@ -5246,8 +5246,9 @@ async function loadChatPeek() {
     const recent = list.slice(-3);
     for (const m of recent) {
       const li = document.createElement('li');
+      // 인라인 스타일로 img 크기 강제 (전역 img { max-width: 100% } 이 30px 부모와 충돌하는 경우 방지)
       const avatar = m.userPhoto
-        ? `<img src="${m.userPhoto.replace(/"/g, '')}" alt="" />`
+        ? `<img src="${m.userPhoto.replace(/"/g, '')}" alt="" style="width:30px;height:30px;object-fit:cover;display:block;border-radius:50%" />`
         : iconEmoji(m.userIcon);
       const timeStr = m.createdAt ? relativeTime(m.createdAt) : '';
       li.innerHTML = `
@@ -5335,7 +5336,7 @@ function renderChatMessages() {
     if (m.tempKey) li.dataset.temp = m.tempKey;
 
     const avatarInner = m.userPhoto
-      ? `<img src="${m.userPhoto.replace(/"/g, '')}" alt="" />`
+      ? `<img src="${m.userPhoto.replace(/"/g, '')}" alt="" style="width:36px;height:36px;object-fit:cover;display:block;border-radius:50%" />`
       : iconEmoji(m.userIcon);
     const hour = d.getHours();
     const mm = String(d.getMinutes()).padStart(2, '0');
