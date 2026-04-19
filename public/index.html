@@ -10,7 +10,7 @@
 <link rel="manifest" href="/manifest.json" />
 <link rel="apple-touch-icon" href="/icons/icon-192.png" />
 <link rel="icon" href="/icons/icon-192.png" />
-<link rel="stylesheet" href="/style.css?v=40" />
+<link rel="stylesheet" href="/style.css?v=41" />
 <title>가족보드</title>
 </head>
 <body>
@@ -1022,6 +1022,19 @@
   <button id="undoBtn" class="undo-btn">되돌리기</button>
 </div>
 
+<!-- 공용 확인 다이얼로그 -->
+<div id="confirmSheet" class="sheet-backdrop hidden" role="dialog">
+  <div class="sheet confirm-sheet" role="document">
+    <div class="sheet-handle"></div>
+    <h2 class="confirm-title" id="confirmTitle">—</h2>
+    <p class="confirm-message" id="confirmMessage">—</p>
+    <div class="confirm-actions">
+      <button type="button" id="confirmCancel" class="confirm-btn confirm-cancel">취소</button>
+      <button type="button" id="confirmOk" class="confirm-btn confirm-ok">확인</button>
+    </div>
+  </div>
+</div>
+
 <!-- 가족 갤러리 전체보기 시트 -->
 <div id="gallerySheet" class="sheet-backdrop hidden" role="dialog">
   <div class="sheet sheet-tall" role="document">
@@ -1153,6 +1166,6 @@
     caches.keys().then((ks) => ks.forEach((k) => caches.delete(k))).catch(() => {});
   }
 </script>
-<script src="/app.js?v=40" defer></script>
+<script src="/app.js?v=41" defer></script>
 </body>
 </html>

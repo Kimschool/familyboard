@@ -4861,6 +4861,52 @@ function showSimpleToast(msg) {
   setTimeout(() => el.classList.add('hidden'), 2500);
 }
 
+/** 공용 인앱 확인 다이얼로그 — native confirm() 대체. Promise<boolean> 반환. */
+function showConfirm({ title = '확인', message = '', confirmLabel = '확인', cancelLabel = '취소', danger = false } = {}) {
+  return new Promise((resolve) => {
+    const sheet = $('confirmSheet');
+    const titleEl = $('confirmTitle');
+    const msgEl = $('confirmMessage');
+    const okBtn = $('confirmOk');
+    const cancelBtn = $('confirmCancel');
+    if (!sheet || !okBtn || !cancelBtn) {
+      // 폴백: 시트 없으면 네이티브 confirm
+      resolve(window.confirm(`${title}\n\n${message}`));
+      return;
+    }
+    titleEl.textContent = title;
+    msgEl.textContent = message;
+    okBtn.textContent = confirmLabel;
+    cancelBtn.textContent = cancelLabel;
+    okBtn.classList.toggle('danger', !!danger);
+    sheet.classList.remove('hidden');
+    let done = false;
+    function cleanup(result) {
+      if (done) return;
+      done = true;
+      sheet.classList.add('hidden');
+      okBtn.removeEventListener('click', onOk);
+      cancelBtn.removeEventListener('click', onCancel);
+      sheet.removeEventListener('click', onBg);
+      document.removeEventListener('keydown', onKey);
+      resolve(result);
+    }
+    function onOk() { cleanup(true); }
+    function onCancel() { cleanup(false); }
+    function onBg(e) { if (e.target.id === 'confirmSheet') cleanup(false); }
+    function onKey(e) {
+      if (e.key === 'Escape') cleanup(false);
+      else if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); cleanup(true); }
+    }
+    okBtn.addEventListener('click', onOk);
+    cancelBtn.addEventListener('click', onCancel);
+    sheet.addEventListener('click', onBg);
+    document.addEventListener('keydown', onKey);
+    // 확인 버튼에 포커스 (키보드 Enter 로 즉시 확정 가능)
+    setTimeout(() => okBtn.focus(), 50);
+  });
+}
+
 let UNDO_TIMER = null;
 function showUndoToast(memo) {
   const el = $('undoToast');
@@ -5153,7 +5199,13 @@ function navigateGalleryDetail(delta) {
 }
 
 async function deleteGalleryPhoto(id) {
-  if (!confirm('이 사진을 삭제할까요? 되돌릴 수 없어요.')) return;
+  const ok = await showConfirm({
+    title: '사진 삭제',
+    message: '이 사진을 삭제할까요?\n한 번 지우면 되돌릴 수 없어요.',
+    confirmLabel: '삭제',
+    danger: true,
+  });
+  if (!ok) return;
   try {
     await api(`/api/gallery/${id}`, { method: 'DELETE' });
     GALLERY_CACHE = GALLERY_CACHE.filter((p) => p.id !== id);
@@ -5645,7 +5697,13 @@ async function retryChatMessage(tempKey) {
 }
 
 async function deleteChatMessage(id) {
-  if (!confirm('메시지를 삭제할까요?')) return;
+  const ok = await showConfirm({
+    title: '메시지 삭제',
+    message: '이 메시지를 삭제할까요?',
+    confirmLabel: '삭제',
+    danger: true,
+  });
+  if (!ok) return;
   try {
     await api(`/api/chat/${id}`, { method: 'DELETE' });
     CHAT_MESSAGES = CHAT_MESSAGES.filter((m) => m.id !== id);

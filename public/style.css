@@ -4200,6 +4200,54 @@ li.memo-important .memo-text { font-weight: 700; }
   font-size: 15px;
   font-weight: 600;
 }
+/* 공용 확인 다이얼로그 */
+.confirm-sheet {
+  max-width: 420px;
+  margin: 0 auto;
+  padding: 14px 22px 22px !important;
+}
+.confirm-title {
+  margin: 6px 0 10px;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: -0.3px;
+  text-align: center;
+}
+.confirm-message {
+  margin: 0 0 20px;
+  font-size: 15px;
+  line-height: 1.55;
+  color: var(--sub);
+  white-space: pre-wrap;
+  text-align: center;
+}
+.confirm-actions { display: flex; gap: 8px; }
+.confirm-btn {
+  flex: 1;
+  height: 50px;
+  border-radius: var(--r-sm);
+  font-size: 15.5px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform .12s, background .15s;
+}
+.confirm-cancel {
+  background: var(--card);
+  border: 1.5px solid var(--line);
+  color: var(--text);
+}
+.confirm-cancel:hover { background: var(--bg); }
+.confirm-ok {
+  background: var(--primary);
+  color: #fff;
+  border: none;
+}
+.confirm-ok.danger { background: var(--bad); }
+.confirm-btn:active { transform: scale(.97); }
+
 /* 갤러리 업로드 미리보기 시트 */
 .gup-preview-wrap {
   width: 100%;
