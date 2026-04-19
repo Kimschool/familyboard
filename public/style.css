@@ -4488,7 +4488,7 @@ html[data-scheme="hc"] .chat-bubble { background: var(--card); }
 
 .chat-msg-del {
   opacity: 0;
-  transition: opacity .15s, color .15s;
+  transition: opacity .15s, color .15s, background .15s;
   background: transparent;
   border: none;
   color: var(--sub);
@@ -4496,12 +4496,29 @@ html[data-scheme="hc"] .chat-bubble { background: var(--card); }
   cursor: pointer;
   padding: 4px 8px;
   align-self: center;
-  border-radius: 6px;
+  border-radius: 8px;
   -webkit-tap-highlight-color: transparent;
 }
-.chat-msg:hover .chat-msg-del,
-.chat-msg:focus-within .chat-msg-del { opacity: 0.6; }
-.chat-msg-del:hover { opacity: 1 !important; color: var(--bad); }
+/* 데스크탑 (hover 가능): 호버·포커스 시에만 표시 */
+@media (hover: hover) and (pointer: fine) {
+  .chat-msg:hover .chat-msg-del,
+  .chat-msg:focus-within .chat-msg-del { opacity: 0.6; }
+  .chat-msg-del:hover { opacity: 1; color: var(--bad); background: rgba(255,59,48,.08); }
+}
+/* 모바일·터치 기기: 호버 없으므로 항상 은은하게 보여 삭제 가능함을 알림 */
+@media (hover: none), (pointer: coarse) {
+  .chat-msg-del {
+    opacity: 0.5;
+    min-width: 34px;
+    min-height: 34px;
+    padding: 6px 8px;
+    font-size: 15px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .chat-msg-del:active { opacity: 1; color: var(--bad); background: rgba(255,59,48,.12); }
+}
 
 /* 낙관적 전송 (sending) / 실패 (failed) 상태 */
 .chat-msg.sending .chat-bubble { opacity: 0.6; }
