@@ -10,7 +10,7 @@
 <link rel="manifest" href="/manifest.json" />
 <link rel="apple-touch-icon" href="/icons/icon-192.png" />
 <link rel="icon" href="/icons/icon-192.png" />
-<link rel="stylesheet" href="/style.css?v=38" />
+<link rel="stylesheet" href="/style.css?v=39" />
 <title>가족보드</title>
 </head>
 <body>
@@ -1085,7 +1085,12 @@
   <div class="sheet" role="document">
     <div class="sheet-handle"></div>
     <div class="gallery-detail">
-      <img id="galleryDetailImg" alt="" class="gallery-detail-img" />
+      <div class="gallery-detail-img-wrap">
+        <button type="button" id="galleryDetailPrev" class="gallery-nav-btn gallery-nav-prev hidden" aria-label="이전 사진">‹</button>
+        <img id="galleryDetailImg" alt="" class="gallery-detail-img" />
+        <button type="button" id="galleryDetailNext" class="gallery-nav-btn gallery-nav-next hidden" aria-label="다음 사진">›</button>
+        <div class="gallery-detail-counter" id="galleryDetailCounter"></div>
+      </div>
       <div class="gallery-detail-meta">
         <div class="gallery-detail-author" id="galleryDetailAuthor"></div>
         <div class="gallery-detail-caption" id="galleryDetailCaption"></div>
@@ -1148,6 +1153,6 @@
     caches.keys().then((ks) => ks.forEach((k) => caches.delete(k))).catch(() => {});
   }
 </script>
-<script src="/app.js?v=39" defer></script>
+<script src="/app.js?v=40" defer></script>
 </body>
 </html>

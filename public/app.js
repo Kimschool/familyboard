@@ -5111,13 +5111,45 @@ async function loadMoreGallery() {
 
 function openGalleryDetail(p) {
   GALLERY_DETAIL_ID = p.id;
+  renderGalleryDetail(p);
+  $('galleryDetailSheet').classList.remove('hidden');
+}
+
+/** 현재 상세 사진 렌더 + 앞/뒤 네비 버튼 상태 업데이트 */
+function renderGalleryDetail(p) {
   $('galleryDetailImg').src = p.url;
   const author = `${iconEmoji(p.uploaderIcon)} ${p.uploaderName || '알 수 없음'}`;
   $('galleryDetailAuthor').textContent = author;
   $('galleryDetailCaption').textContent = p.caption || '';
   $('galleryDetailTime').textContent = p.createdAt ? relativeTime(p.createdAt) : '';
   $('galleryDetailDeleteBtn').classList.toggle('hidden', !p.canDelete);
-  $('galleryDetailSheet').classList.remove('hidden');
+  // 앞/뒤 네비 + 카운터
+  const idx = GALLERY_CACHE.findIndex((x) => x.id === p.id);
+  const total = GALLERY_CACHE.length;
+  const prevBtn = $('galleryDetailPrev');
+  const nextBtn = $('galleryDetailNext');
+  const counter = $('galleryDetailCounter');
+  if (idx < 0 || total <= 1) {
+    prevBtn?.classList.add('hidden');
+    nextBtn?.classList.add('hidden');
+    if (counter) counter.textContent = '';
+  } else {
+    // GALLERY_CACHE 는 최신→오래된 순이므로 '다음 사진' = 더 오래된 것 (idx+1)
+    prevBtn?.classList.toggle('hidden', idx === 0);
+    nextBtn?.classList.toggle('hidden', idx >= total - 1);
+    if (counter) counter.textContent = `${idx + 1} / ${total}`;
+  }
+}
+
+function navigateGalleryDetail(delta) {
+  if (GALLERY_DETAIL_ID == null) return;
+  const idx = GALLERY_CACHE.findIndex((x) => x.id === GALLERY_DETAIL_ID);
+  if (idx < 0) return;
+  const newIdx = idx + delta;
+  if (newIdx < 0 || newIdx >= GALLERY_CACHE.length) return;
+  const p = GALLERY_CACHE[newIdx];
+  GALLERY_DETAIL_ID = p.id;
+  renderGalleryDetail(p);
 }
 
 async function deleteGalleryPhoto(id) {
@@ -5222,6 +5254,45 @@ $('galleryDetailImg')?.addEventListener('click', () => {
   const src = $('galleryDetailImg').getAttribute('src');
   if (src) openLightbox(src);
 });
+
+// 네비게이션: 이전/다음 버튼
+$('galleryDetailPrev')?.addEventListener('click', (e) => { e.stopPropagation(); navigateGalleryDetail(-1); });
+$('galleryDetailNext')?.addEventListener('click', (e) => { e.stopPropagation(); navigateGalleryDetail(1); });
+
+// 키보드 ← / → 로 이동 (시트 열려 있을 때만)
+document.addEventListener('keydown', (e) => {
+  if ($('galleryDetailSheet')?.classList.contains('hidden')) return;
+  if (e.key === 'ArrowLeft') { e.preventDefault(); navigateGalleryDetail(-1); }
+  else if (e.key === 'ArrowRight') { e.preventDefault(); navigateGalleryDetail(1); }
+  else if (e.key === 'Escape') $('galleryDetailSheet').classList.add('hidden');
+});
+
+// 모바일 스와이프 — 이미지 영역에서 가로 스와이프 감지
+(function setupGallerySwipe() {
+  const wrap = document.querySelector('.gallery-detail-img-wrap');
+  if (!wrap) return;
+  let startX = 0, startY = 0, startT = 0, tracking = false;
+  wrap.addEventListener('touchstart', (e) => {
+    if (e.touches.length !== 1) { tracking = false; return; }
+    startX = e.touches[0].clientX;
+    startY = e.touches[0].clientY;
+    startT = Date.now();
+    tracking = true;
+  }, { passive: true });
+  wrap.addEventListener('touchend', (e) => {
+    if (!tracking) return;
+    tracking = false;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - startX;
+    const dy = t.clientY - startY;
+    const dt = Date.now() - startT;
+    // 가로 이동이 세로보다 크고, 50px 이상, 600ms 이내면 스와이프
+    if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.5 && dt < 600) {
+      if (dx > 0) navigateGalleryDetail(-1);  // 오른쪽으로 밀면 이전
+      else navigateGalleryDetail(1);           // 왼쪽으로 밀면 다음
+    }
+  }, { passive: true });
+})();
 
 // ==========================================================================
 // 가족 채팅
