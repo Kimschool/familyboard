@@ -17,6 +17,8 @@ body { min-height: 100vh; padding-bottom: 40px; }
 
 .screen { max-width: 560px; margin: 0 auto; padding: 16px; }
 .screen.hidden { display: none; }
+/* 전역 .hidden — 다이얼로그·버튼 등 모든 요소에 적용 */
+.hidden { display: none !important; }
 
 .g-head {
   display: flex; align-items: center; gap: 12px;
