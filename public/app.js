@@ -5342,6 +5342,32 @@ function openGalleryDetail(p) {
   loadGalleryComments(p.id);
 }
 
+// 긴 캡션은 80자 넘어가면 잘라서 '더 보기' 버튼 노출. 버튼 누르면 전체로 확장.
+const IG_CAPTION_LIMIT = 80;
+let _igCaptionExpanded = false;
+let _igCaptionFull = '';
+function renderIgCaption(text) {
+  const el = $('galleryDetailCaption');
+  if (!el) return;
+  _igCaptionFull = text || '';
+  _igCaptionExpanded = false;
+  // 기존 '더 보기' 버튼 제거 (재렌더 시 중복 방지)
+  el.parentElement?.querySelector('.ig-caption-more')?.remove();
+  if (!text) { el.textContent = ''; return; }
+  if (text.length <= IG_CAPTION_LIMIT) { el.textContent = text; return; }
+  el.textContent = text.slice(0, IG_CAPTION_LIMIT) + '…';
+  const more = document.createElement('button');
+  more.type = 'button';
+  more.className = 'ig-caption-more';
+  more.textContent = '더 보기';
+  more.onclick = () => {
+    _igCaptionExpanded = !_igCaptionExpanded;
+    el.textContent = _igCaptionExpanded ? _igCaptionFull : _igCaptionFull.slice(0, IG_CAPTION_LIMIT) + '…';
+    more.textContent = _igCaptionExpanded ? '접기' : '더 보기';
+  };
+  el.parentElement.appendChild(more);
+}
+
 function formatLikeLabel(n) {
   n = Number(n) || 0;
   if (n === 0) return '가장 먼저 좋아요를 눌러 보세요';
@@ -5364,8 +5390,17 @@ function igShortTime(dateStr) {
 /** 현재 상세 사진 렌더 + 앞/뒤 네비 버튼 상태 업데이트 */
 function renderGalleryDetail(p) {
   $('galleryDetailImg').src = p.url;
-  $('galleryDetailAuthor').textContent = p.uploaderName || '알 수 없음';
-  $('galleryDetailCaption').textContent = p.caption || '';
+  // 포스트 헤더: 아바타 + 업로더 이름
+  const avatarEl = $('galleryDetailAvatar');
+  if (avatarEl) {
+    avatarEl.innerHTML = inlineAvatarHtml({
+      id: p.uploaderId, name: p.uploaderName, icon: p.uploaderIcon, photoUrl: p.uploaderPhoto,
+    }, 32);
+  }
+  $('galleryDetailUsername').textContent = p.uploaderName || '알 수 없음';
+  // 캡션 (IG 스타일: 업로더 이름 bold + 본문 inline)
+  $('galleryDetailAuthor').textContent = p.uploaderName || '';
+  renderIgCaption(p.caption || '');
   $('galleryDetailTime').textContent = p.createdAt ? `${igShortTime(p.createdAt)} 전` : '';
   $('galleryDetailDeleteBtn').classList.toggle('hidden', !p.canDelete);
   // 좋아요 상태
@@ -5430,10 +5465,12 @@ async function loadGalleryComments(photoId) {
     for (const c of shown) {
       const li = document.createElement('li');
       const canDelete = c.author_id === ME.id || ME.role === 'admin';
+      const t = c.created_at ? igShortTime(c.created_at) : '';
       li.innerHTML = `
         <span class="ig-comment-text">
           <strong></strong><span class="ig-comment-body"></span>
         </span>
+        <span class="ig-comment-time">${t}</span>
         ${canDelete ? `<button class="ig-comment-del" data-cid="${c.id}" aria-label="삭제">✕</button>` : ''}`;
       li.querySelector('strong').textContent = c.author_name || '알 수 없음';
       li.querySelector('.ig-comment-body').textContent = c.text;
