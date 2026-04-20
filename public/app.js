@@ -3454,7 +3454,7 @@ const DEFAULT_CARD_ORDER = [
   // 5) 보조 정보
   'weather','tips','gallery',
   // 6) 엔터·유틸·메모 (아래로)
-  'zodiac','fx','calc','memo','account'
+  'games','zodiac','fx','calc','memo','account'
 ];
 function loadCardOrder() {
   try {
