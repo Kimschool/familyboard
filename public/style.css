@@ -1232,97 +1232,140 @@ body.tod-night .hero-weather { color: rgba(242,242,247,.8); }
   font-family: inherit;
 }
 
-/* ========== 월간 가족 달력 ========== */
+/* ========== 월간 가족 달력 (라운드1 비주얼 톤업) ========== */
 .calendar-card { overflow: hidden; }
+.calendar-card .card-title {
+  font-size: 19px;
+  font-weight: 800;
+  letter-spacing: -0.4px;
+}
 .cal-nav { display: flex; gap: 4px; align-items: center; }
 .cal-nav-btn {
-  background: var(--bg);
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  padding: 4px 10px;
-  font-size: 14px;
+  background: transparent;
+  border: none;
+  border-radius: 10px;
+  padding: 0 10px;
+  font-size: 17px;
   font-weight: 700;
-  color: var(--text);
+  color: var(--sub);
   cursor: pointer;
   font-family: inherit;
   min-width: 32px;
-  height: 32px;
+  height: 34px;
+  -webkit-tap-highlight-color: transparent;
+  transition: background .15s, color .15s, transform .12s;
 }
-.cal-nav-btn:active { background: var(--card); }
+.cal-nav-btn:hover { background: var(--bg); color: var(--text); }
+.cal-nav-btn:active { transform: scale(.92); }
+#calToday {
+  font-size: 13.5px;
+  font-weight: 700;
+  padding: 0 12px;
+  color: var(--primary);
+}
+#calToday:hover { background: rgba(10,132,255,.1); color: var(--primary); }
 
 .cal-weekdays {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
-  font-size: 12px;
+  font-size: 11.5px;
   font-weight: 700;
   color: var(--sub);
   text-align: center;
-  margin-bottom: 6px;
-  padding: 8px 0;
-  background: var(--bg);
-  border-radius: 10px 10px 0 0;
-  border-bottom: 2px solid var(--line);
+  padding: 6px 4px 8px;
+  letter-spacing: 0.5px;
+  background: transparent;
+  border: none;
+  margin-bottom: 2px;
 }
-.cal-weekdays span:first-child { color: var(--bad); }
+.cal-weekdays span:first-child { color: #D4375A; }
 .cal-weekdays span:last-child  { color: var(--primary); }
 
 .cal-grid {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
-  gap: 4px;
-  padding: 4px;
-  background: var(--bg);
-  border-radius: 0 0 10px 10px;
+  gap: 3px;
+  padding: 0;
+  background: transparent;
+  border-radius: 0;
 }
 .cal-cell {
   aspect-ratio: 1 / 1;
-  min-height: 44px;
-  background: var(--card);
-  border-radius: 8px;
-  padding: 4px;
+  min-height: 48px;
+  background: transparent;
+  border-radius: 10px;
+  padding: 5px 3px 4px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
+  gap: 2px;
   font-size: 13px;
   color: var(--text);
   position: relative;
   cursor: default;
-  transition: transform .12s, background .12s;
-  box-shadow: 0 1px 2px rgba(0,0,0,.03);
+  transition: background .15s, transform .12s;
+  box-shadow: none;
 }
-.cal-cell.empty { background: transparent; box-shadow: none; }
+.cal-cell.empty { background: transparent; }
 .cal-cell.is-clickable { cursor: pointer; -webkit-tap-highlight-color: transparent; }
 .cal-cell.is-clickable:hover { background: var(--bg); }
 .cal-cell.is-clickable:active { transform: scale(.94); }
-.cal-cell.is-clickable.is-today:hover { background: var(--primary); filter: brightness(1.05); }
-.cal-day { font-weight: 700; font-size: 14px; }
-.cal-cell.is-today {
-  background: var(--primary);
-  color: #fff;
-  box-shadow: 0 3px 10px rgba(10,132,255,.3);
+
+.cal-day {
+  font-weight: 600;
+  font-size: 14px;
+  line-height: 1;
+  width: 26px;
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: background .15s, color .15s;
 }
-.cal-cell.is-today .cal-day { font-weight: 800; font-size: 15px; }
+.cal-cell.is-sunday .cal-day { color: #D4375A; }
+.cal-cell.is-saturday .cal-day { color: var(--primary); }
+
+/* 오늘: 셀 전체 아닌 '숫자만 파란 원형' 으로 절제된 강조 */
+.cal-cell.is-today .cal-day {
+  background: var(--primary);
+  color: #fff !important;
+  font-weight: 800;
+  box-shadow: 0 2px 6px rgba(10,132,255,.35);
+}
+.cal-cell.is-clickable.is-today:hover { background: var(--bg); }
+
+/* 생일: subtle 핑크 dot(숫자 위) + 은은한 배경 */
 .cal-cell.is-birthday {
   cursor: pointer;
-  background: linear-gradient(135deg, #FFE9EC 0%, #FFF5E1 100%);
-  box-shadow: 0 2px 8px rgba(255,100,100,.15);
+  background: rgba(255, 100, 130, .06);
+}
+.cal-cell.is-birthday::before {
+  content: '';
+  position: absolute;
+  top: 4px;
+  right: 6px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #ff6b8a;
+  box-shadow: 0 0 0 2px var(--card);
 }
 @media (prefers-color-scheme: dark) {
-  .cal-cell { background: rgba(255,255,255,.05); }
-  .cal-cell.is-birthday { background: linear-gradient(135deg, #3A2A2A 0%, #3A3020 100%); }
-}
-.cal-cell.is-birthday.is-today {
-  background: linear-gradient(135deg, #FFB3BA 0%, #FFD9A8 100%);
-  color: #3A2A2A;
+  .cal-cell.is-birthday { background: rgba(255, 130, 155, .1); }
+  .cal-cell.is-birthday::before { box-shadow: 0 0 0 2px #1c1c1e; }
 }
 .cal-cell.is-birthday:active { transform: scale(.94); }
+
 .cal-bd {
-  font-size: 12px;
+  font-size: 11px;
   line-height: 1;
-  margin-top: 2px;
   overflow: hidden;
   white-space: nowrap;
+  max-width: 100%;
+  text-overflow: ellipsis;
+  opacity: .85;
 }
 
 /* 공지 NEW 배지 */

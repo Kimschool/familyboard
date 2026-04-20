@@ -1912,6 +1912,9 @@ function renderCalendar() {
   for (let d = 1; d <= lastDay; d++) {
     const cell = document.createElement('div');
     cell.className = 'cal-cell';
+    const weekday = new Date(y, m, d).getDay();
+    if (weekday === 0) cell.classList.add('is-sunday');
+    else if (weekday === 6) cell.classList.add('is-saturday');
     const isToday = (y === todayY && m === todayM && d === todayD);
     const bdPeople = birthdayMap.get(d);
     const evs = eventMap.get(d);
