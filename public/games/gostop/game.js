@@ -96,9 +96,16 @@
       // 2.5초 뒤 결과 오버레이 표시
       setTimeout(function () { showEndDialog(); }, 2000);
     }
-    // 고/스톱 로그 감지 시 해당 사운드
-    if (newLog && (!oldLog || newLog.ts !== oldLog.ts) && SFX) {
-      if (/고!\s*계속/.test(newLog.msg)) SFX.gong();
+    // 뻑 / 뻑먹기 감지 — 최근 로그 문구 기준
+    if (newLog && (!oldLog || newLog.ts !== oldLog.ts)) {
+      if (/^뻑!/.test(newLog.msg)) {
+        bigCallout('뻑!', 'go', 1600);
+        if (SFX) SFX.gong();
+      } else if (/뻑 먹기|뻑 싹쓸이|뻑먹기/.test(newLog.msg)) {
+        bigCallout('싹쓸이!', 'gold', 1800);
+        if (SFX) SFX.fanfare();
+      }
+      if (/고!\s*계속/.test(newLog.msg) && SFX) SFX.gong();
     }
   }
 
@@ -335,8 +342,11 @@
       }
     }
 
+    // 뻑 그룹 월 셋
+    const bbukMonths = new Set((VIEW.bbukGroups || []).map(function (g) { return g.month; }));
     VIEW.board.forEach(function (c, idx) {
       const wrap = GostopCards.renderCard(c, { highlight: highlightIds.has(c.id) });
+      if (bbukMonths.has(c.month)) wrap.classList.add('is-bbuk');
       if (!prevBoardIds.has(c.id)) {
         // 새 등장
         if (stockDropped && handDropFromIdx < 0) {

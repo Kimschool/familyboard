@@ -196,19 +196,27 @@
       addCaptured(s, playerIdx, card);
       addCaptured(s, playerIdx, m);
       appendLog(s, s.players[playerIdx].name + '님: ' + card.label + ' 로 ' + m.label + ' 을 먹었어요');
-    } else {
-      if (!matchCardId) {
-        s.phase = 'choose-hand-match';
-        s.pending = { cardId: card.id, choices: matches.map(function (m) { return m.id; }) };
-        return { state: s, needsMatchChoice: true, choices: matches.map(function (m) { return m.id; }) };
-      }
-      const chosen = matches.find(function (m) { return m.id === matchCardId; });
-      if (!chosen) throw new Error('invalid match choice');
+    } else if (matches.length === 2) {
+      // 뻑! — 3장 모두 바닥에 놓고, 뻑 그룹으로 마킹
       hand.splice(idx, 1);
-      s.board = s.board.filter(function (b) { return b.id !== chosen.id; });
+      s.board.push(card);
+      s.bbukGroups = s.bbukGroups || [];
+      s.bbukGroups.push({ month: card.month, ownerIdx: playerIdx });
+      appendLog(s, '뻑! ' + s.players[playerIdx].name + '님 ' + card.month + '월 뻑');
+      s.phase = 'flip-stock';
+      return { state: s, bbuk: true };
+    } else {
+      // 3장 이상 매칭 — 뻑 그룹이 있다는 뜻. 모두 먹기
+      hand.splice(idx, 1);
+      matches.forEach(function (m) {
+        s.board = s.board.filter(function (b) { return b.id !== m.id; });
+        addCaptured(s, playerIdx, m);
+      });
       addCaptured(s, playerIdx, card);
-      addCaptured(s, playerIdx, chosen);
-      appendLog(s, s.players[playerIdx].name + '님: ' + card.label + ' 로 ' + chosen.label + ' 을 먹었어요');
+      s.bbukGroups = (s.bbukGroups || []).filter(function (g) { return g.month !== card.month; });
+      appendLog(s, '뻑 먹기! ' + s.players[playerIdx].name + '님 ' + card.month + '월 싹쓸이');
+      s.phase = 'flip-stock';
+      return { state: s, bbukCleared: true };
     }
 
     s.phase = 'flip-stock';
@@ -254,6 +262,16 @@
       addCaptured(s, playerIdx, flipped);
       addCaptured(s, playerIdx, m);
       appendLog(s, '뒤집기: ' + flipped.label + ' 로 ' + m.label + ' 을 먹었어요');
+    } else if (matches.length >= 3) {
+      // 뻑 그룹을 뒤집어서 걸림 — 모두 먹기
+      matches.forEach(function (m) {
+        s.board = s.board.filter(function (b) { return b.id !== m.id; });
+        addCaptured(s, playerIdx, m);
+      });
+      addCaptured(s, playerIdx, flipped);
+      s.bbukGroups = (s.bbukGroups || []).filter(function (g) { return g.month !== flipped.month; });
+      appendLog(s, '뒤집어서 뻑 먹기! ' + s.players[playerIdx].name + '님 ' + flipped.month + '월 싹쓸이');
+      return afterFlip(s);
     } else {
       if (!matchCardId) {
         s.phase = 'choose-flip-match';
@@ -341,6 +359,7 @@
       finished: state.finished,
       winner: state.winner,
       log: state.log.slice(-10),
+      bbukGroups: state.bbukGroups || [],
     };
   }
 

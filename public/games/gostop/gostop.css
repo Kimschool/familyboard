@@ -158,6 +158,30 @@ body { min-height: 100vh; padding-bottom: 40px; }
   60%  { opacity: 1; transform: translateY(8px) scale(1.05); }
   100% { transform: translateY(0) scale(1); }
 }
+/* 뻑 그룹 — 바닥에 쌓인 같은 달 3장에 빨간 링 */
+.hwa-card-wrap.is-bbuk::before {
+  content: '뻑';
+  position: absolute;
+  top: -10px; left: -6px;
+  background: #D94A2C;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 900;
+  padding: 2px 7px;
+  border-radius: 999px;
+  z-index: 3;
+  box-shadow: 0 2px 6px rgba(217,74,44,.5);
+  animation: bbukPulse 1.4s ease-in-out infinite;
+}
+.hwa-card-wrap.is-bbuk .hwa-img,
+.hwa-card-wrap.is-bbuk .hwa-card {
+  box-shadow: 0 0 0 3px rgba(217,74,44,.85), 0 0 14px rgba(217,74,44,.4) !important;
+}
+@keyframes bbukPulse {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.12); }
+}
+
 /* 스팟라이트 — 새 카드 금빛 펄스 3초 */
 .hwa-card-wrap.is-spotlight::after {
   content: '';
