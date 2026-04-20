@@ -5,7 +5,7 @@ WORKDIR /app
 COPY package.json ./
 RUN npm install --omit=dev --no-audit --no-fund
 
-COPY server.js db.js auth.js ./
+COPY server.js db.js auth.js gostop-server.js ./
 COPY public ./public
 
 ENV NODE_ENV=production
