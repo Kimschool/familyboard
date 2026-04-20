@@ -307,6 +307,8 @@
     // 상대 정보 — 아바타 + 이름/점수 + 손패 스택 + 턴 화살표
     const oppEl = $('gameOpponents');
     oppEl.innerHTML = '';
+    const oppCount = VIEW.playerCount - 1;
+    oppEl.className = 'g-opp-wrap g-opp-wrap-' + oppCount; // 1/2/3 에 따라 다른 레이아웃
     VIEW.players.forEach(function (p, i) {
       if (i === me) return;
       const box = document.createElement('div');

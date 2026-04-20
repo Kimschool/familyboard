@@ -416,8 +416,30 @@ body { min-height: 100vh; padding-bottom: 40px; }
   font-weight: 700;
 }
 
-/* 상대 영역 — 컴팩트 뱃지 */
+/* 상대 영역 — 인원수에 따라 다른 레이아웃 */
 .g-opp-wrap { display: flex; gap: 8px; margin-bottom: 4px; }
+/* 1명(2인 맞고) — 넓게 한 행 */
+.g-opp-wrap.g-opp-wrap-1 .g-opp { flex: 1; }
+/* 2명(3인 고스톱) — 2 열 균등 */
+.g-opp-wrap.g-opp-wrap-2 .g-opp { flex: 1 1 0; min-width: 0; padding: 6px 8px; }
+.g-opp-wrap.g-opp-wrap-2 .g-opp-avatar { width: 30px; height: 30px; font-size: 17px; }
+.g-opp-wrap.g-opp-wrap-2 .g-opp-head { font-size: 12px; }
+.g-opp-wrap.g-opp-wrap-2 .g-opp-hand { height: 34px; }
+.g-opp-wrap.g-opp-wrap-2 .g-opp-card { width: 22px !important; height: 32px !important; }
+.g-opp-wrap.g-opp-wrap-2 .g-opp-card svg { width: 22px !important; height: 32px !important; }
+/* 3명(4인 고스톱) — 3 열, 매우 컴팩트 */
+.g-opp-wrap.g-opp-wrap-3 { gap: 5px; }
+.g-opp-wrap.g-opp-wrap-3 .g-opp { flex: 1 1 0; min-width: 0; padding: 5px 6px; gap: 3px; }
+.g-opp-wrap.g-opp-wrap-3 .g-opp-inner { gap: 4px; }
+.g-opp-wrap.g-opp-wrap-3 .g-opp-avatar { width: 26px; height: 26px; font-size: 14px; }
+.g-opp-wrap.g-opp-wrap-3 .g-opp-head { font-size: 11px; flex-direction: column; align-items: flex-start; gap: 1px; }
+.g-opp-wrap.g-opp-wrap-3 .g-opp-hand { height: 28px; }
+.g-opp-wrap.g-opp-wrap-3 .g-opp-card { width: 18px !important; height: 26px !important; }
+.g-opp-wrap.g-opp-wrap-3 .g-opp-card svg { width: 18px !important; height: 26px !important; }
+.g-opp-wrap.g-opp-wrap-3 .g-opp-captured { display: none; } /* 4인은 공간 부족 — 바닥 펠트 쪽으로 이동 */
+.g-opp-wrap.g-opp-wrap-3 .g-go-badge { font-size: 9px; padding: 1px 5px; margin-left: 3px; }
+.g-opp-wrap.g-opp-wrap-3 .g-turn-arrow { font-size: 14px; bottom: -6px; }
+.g-opp {
 .g-opp {
   flex: 1;
   background: linear-gradient(180deg, #FFF, #F6F0E3);
