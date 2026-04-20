@@ -5416,24 +5416,29 @@ html[data-scheme="hc"] .chat-bubble { background: var(--card); }
 }
 
 /* ========== 퀵 메모 FAB ========== */
-.quick-memo-fab {
+.gostop-fab {
   position: fixed;
   left: 18px;
   bottom: calc(18px + env(safe-area-inset-bottom));
   width: 60px; height: 60px;
   border-radius: 50%;
   border: none;
-  background: linear-gradient(135deg, var(--primary), #5AC8FA);
+  background: linear-gradient(135deg, #D94A2C 0%, #F5A742 100%);
   color: #fff;
-  font-size: 34px;
-  font-weight: 300;
+  font-size: 30px;
+  text-decoration: none;
   cursor: pointer;
-  box-shadow: 0 6px 20px rgba(10,132,255,.4);
+  box-shadow: 0 6px 20px rgba(217, 74, 44, .4);
   z-index: 920;
-  transition: transform .15s;
+  transition: transform .15s, box-shadow .2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  -webkit-tap-highlight-color: transparent;
 }
-.quick-memo-fab:active { transform: scale(.92); }
-body.reorder-mode .quick-memo-fab { display: none; }
+.gostop-fab:hover { transform: translateY(-2px); box-shadow: 0 10px 24px rgba(217, 74, 44, .5); }
+.gostop-fab:active { transform: scale(.92); }
+body.reorder-mode .gostop-fab { display: none; }
 
 .quick-memo-cats {
   display: flex;

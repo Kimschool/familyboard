@@ -3623,8 +3623,8 @@ $('favoritesSheet').addEventListener('click', (e) => {
   if (e.target.id === 'favoritesSheet') $('favoritesSheet').classList.add('hidden');
 });
 
-// 퀵 메모 FAB
-$('quickMemoFab').addEventListener('click', () => {
+// 퀵 메모 FAB (현재 비활성 — 고스톱 FAB 로 교체됨)
+$('quickMemoFab')?.addEventListener('click', () => {
   $('quickMemoInput').value = '';
   $('quickMemoSheet').classList.remove('hidden');
   setTimeout(() => $('quickMemoInput').focus(), 100);
