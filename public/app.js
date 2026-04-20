@@ -2472,16 +2472,26 @@ function renderPollenDays(a) {
     const d = new Date(dateStr);
     return `${d.getMonth() + 1}/${d.getDate()}`;
   };
-  const catFor = (lvl) => ({ good: '적음', normal: '보통', bad: '많음', worst: '매우 많음' }[lvl] || '—');
-  box.innerHTML = days.slice(0, 3).map((d, i) => {
-    const top = d.topPlant && d.topPlant.value >= 2 ? d.topPlant.name : '';
-    return `
-      <div class="pollen-day lvl-${d.level}">
-        <div class="pollen-day-label">${labelFor(i, d.date)}</div>
-        <div class="pollen-day-category"><span class="pollen-day-lvl"></span>${catFor(d.level)}</div>
-        ${top ? `<div class="pollen-day-top">${escapeHtml(top)}</div>` : ''}
-      </div>`;
-  }).join('');
+  const catFor  = (lvl) => ({ good: '적음', normal: '보통', bad: '많음',   worst: '매우 많음' }[lvl] || '—');
+  const emojiOf = (lvl) => ({ good: '🌤️',  normal: '🌿',   bad: '🌳',     worst: '⚠️'       }[lvl] || '·');
+  // '편백' 같은 토종명만 축약 (모바일 한 줄 유지)
+  const shortenPlant = (name) => (name || '').replace(/^일본\s*/, '').replace(/\(.*?\)/g, '').trim();
+  box.innerHTML = `
+    <div class="pollen-fc-title">🌸 앞으로 3일 꽃가루</div>
+    <div class="pollen-fc-row">
+      ${days.slice(0, 3).map((d, i) => {
+        const top = d.topPlant && d.topPlant.value >= 2 ? shortenPlant(d.topPlant.name) : '';
+        return `
+          <div class="pollen-fc-day lvl-${d.level}">
+            <span class="pollen-fc-day-label">${labelFor(i, d.date)}</span>
+            <div class="pollen-fc-day-body">
+              <span class="pollen-fc-day-emoji">${emojiOf(d.level)}</span>
+              <span class="pollen-fc-day-cat">${catFor(d.level)}</span>
+            </div>
+            <span class="pollen-fc-day-top">${top ? escapeHtml(top) : ''}</span>
+          </div>`;
+      }).join('')}
+    </div>`;
   box.classList.remove('hidden');
 }
 

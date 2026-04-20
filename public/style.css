@@ -2642,38 +2642,65 @@ body.tod-night .hero-weather { color: rgba(242,242,247,.8); }
 .lvl.worst  { background: var(--worst); }
 
 /* 꽃가루 3일 예보 */
-.pollen-days {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
-  margin-top: 12px;
-}
-.pollen-day {
+.pollen-forecast {
+  margin-top: 14px;
+  padding: 12px 12px 10px;
   background: var(--bg);
+  border-radius: 14px;
+}
+.pollen-fc-title {
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--sub);
+  margin-bottom: 10px;
+  letter-spacing: 0.4px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.pollen-fc-row {
+  display: grid !important;
+  grid-template-columns: repeat(3, 1fr) !important;
+  gap: 8px;
+}
+.pollen-fc-day {
+  background: var(--card);
   border-radius: 12px;
-  padding: 10px 8px;
+  padding: 10px 6px 8px;
   text-align: center;
-  font-size: 12.5px;
-  color: var(--text);
-  line-height: 1.35;
-  border: 1px solid var(--line);
-  position: relative;
+  border-top: 3px solid var(--line);
+  box-shadow: 0 1px 3px rgba(0,0,0,.04);
+  min-width: 0;
 }
-.pollen-day-label { color: var(--sub); font-weight: 600; font-size: 11.5px; margin-bottom: 2px; }
-.pollen-day-lvl {
-  display: inline-block;
-  width: 8px; height: 8px;
-  border-radius: 50%;
-  background: var(--line);
-  margin-right: 4px;
-  vertical-align: middle;
+.pollen-fc-day.lvl-good { border-top-color: var(--good); }
+.pollen-fc-day.lvl-normal { border-top-color: var(--normal); }
+.pollen-fc-day.lvl-bad { border-top-color: var(--bad); }
+.pollen-fc-day.lvl-worst { border-top-color: var(--worst); }
+.pollen-fc-day-label {
+  display: block;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--sub);
+  letter-spacing: 0.2px;
 }
-.pollen-day-category { font-weight: 700; font-size: 13px; }
-.pollen-day-top { color: var(--sub); font-size: 11.5px; margin-top: 2px; word-break: keep-all; }
-.pollen-day.lvl-good .pollen-day-lvl { background: var(--good); }
-.pollen-day.lvl-normal .pollen-day-lvl { background: var(--normal); }
-.pollen-day.lvl-bad .pollen-day-lvl { background: var(--bad); }
-.pollen-day.lvl-worst .pollen-day-lvl { background: var(--worst); }
+.pollen-fc-day-body {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  margin: 4px 0 3px;
+}
+.pollen-fc-day-emoji { font-size: 18px; line-height: 1; }
+.pollen-fc-day-cat { font-size: 13.5px; font-weight: 800; color: var(--text); }
+.pollen-fc-day-top {
+  display: block;
+  font-size: 11px;
+  color: var(--sub);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-height: 14px;
+}
 
 /* ========== 건강 조언 (핵심 컨텐츠) ========== */
 .tips-card { padding: 20px 18px 18px; }
