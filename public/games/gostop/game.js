@@ -53,6 +53,13 @@
     });
   }
 
+  function bumpBounce(el) {
+    if (!el) return;
+    el.classList.remove('g-bump');
+    void el.offsetWidth;
+    el.classList.add('g-bump');
+  }
+
   function showToast(msg) {
     let t = $('gameToast');
     if (!t) {
@@ -155,19 +162,78 @@
       oppEl.appendChild(box);
     });
 
-    // 바닥 — 이전 렌더와 비교해 새로 생긴 카드는 deal-in 애니메이션
+    // 바닥 — 이전 렌더와 비교해 새 카드는 카테고리별 애니메이션
+    // (A) 덱에서 뒤집힌 카드: stock 감소 + 해당 카드가 새로 등장 → flip 애니
+    // (B) 플레이어 손패에서 낸 카드: 손패 감소 + 새 카드 등장 → 슬라이드 애니
     const boardEl = $('gameBoard');
     boardEl.innerHTML = '';
     const highlightIds = VIEW.pending && VIEW.pending.choices ? new Set(VIEW.pending.choices) : new Set();
     const prevBoardIds = new Set((PREV_VIEW && PREV_VIEW.board ? PREV_VIEW.board : []).map(function (c) { return c.id; }));
-    VIEW.board.forEach(function (c) {
+    const prevStock = PREV_VIEW ? PREV_VIEW.stockCount : 0;
+    const curStock = VIEW.stockCount || 0;
+    const stockDropped = PREV_VIEW && (prevStock - curStock) > 0;
+    // 어떤 플레이어의 손패 수가 줄었는지 — 손패에서 낸 카드 추적
+    let handDropFromIdx = -1;
+    if (PREV_VIEW) {
+      const prevMyHandLen = (PREV_VIEW.myHand || []).length;
+      const curMyHandLen = (VIEW.myHand || []).length;
+      if (VIEW.myIndex === me && curMyHandLen < prevMyHandLen) {
+        handDropFromIdx = me;
+      } else {
+        VIEW.players.forEach(function (_, i) {
+          if (i === me) return;
+          const pH = (PREV_VIEW.opponentHandCounts && PREV_VIEW.opponentHandCounts[i]) || 0;
+          const cH = (VIEW.opponentHandCounts && VIEW.opponentHandCounts[i]) || 0;
+          if (cH < pH) handDropFromIdx = i;
+        });
+      }
+    }
+
+    VIEW.board.forEach(function (c, idx) {
       const wrap = GostopCards.renderCard(c, { highlight: highlightIds.has(c.id) });
-      if (!prevBoardIds.has(c.id)) wrap.classList.add('is-new');
+      if (!prevBoardIds.has(c.id)) {
+        // 새 등장
+        if (stockDropped && handDropFromIdx < 0) {
+          wrap.classList.add('is-flipped-in'); // 덱 → 바닥 (플립)
+        } else if (handDropFromIdx === me) {
+          wrap.classList.add('is-from-me');    // 내 손패 → 바닥 (아래서 위로)
+        } else if (handDropFromIdx >= 0) {
+          wrap.classList.add('is-from-opp');   // 상대 손패 → 바닥 (위에서 아래로)
+        } else {
+          wrap.classList.add('is-new');
+        }
+        // 스팟라이트 글로우 (모든 새 카드 공통)
+        wrap.classList.add('is-spotlight');
+        // 3초 뒤 스팟라이트 제거
+        setTimeout(function (el) {
+          return function () { el.classList.remove('is-spotlight'); };
+        }(wrap), 2800);
+      }
       if ((VIEW.phase === 'choose-hand-match' || VIEW.phase === 'choose-flip-match') && highlightIds.has(c.id) && isMyTurn) {
         wrap.onclick = function () { chooseMatch(c.id); };
       }
       boardEl.appendChild(wrap);
     });
+
+    // 획득이 발생했으면(board 카드가 사라졌으면) 캡처러의 획득 영역 bounce
+    if (PREV_VIEW) {
+      const prevBoardSet = new Set(PREV_VIEW.board.map(function (c) { return c.id; }));
+      const capturedIds = [];
+      PREV_VIEW.board.forEach(function (c) {
+        if (!VIEW.board.find(function (b) { return b.id === c.id; })) capturedIds.push(c.id);
+      });
+      if (capturedIds.length) {
+        // 현재 턴 플레이어가 캡처자
+        const captorIdx = PREV_VIEW.turn;
+        if (captorIdx === me) {
+          const peek = $('gameMyCapturedPeek');
+          if (peek) bumpBounce(peek);
+        } else {
+          const boxes = document.querySelectorAll('.g-opp');
+          if (boxes[captorIdx]) bumpBounce(boxes[captorIdx].querySelector('.g-opp-captured') || boxes[captorIdx]);
+        }
+      }
+    }
 
     // 내 손패
     const handEl = $('gameHand');

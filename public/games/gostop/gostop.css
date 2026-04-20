@@ -123,13 +123,65 @@ body { min-height: 100vh; padding-bottom: 40px; }
 }
 .hwa-card-wrap:hover { transform: translateY(-4px); filter: brightness(1.05); }
 .hwa-card-wrap.is-selected { transform: translateY(-12px); filter: brightness(1.08) drop-shadow(0 6px 14px rgba(0,0,0,.25)); }
-/* 새 카드 등장 애니메이션 */
+/* 새 카드 등장 (기본) */
 .hwa-card-wrap.is-new { animation: hwaDealIn .4s ease-out; }
 @keyframes hwaDealIn {
   from { opacity: 0; transform: translateY(-20px) scale(.8) rotate(-8deg); }
   to   { opacity: 1; transform: translateY(0) scale(1) rotate(0); }
 }
-/* 뒤집기 — 360도 Y축 플립 */
+/* 덱에서 뒤집힌 카드 — Y축 360도 플립 + 살짝 튀어오름 */
+.hwa-card-wrap.is-flipped-in {
+  animation: hwaFlipIn .6s cubic-bezier(.22,1.4,.4,1.1);
+  transform-style: preserve-3d;
+}
+@keyframes hwaFlipIn {
+  0%   { transform: rotateY(180deg) scale(.8); opacity: 0; }
+  40%  { transform: rotateY(90deg) scale(1.1); opacity: 1; }
+  70%  { transform: rotateY(-10deg) scale(1.05); }
+  100% { transform: rotateY(0) scale(1); opacity: 1; }
+}
+/* 내 손패 → 바닥 (아래에서 위로 슬라이드) */
+.hwa-card-wrap.is-from-me {
+  animation: hwaFromMe .45s cubic-bezier(.22,1.4,.4,1.1);
+}
+@keyframes hwaFromMe {
+  0%   { opacity: 0; transform: translateY(200px) scale(1.1) rotate(-4deg); }
+  60%  { opacity: 1; transform: translateY(-8px) scale(1.05) rotate(0); }
+  100% { transform: translateY(0) scale(1); }
+}
+/* 상대 손패 → 바닥 (위에서 아래로 슬라이드) */
+.hwa-card-wrap.is-from-opp {
+  animation: hwaFromOpp .45s cubic-bezier(.22,1.4,.4,1.1);
+}
+@keyframes hwaFromOpp {
+  0%   { opacity: 0; transform: translateY(-200px) scale(.85) rotate(6deg); }
+  60%  { opacity: 1; transform: translateY(8px) scale(1.05); }
+  100% { transform: translateY(0) scale(1); }
+}
+/* 스팟라이트 — 새 카드 금빛 펄스 3초 */
+.hwa-card-wrap.is-spotlight::after {
+  content: '';
+  position: absolute;
+  inset: -6px;
+  border-radius: 12px;
+  box-shadow: 0 0 0 3px rgba(255, 216, 77, .9), 0 0 28px rgba(255, 200, 0, .8);
+  pointer-events: none;
+  animation: hwaSpotlightFade 2.8s ease-out forwards;
+}
+@keyframes hwaSpotlightFade {
+  0%, 20%  { opacity: 1; }
+  100%     { opacity: 0; }
+}
+
+/* 획득 영역 bounce (누가 카드를 먹었을 때) */
+.g-bump { animation: gBump .5s cubic-bezier(.22,1.4,.4,1.1); }
+@keyframes gBump {
+  0%, 100% { transform: scale(1); }
+  40%      { transform: scale(1.12); filter: brightness(1.15); }
+  70%      { transform: scale(.97); }
+}
+
+/* 뒤집기 — 360도 Y축 플립 (기존, legacy) */
 .hwa-card-wrap.is-flipping { animation: hwaFlip .55s ease-in-out; }
 @keyframes hwaFlip {
   0%   { transform: rotateY(0) scale(1); }
