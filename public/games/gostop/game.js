@@ -33,24 +33,74 @@
 
   function fireDiffEffects() {
     if (!PREV_VIEW || !VIEW) return;
+    const me = VIEW.myIndex;
     // 1) 최근 로그가 바뀌었으면 토스트
     const newLog = VIEW.log && VIEW.log.length ? VIEW.log[VIEW.log.length - 1] : null;
     const oldLog = PREV_VIEW.log && PREV_VIEW.log.length ? PREV_VIEW.log[PREV_VIEW.log.length - 1] : null;
     if (newLog && (!oldLog || newLog.ts !== oldLog.ts)) {
       showToast(newLog.msg);
+      // 2-1) 고/스톱 로그 감지 → 중앙 콜아웃
+      if (/고!\s*계속/.test(newLog.msg)) bigCallout('고!', 'go');
+      else if (/스톱!/.test(newLog.msg) || /승리/.test(newLog.msg)) {
+        // 스톱/승리는 게임 종료에서 처리
+      } else if (/먹었어요/.test(newLog.msg)) {
+        // 먹은 플레이어가 나인지에 따라 톤 조절
+        if (newLog.msg.indexOf(VIEW.players[me].name) === 0) bigCallout('먹었다!', 'good');
+      }
     }
-    // 2) 내 점수가 올랐으면 플로터
-    const me = VIEW.myIndex;
+    // 2) 점수 임계치 크로싱 (3·5·7·10)
+    const THRESHOLDS = [3, 5, 7, 10];
     const before = (PREV_VIEW.scores && PREV_VIEW.scores[me]) || 0;
     const after  = (VIEW.scores && VIEW.scores[me]) || 0;
-    if (after > before) popScore('+' + (after - before) + '점', 'me');
-    // 상대 점수 상승 — 상대 이름 옆에 플로터
+    if (after > before) {
+      popScore('+' + (after - before) + '점', 'me');
+      const crossed = THRESHOLDS.find(function (t) { return before < t && after >= t; });
+      if (crossed) bigCallout(crossed + '점 달성!', 'gold');
+    }
+    // 상대 점수 상승 플로터
     VIEW.players.forEach(function (_, i) {
       if (i === me) return;
       const b = (PREV_VIEW.scores && PREV_VIEW.scores[i]) || 0;
       const a = (VIEW.scores && VIEW.scores[i]) || 0;
       if (a > b) popScore('+' + (a - b) + '점', 'opp-' + i);
     });
+    // 3) 게임 종료 감지 — 큰 승/패 스크린
+    if (VIEW.finished && !PREV_VIEW.finished) {
+      const winner = VIEW.winner;
+      if (winner === me) {
+        bigCallout('승리!', 'victory', 2500);
+        fireConfetti();
+      } else if (winner != null) {
+        bigCallout(VIEW.players[winner].name + '님 승', 'defeat', 2500);
+      } else {
+        bigCallout('무승부', 'neutral', 2000);
+      }
+    }
+  }
+
+  // 중앙 큰 콜아웃 — "먹었다!" "3점 달성!" "고!" "승리!"
+  function bigCallout(text, tone, duration) {
+    duration = duration || 1400;
+    const el = document.createElement('div');
+    el.className = 'g-big-callout g-callout-' + (tone || 'good');
+    el.textContent = text;
+    document.body.appendChild(el);
+    setTimeout(function () { el.remove(); }, duration);
+  }
+
+  // 승리 시 컨페티 — 짧은 CSS 애니 파티클
+  function fireConfetti() {
+    const colors = ['#FFD84D', '#F87171', '#60A5FA', '#34D399', '#A78BFA', '#FB923C'];
+    for (let i = 0; i < 40; i++) {
+      const p = document.createElement('span');
+      p.className = 'g-confetti';
+      p.style.left = (Math.random() * 100) + 'vw';
+      p.style.background = colors[Math.floor(Math.random() * colors.length)];
+      p.style.animationDelay = (Math.random() * 0.3) + 's';
+      p.style.animationDuration = (2 + Math.random() * 1.5) + 's';
+      document.body.appendChild(p);
+      setTimeout(function (el) { return function () { el.remove(); }; }(p), 4000);
+    }
   }
 
   function bumpBounce(el) {

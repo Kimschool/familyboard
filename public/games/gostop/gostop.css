@@ -597,6 +597,54 @@ body { min-height: 100vh; padding-bottom: 40px; }
   transform: translateX(-50%) translateY(0);
 }
 
+/* ===== 중앙 큰 콜아웃 ===== */
+.g-big-callout {
+  position: fixed;
+  top: 40%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 56px;
+  font-weight: 900;
+  letter-spacing: -2px;
+  z-index: 10000;
+  pointer-events: none;
+  text-shadow: 0 4px 16px rgba(0,0,0,.4);
+  padding: 12px 32px;
+  border-radius: 20px;
+  animation: bigCalloutPop 1.4s cubic-bezier(.22,1.4,.4,1.1) forwards;
+  white-space: nowrap;
+}
+@keyframes bigCalloutPop {
+  0%   { transform: translate(-50%, -50%) scale(.2) rotate(-8deg); opacity: 0; }
+  20%  { transform: translate(-50%, -50%) scale(1.3) rotate(4deg); opacity: 1; }
+  35%  { transform: translate(-50%, -50%) scale(.95) rotate(-2deg); }
+  50%  { transform: translate(-50%, -50%) scale(1.05) rotate(0); }
+  80%  { transform: translate(-50%, -50%) scale(1) rotate(0); opacity: 1; }
+  100% { transform: translate(-50%, -70%) scale(.9) rotate(0); opacity: 0; }
+}
+.g-callout-good    { background: linear-gradient(135deg,#3B9A5C,#2D7D46); color: #fff; }
+.g-callout-gold    { background: linear-gradient(135deg,#FFD84D,#F5A742); color: #5A3D00; }
+.g-callout-go      { background: linear-gradient(135deg,#FF6B6B,#D94A2C); color: #fff; font-size: 72px; }
+.g-callout-victory { background: linear-gradient(135deg,#FFD84D,#FF9D00); color: #5A3D00; font-size: 80px; animation-duration: 2.5s; }
+.g-callout-defeat  { background: linear-gradient(135deg,#6B7280,#374151); color: #fff; font-size: 56px; }
+.g-callout-neutral { background: linear-gradient(135deg,#A78BFA,#7C3AED); color: #fff; }
+
+/* ===== 컨페티 파티클 ===== */
+.g-confetti {
+  position: fixed;
+  top: -20px;
+  width: 10px;
+  height: 16px;
+  border-radius: 2px;
+  z-index: 9997;
+  pointer-events: none;
+  animation: confettiFall linear forwards;
+}
+@keyframes confettiFall {
+  0%   { transform: translateY(0) rotate(0);    opacity: 1; }
+  100% { transform: translateY(110vh) rotate(720deg); opacity: .5; }
+}
+
 /* ===== 점수 플로터 (+N점) ===== */
 .g-score-pop {
   position: fixed;
