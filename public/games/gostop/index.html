@@ -4,7 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover" />
 <title>고스톱 (테스트)</title>
-<link rel="stylesheet" href="./gostop.css?v=10" />
+<link rel="stylesheet" href="./gostop.css?v=11" />
 </head>
 <body>
 <div id="lobby" class="screen">
@@ -59,40 +59,47 @@
   </section>
 </div>
 
-<div id="game" class="screen hidden">
-  <header class="g-head">
+<div id="game" class="screen game-table hidden">
+  <header class="g-head g-table-head">
     <button id="btnQuit" class="g-back">← 나가기</button>
-    <h1>고스톱</h1>
+    <div id="gameStatus" class="g-status g-status-compact"></div>
   </header>
 
-  <div id="gameStatus" class="g-status"></div>
-  <div id="gameHelp" class="g-help hidden" style="display:none"></div>
-
+  <!-- 상대 영역 (상단) -->
   <div id="gameOpponents" class="g-opp-wrap"></div>
 
-  <div class="g-board-wrap">
-    <div class="g-board-label">바닥</div>
+  <!-- 가운데 녹색 펠트 테이블 -->
+  <div class="g-felt">
+    <div class="g-felt-label">바닥</div>
     <div id="gameBoard" class="g-board"></div>
+    <!-- 덱 (오른쪽 위 고정) -->
+    <div class="g-deck" id="gameDeck" aria-label="덱">
+      <span class="g-deck-count" id="gameDeckCount">0</span>
+    </div>
+    <!-- 매칭 선택 안내 -->
+    <div id="gameHelp" class="g-help hidden" style="display:none"></div>
   </div>
 
-  <div class="g-my-wrap">
-    <div class="g-my-head">
-      내 카드
-      <span class="g-my-score" id="gameMyScore">0점</span>
+  <!-- 내 영역 (하단) -->
+  <div class="g-me-wrap">
+    <div class="g-me-meta">
+      <span class="g-me-name" id="gameMyName">나</span>
+      <span class="g-me-score" id="gameMyScore">0점</span>
     </div>
-    <div id="gameMyCaptured" class="g-my-captured"></div>
     <div id="gameMyCapturedPeek" class="g-my-captured-peek"></div>
-    <div id="gameHand" class="g-hand"></div>
+    <div id="gameMyCaptured" class="g-my-captured g-my-captured-chips hidden"></div>
+    <div id="gameHand" class="g-hand g-hand-arc"></div>
   </div>
 
   <div class="g-actions">
     <button id="btnFlip" class="g-primary hidden">덱 뒤집기</button>
   </div>
 
-  <div class="g-log-wrap">
-    <div class="g-log-head">진행 기록</div>
+  <!-- 로그 (접힘 기본) -->
+  <details class="g-log-wrap">
+    <summary class="g-log-head">진행 기록 펼치기</summary>
     <ul id="gameLog" class="g-log"></ul>
-  </div>
+  </details>
 </div>
 
 <!-- 고/스톱 다이얼로그 -->
@@ -108,9 +115,9 @@
 </div>
 
 <script src="/gostop/socket/socket.io.js"></script>
-<script src="./engine.js?v=10"></script>
-<script src="./cards-svg.js?v=10"></script>
-<script src="./lobby.js?v=10"></script>
-<script src="./game.js?v=10"></script>
+<script src="./engine.js?v=11"></script>
+<script src="./cards-svg.js?v=11"></script>
+<script src="./lobby.js?v=11"></script>
+<script src="./game.js?v=11"></script>
 </body>
 </html>

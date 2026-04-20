@@ -133,7 +133,7 @@
       helpBanner.style.display = 'none';
     }
 
-    // 상대 정보 (단 2인 맞고 기준 — 상대 1명)
+    // 상대 정보 — 테이블 스타일 (겹친 뒷면 카드 스택)
     const oppEl = $('gameOpponents');
     oppEl.innerHTML = '';
     VIEW.players.forEach(function (p, i) {
@@ -142,11 +142,15 @@
       box.className = 'g-opp' + (VIEW.turn === i ? ' is-turn' : '');
       const handCount = VIEW.opponentHandCounts[i] || 0;
       const score = VIEW.scores[i] || 0;
+      // 손패: 뒷면 카드를 absolute 로 겹쳐서 고정 너비 안에 표시 (최대 10장)
+      const shown = Math.min(handCount, 10);
+      let cardsHtml = '';
+      for (let k = 0; k < shown; k++) {
+        cardsHtml += '<span class="g-opp-card" style="left:' + (k * 8) + 'px">' + GostopCards.faceDownSvg() + '</span>';
+      }
       box.innerHTML =
-        '<div class="g-opp-head">' + escapeHtml(p.name) + ' · ' + score + '점</div>' +
-        '<div class="g-opp-hand">' + new Array(handCount).fill('').map(function () {
-          return '<span class="g-opp-card">' + GostopCards.faceDownSvg() + '</span>';
-        }).join('') + '</div>' +
+        '<div class="g-opp-head"><span>' + escapeHtml(p.name) + '</span><span>' + score + '점 · 손패 ' + handCount + '</span></div>' +
+        '<div class="g-opp-hand">' + cardsHtml + '</div>' +
         '<div class="g-opp-captured">' + renderCapturedSummary(VIEW.captured[i]) + '</div>';
       oppEl.appendChild(box);
     });
@@ -179,9 +183,17 @@
 
     // 내 획득 카드 — 요약(칩) + 카드 스택 피크
     const capEl = $('gameMyCaptured');
-    capEl.innerHTML = renderCapturedSummary(VIEW.captured[me]);
+    if (capEl) capEl.innerHTML = renderCapturedSummary(VIEW.captured[me]);
     renderCapturedPeek(VIEW.captured[me], 'gameMyCapturedPeek');
-    $('gameMyScore').textContent = (VIEW.scores[me] || 0) + '점';
+    const myScoreEl = $('gameMyScore');
+    if (myScoreEl) myScoreEl.textContent = (VIEW.scores[me] || 0) + '점';
+    const myNameEl = $('gameMyName');
+    if (myNameEl) myNameEl.textContent = (VIEW.players[me] && VIEW.players[me].name) || '나';
+    // 덱 카운트
+    const deckCount = $('gameDeckCount');
+    if (deckCount) deckCount.textContent = String(VIEW.stockCount || 0);
+    const deckEl = $('gameDeck');
+    if (deckEl) deckEl.classList.toggle('is-empty', (VIEW.stockCount || 0) === 0);
 
     // 덱 뒤집기는 자동 실행 — 손패 낸 뒤 900ms 지연 후 서버에 game:flip 전송
     // (사용자가 방금 낸 카드 결과를 볼 시간 확보 + 연속 호출 방지)
