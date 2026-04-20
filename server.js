@@ -1545,8 +1545,8 @@ app.get('/api/weather', async (_req, res) => {
   } catch (e) { res.status(502).json({ error: 'weather-fetch-failed', message: e.message }); }
 });
 
-/** Google Pollen API 에서 TREE/GRASS/WEED 꽃가루 지수(UPI 0–5) 가져오기.
- *  키 미설정·호출 실패 시 null 반환 → 호출자가 Open-Meteo 폴백 사용. */
+/** Google Pollen API 에서 TREE/GRASS/WEED 통합 + plantInfo 종별(스기/히노키 등)
+ *  꽃가루 지수(UPI 0–5) 가져오기. 키 미설정·호출 실패 시 null → Open-Meteo 폴백. */
 async function fetchGooglePollen(lat, lon) {
   const apiKey = (process.env.GOOGLE_POLLEN_API_KEY || '').trim();
   if (!apiKey) return null;
@@ -1562,10 +1562,24 @@ async function fetchGooglePollen(lat, lon) {
     const day = j.dailyInfo?.[0];
     if (!day) return null;
     const types = day.pollenTypeInfo || [];
+    const plants = day.plantInfo || [];
+    // 통합 TREE/GRASS/WEED 최대치 (전체 지수)
     const maxValue = types.reduce((mx, t) => {
       const v = t.indexInfo?.value;
       return typeof v === 'number' && v > mx ? v : mx;
     }, 0);
+    // 종별(plantInfo) 중 가장 높은 값의 종 — "누가 범인인지" 에 해당
+    const plantsWithValue = plants
+      .filter((p) => typeof p.indexInfo?.value === 'number')
+      .map((p) => ({
+        code: p.code,
+        name: p.displayName || p.code,
+        value: p.indexInfo.value,
+        category: p.indexInfo.category ?? null,
+        inSeason: p.inSeason ?? null,
+      }))
+      .sort((a, b) => b.value - a.value);
+    const top = plantsWithValue[0] || null;
     // Google UPI 0–5 → 프론트 level 매핑
     const pollenLevel = maxValue <= 1 ? 'good'
       : maxValue === 2 ? 'normal'
@@ -1581,6 +1595,8 @@ async function fetchGooglePollen(lat, lon) {
         value: t.indexInfo?.value ?? null,
         category: t.indexInfo?.category ?? null,
       })),
+      plants: plantsWithValue,
+      topPlant: top,
     };
   } catch (e) {
     console.warn('[google-pollen]', e.message);
@@ -1618,6 +1634,8 @@ app.get('/api/air', async (_req, res) => {
       pollenLevel: google ? google.pollenLevel : level(omPollen, [1, 10, 50]),
       pollenSource: google ? 'google' : 'open-meteo',
       pollenTypes: google ? google.pollenTypes : null,
+      pollenPlants: google ? google.plants : null,
+      pollenTopPlant: google ? google.topPlant : null,
     };
     cacheSet(key, out);
     res.json(out);

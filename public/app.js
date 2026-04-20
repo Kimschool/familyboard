@@ -2407,10 +2407,18 @@ async function loadWeatherAndAir() {
     // 꽃가루 종별 상세 (Google Pollen API) 가 있으면 title 에 힌트 (호버 시 나무/풀 구체 정보)
     const polChip = $('aPol')?.closest('.chip');
     if (polChip) {
-      if (a.pollenTypes && a.pollenTypes.length) {
+      const upiLabel = (v) => ['없음','매우 낮음','낮음','보통','높음','매우 높음'][v] || String(v);
+      if (a.pollenPlants && a.pollenPlants.length) {
+        // 종별(스기/히노키 등) 상세를 우선 노출
+        const hint = a.pollenPlants
+          .slice(0, 5)
+          .map((p) => `${p.name}: ${upiLabel(p.value)}`)
+          .join(' · ');
+        polChip.title = `꽃가루 (Google · ${hint})`;
+      } else if (a.pollenTypes && a.pollenTypes.length) {
         const hint = a.pollenTypes
           .filter((t) => t.value != null)
-          .map((t) => `${t.name}: ${['없음','매우낮음','낮음','보통','높음','매우높음'][t.value] || t.value}`)
+          .map((t) => `${t.name}: ${upiLabel(t.value)}`)
           .join(' · ');
         polChip.title = `꽃가루 (Google · ${hint})`;
       } else if (a.pollenSource === 'open-meteo') {
@@ -2534,9 +2542,13 @@ function renderTips(w, a) {
 
   let pol = '꽃가루 정보를 불러오지 못했어요';
   if (a) {
+    // 가장 강한 종(topPlant)이 있으면 "누가 원인인지" 를 말해 주는 게 알레르기 관리에 훨씬 유용
+    const top = a.pollenTopPlant;
+    const topPhrase = top && top.value >= 2 ? `${top.name} ` : '';
     if      (a.pollenLevel === 'good')   pol = '꽃가루는 적어요. 걱정하지 않으셔도 돼요';
-    else if (a.pollenLevel === 'normal') pol = '꽃가루가 조금 있어요. 알레르기가 있으시면 조심하세요';
-    else if (a.pollenLevel === 'bad' || a.pollenLevel === 'worst') pol = '꽃가루가 많은 날이에요. 창문을 닫고 외출 후엔 세수를 해주세요';
+    else if (a.pollenLevel === 'normal') pol = `${topPhrase}꽃가루가 조금 있어요. 알레르기가 있으시면 조심하세요`;
+    else if (a.pollenLevel === 'bad')    pol = `${topPhrase}꽃가루가 많은 날이에요. 창문을 닫고 외출 후엔 세수를 해주세요`;
+    else if (a.pollenLevel === 'worst')  pol = `${topPhrase}꽃가루가 아주 많아요. 외출은 짧게, 마스크를 꼭 써 주세요`;
     else pol = '꽃가루 상태를 확인하는 중이에요';
   }
   $('tipPollen').textContent = pol;
