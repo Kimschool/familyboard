@@ -286,7 +286,7 @@ function attachGostopServer(httpServer) {
   function broadcastGameView(room) {
     const game = room.game;
     if (!game) return;
-    // 게임 종료 시 1회만 누적 점수 기록
+    // 게임 종료 시 1회만 누적 점수 기록 + DB 기록
     if (game.finished && !room.gameResultRecorded) {
       room.gameResultRecorded = true;
       room.cumScores = room.cumScores || {};
@@ -301,6 +301,10 @@ function attachGostopServer(httpServer) {
           winnerName: game.players[w].name,
           score: winPts,
           endedAt: Date.now(),
+        });
+        // DB 비동기 기록 — 실패해도 게임 흐름엔 영향 없음
+        recordGameResult(room, game).catch(function (e) {
+          console.warn('[gostop] recordGameResult failed:', e.message);
         });
       }
     }
@@ -330,6 +334,23 @@ function attachGostopServer(httpServer) {
       io.to(`room:${room.id}`).emit('room:update', serializeRoom(room));
     }
     broadcastRooms(room.familyId);
+  }
+
+  async function recordGameResult(room, game) {
+    const winnerIdx = game.winner;
+    const winnerUserId = winnerIdx != null ? game.players[winnerIdx].userId : null;
+    const [r] = await getPool().query(
+      'INSERT INTO gostop_games (family_id, player_count, winner_user_id, winner_score) VALUES (?, ?, ?, ?)',
+      [room.familyId, room.playerCount, winnerUserId, (winnerIdx != null ? game.scores[winnerIdx] : 0)]
+    );
+    const gameId = r.insertId;
+    // 각 플레이어 결과
+    for (let i = 0; i < game.players.length; i++) {
+      await getPool().query(
+        'INSERT IGNORE INTO gostop_results (game_id, user_id, score, is_winner) VALUES (?, ?, ?, ?)',
+        [gameId, game.players[i].userId, game.scores[i] || 0, i === winnerIdx ? 1 : 0]
+      );
+    }
   }
 
   console.log('[gostop] socket.io mounted at /gostop/socket');

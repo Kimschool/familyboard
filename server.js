@@ -1705,6 +1705,48 @@ async function fetchGooglePollen(lat, lon) {
   }
 }
 
+// ---------- 고스톱 가족 통계 ----------
+app.get('/api/gostop/stats', requireAuth, async (req, res) => {
+  try {
+    // 가족 단위 집계 — 멤버별 승/총판/총점/최고점
+    const [rows] = await getPool().query(
+      `SELECT u.id, u.display_name, u.icon, u.photo_url,
+              COALESCE(s.games, 0) AS games,
+              COALESCE(s.wins, 0) AS wins,
+              COALESCE(s.total_score, 0) AS total_score,
+              COALESCE(s.best_score, 0) AS best_score
+         FROM users u
+         LEFT JOIN (
+           SELECT user_id,
+                  COUNT(*) AS games,
+                  SUM(is_winner) AS wins,
+                  SUM(score) AS total_score,
+                  MAX(score) AS best_score
+             FROM gostop_results r
+             JOIN gostop_games g ON g.id = r.game_id
+            WHERE g.family_id = ?
+            GROUP BY user_id
+         ) s ON s.user_id = u.id
+        WHERE u.family_id = ? AND COALESCE(u.is_pet, 0) = 0
+        ORDER BY wins DESC, total_score DESC, u.id ASC`,
+      [req.user.family_id, req.user.family_id]
+    );
+    res.json(rows.map(function (r) {
+      return {
+        userId: r.id,
+        name: r.display_name,
+        icon: r.icon,
+        photoUrl: r.photo_url,
+        games: Number(r.games) || 0,
+        wins: Number(r.wins) || 0,
+        winRate: r.games ? Math.round((Number(r.wins) / Number(r.games)) * 100) : 0,
+        totalScore: Number(r.total_score) || 0,
+        bestScore: Number(r.best_score) || 0,
+      };
+    }));
+  } catch (e) { res.status(500).json({ error: 'internal', message: e.message }); }
+});
+
 app.get('/api/air', async (_req, res) => {
   try {
     const lat = process.env.DEFAULT_LAT || '35.6895';

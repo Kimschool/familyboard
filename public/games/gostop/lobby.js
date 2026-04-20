@@ -156,7 +156,41 @@
       if (res && res.user) window.GostopMe = res.user;
     });
     refreshRoomList();
+    loadRanking();
   });
+
+  function loadRanking() {
+    fetch('/api/gostop/stats', { credentials: 'same-origin' })
+      .then(function (r) { return r.json(); })
+      .then(function (list) {
+        const ul = $('gostopRanking');
+        const empty = $('gostopRankingEmpty');
+        if (!ul) return;
+        const played = list.filter(function (p) { return p.games > 0; });
+        ul.innerHTML = '';
+        if (!played.length) { empty.style.display = 'block'; return; }
+        empty.style.display = 'none';
+        played.sort(function (a, b) { return b.wins - a.wins || b.totalScore - a.totalScore; });
+        played.forEach(function (p, rank) {
+          const medal = rank === 0 ? '🥇' : rank === 1 ? '🥈' : rank === 2 ? '🥉' : '';
+          const avatarHtml = p.photoUrl
+            ? '<img src="' + p.photoUrl.replace(/"/g, '') + '" alt="" />'
+            : iconEmoji(p.icon);
+          const li = document.createElement('li');
+          li.className = 'g-rank-row' + (rank === 0 ? ' is-top' : '');
+          li.innerHTML =
+            '<span class="g-rank-medal">' + (medal || ('#' + (rank + 1))) + '</span>' +
+            '<span class="g-rank-avatar">' + avatarHtml + '</span>' +
+            '<div class="g-rank-main">' +
+              '<div class="g-rank-name">' + escapeHtml(p.name) + '</div>' +
+              '<div class="g-rank-stats">' + p.wins + '승 · ' + p.games + '판 · 승률 ' + p.winRate + '%</div>' +
+            '</div>' +
+            '<div class="g-rank-score"><b>' + p.totalScore + '</b><span>총 점수</span></div>';
+          ul.appendChild(li);
+        });
+      })
+      .catch(function () {});
+  }
   socket.on('connect_error', function (err) {
     if (err.message === 'unauthorized') {
       $('roomList').innerHTML = '';

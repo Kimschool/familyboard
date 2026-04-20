@@ -332,6 +332,30 @@ async function ensureSchema() {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   `);
 
+  // ---------- 가족 놀이: 고스톱 결과 ----------
+  await p.query(`
+    CREATE TABLE IF NOT EXISTS gostop_games (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      family_id INT NOT NULL,
+      player_count TINYINT NOT NULL,
+      winner_user_id INT NULL,
+      winner_score INT NOT NULL DEFAULT 0,
+      started_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      ended_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      INDEX idx_family_ended (family_id, ended_at)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  `);
+  await p.query(`
+    CREATE TABLE IF NOT EXISTS gostop_results (
+      game_id INT NOT NULL,
+      user_id INT NOT NULL,
+      score INT NOT NULL DEFAULT 0,
+      is_winner TINYINT(1) NOT NULL DEFAULT 0,
+      PRIMARY KEY (game_id, user_id),
+      INDEX idx_user (user_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  `);
+
   // ---------- 가족 갤러리 ----------
   await p.query(`
     CREATE TABLE IF NOT EXISTS gallery_photos (
