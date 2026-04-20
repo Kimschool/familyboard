@@ -18,6 +18,9 @@
   --shadow-md: 0 2px 4px rgba(0,0,0,.04), 0 8px 24px rgba(0,0,0,.05);
 }
 
+/* iOS Safari: 자동 텍스트 크기 조정을 꺼야 input 포커스 확대를 완전 차단할 수 있음 */
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+
 @media (prefers-color-scheme: dark) {
   :root {
     --bg: #000000;
