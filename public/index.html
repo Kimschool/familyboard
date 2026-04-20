@@ -119,20 +119,39 @@
     </div>
   </div>
 
-  <!-- 가족 공지 (관리자가 남긴 메시지) -->
-  <section class="card notice-card hidden" data-card-id="notice" id="noticeCard">
+  <!-- 가족 공지 (가족 누구나 작성/편집) -->
+  <section class="card notice-card" data-card-id="notice" id="noticeCard">
     <div class="notice-head">
       <span class="notice-pin">📌</span>
       <span class="notice-label">가족 공지</span>
       <span class="notice-new hidden" id="noticeNewBadge">NEW</span>
       <span class="notice-meta" id="noticeMeta"></span>
       <button class="tts-btn" data-tts="notice" aria-label="읽어주기">🔊</button>
+      <button class="notice-edit-btn" id="noticeEditBtn" aria-label="공지 편집">✏️</button>
     </div>
     <p class="notice-text" id="noticeText"></p>
+    <div class="notice-empty hidden" id="noticeEmpty">
+      아직 공지가 없어요. 가족에게 알리고 싶은 말을 남겨 보세요.
+      <button type="button" class="notice-empty-btn" id="noticeEmptyBtn">✏️ 공지 작성</button>
+    </div>
     <div class="notice-react-row" id="noticeReactRow"></div>
     <div class="notice-reads hidden" id="noticeReads"></div>
     <button type="button" class="notice-history-btn" id="noticeHistoryBtn">지난 공지 보기</button>
   </section>
+
+  <!-- 공지 편집 시트 -->
+  <div id="noticeEditSheet" class="sheet-backdrop hidden" role="dialog">
+    <div class="sheet" role="document">
+      <div class="sheet-handle"></div>
+      <h2 class="sheet-title">📌 가족 공지</h2>
+      <p class="sheet-sub" style="margin: 0 0 10px;">모두에게 상단에 보여져요. 비워 두면 공지가 사라집니다.</p>
+      <textarea id="noticeEditText" class="ufi" style="width:100%; min-height:120px; padding:12px 14px; font-family: inherit; font-size:15.5px; line-height:1.5;" maxlength="500" placeholder="예: 오늘 저녁 7시에 모여요"></textarea>
+      <div class="confirm-actions" style="margin-top:12px;">
+        <button type="button" id="noticeEditCancel" class="confirm-btn confirm-cancel">취소</button>
+        <button type="button" id="noticeEditSave" class="confirm-btn confirm-ok">저장</button>
+      </div>
+    </div>
+  </div>
 
   <!-- 공지 히스토리 바텀시트 -->
   <div id="noticeHistSheet" class="sheet-backdrop hidden" role="dialog">
@@ -170,7 +189,8 @@
   <div id="eventCreateSheet" class="sheet-backdrop hidden" role="dialog">
     <div class="sheet" role="document">
       <div class="sheet-handle"></div>
-      <h2 class="sheet-title">📅 새 일정</h2>
+      <h2 class="sheet-title">📅 새 일정 <span id="evDateHeader" class="ev-date-header"></span></h2>
+      <div id="evDayPreview" class="ev-day-preview hidden"></div>
       <div class="ufi-row" style="margin-bottom: 8px;">
         <input id="evTitle" class="ufi" type="text" placeholder="일정 이름 (예: 병원 방문)" maxlength="100" />
         <input id="evEmoji" class="ufi-s" type="text" placeholder="🏥" maxlength="4" style="flex: 0 0 60px; text-align: center; font-size: 22px;" />
@@ -329,6 +349,7 @@
       <span class="chip"><span class="chip-k">초미세</span><b id="aPm25">--</b><i class="lvl" id="aPm25L"></i></span>
       <span class="chip"><span class="chip-k">꽃가루</span><b id="aPol">--</b><i class="lvl" id="aPolL"></i></span>
     </div>
+    <div class="pollen-days hidden" id="pollenDays"></div>
     <div class="outing-score hidden" id="outingScore">
       <span class="os-emoji" id="osEmoji">🌤️</span>
       <div class="os-text">

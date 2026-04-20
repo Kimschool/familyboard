@@ -1811,6 +1811,10 @@ function renderEventsCard() {
 
 $('eventNewBtn').addEventListener('click', () => {
   $('evDate').value = new Date().toISOString().slice(0, 10);
+  const preview = $('evDayPreview');
+  if (preview) { preview.innerHTML = ''; preview.classList.add('hidden'); }
+  const header = $('evDateHeader');
+  if (header) header.textContent = '';
   $('eventCreateSheet').classList.remove('hidden');
 });
 $('evCreateClose').addEventListener('click', () => $('eventCreateSheet').classList.add('hidden'));
@@ -1900,16 +1904,37 @@ function renderCalendar() {
       <span class="cal-day">${d}</span>
       ${icons.length ? `<span class="cal-bd">${icons.slice(0, 3).join('')}</span>` : ''}
     `;
-    if (bdPeople || evs) {
-      cell.onclick = () => {
-        const parts = [];
-        if (bdPeople) parts.push(...bdPeople.map((p) => `${iconEmoji(p.icon)} ${p.displayName}님 생일 (${m + 1}월 ${d}일)`));
-        if (evs) parts.push(...evs.map((e) => `${e.emoji} ${e.title}${e.event_time ? ' ' + e.event_time : ''}${e.location ? ' @ ' + e.location : ''}`));
-        alert(parts.join('\n'));
-      };
-    }
+    cell.classList.add('is-clickable');
+    cell.onclick = () => openCalendarDaySheet(y, m, d, bdPeople, evs);
     grid.appendChild(cell);
   }
+}
+
+/** 달력 셀 탭 시: 해당 날짜의 기존 일정·생일을 보여주고 바로 새 일정 추가도 가능하게 */
+function openCalendarDaySheet(y, m, d, bdPeople, evs) {
+  const dateStr = `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+  // 기존 일정/생일 요약 — 있으면 create 시트 위에 미리 노출
+  const lines = [];
+  if (bdPeople) lines.push(...bdPeople.map((p) => `🎂 ${p.displayName}님 생일`));
+  if (evs) lines.push(...evs.map((e) => `${e.emoji} ${e.title}${e.event_time ? ' ' + e.event_time : ''}${e.location ? ' @ ' + e.location : ''}`));
+  // 생성 시트 오픈: 해당 날짜로 prefill
+  $('evDate').value = dateStr;
+  // 기존 일정 미리보기 영역
+  const preview = $('evDayPreview');
+  if (preview) {
+    if (lines.length) {
+      preview.innerHTML = `<div class="ev-preview-label">이 날의 일정</div>` +
+        lines.map((l) => `<div class="ev-preview-item">${escapeHtml(l)}</div>`).join('');
+      preview.classList.remove('hidden');
+    } else {
+      preview.innerHTML = '';
+      preview.classList.add('hidden');
+    }
+  }
+  // 날짜 헤더
+  const header = $('evDateHeader');
+  if (header) header.textContent = `${m + 1}월 ${d}일`;
+  $('eventCreateSheet').classList.remove('hidden');
 }
 $('calPrev').addEventListener('click', () => { CAL_VIEW.setMonth(CAL_VIEW.getMonth() - 1); renderCalendar(); });
 $('calNext').addEventListener('click', () => { CAL_VIEW.setMonth(CAL_VIEW.getMonth() + 1); renderCalendar(); });
@@ -2429,8 +2454,35 @@ async function loadWeatherAndAir() {
     }
   }
 
+  renderPollenDays(a);
   renderTips(w, a);
   renderOutingScore(w, a);
+}
+
+function renderPollenDays(a) {
+  const box = $('pollenDays');
+  if (!box) return;
+  const days = a?.pollenDays;
+  if (!days || days.length < 2) { box.classList.add('hidden'); box.innerHTML = ''; return; }
+  const labelFor = (idx, dateStr) => {
+    if (idx === 0) return '오늘';
+    if (idx === 1) return '내일';
+    if (idx === 2) return '모레';
+    if (!dateStr) return '';
+    const d = new Date(dateStr);
+    return `${d.getMonth() + 1}/${d.getDate()}`;
+  };
+  const catFor = (lvl) => ({ good: '적음', normal: '보통', bad: '많음', worst: '매우 많음' }[lvl] || '—');
+  box.innerHTML = days.slice(0, 3).map((d, i) => {
+    const top = d.topPlant && d.topPlant.value >= 2 ? d.topPlant.name : '';
+    return `
+      <div class="pollen-day lvl-${d.level}">
+        <div class="pollen-day-label">${labelFor(i, d.date)}</div>
+        <div class="pollen-day-category"><span class="pollen-day-lvl"></span>${catFor(d.level)}</div>
+        ${top ? `<div class="pollen-day-top">${escapeHtml(top)}</div>` : ''}
+      </div>`;
+  }).join('');
+  box.classList.remove('hidden');
 }
 
 function renderOutingScore(w, a) {
@@ -3605,8 +3657,18 @@ async function loadFamilyNotice() {
         banner.classList.add('hidden');
       }
     }
+    // 공지 카드는 항상 표시 (빈 상태도 가족 누구나 작성할 수 있게)
+    const textEl = $('noticeText');
+    const emptyEl = $('noticeEmpty');
+    const reactRow = $('noticeReactRow');
+    const readsEl = $('noticeReads');
+    const histBtn = $('noticeHistoryBtn');
     if (f.notice) {
-      $('noticeText').textContent = f.notice;
+      textEl.textContent = f.notice;
+      emptyEl?.classList.add('hidden');
+      reactRow?.classList.remove('hidden');
+      readsEl?.classList.remove('hidden');
+      histBtn?.classList.remove('hidden');
       // 읽음 상태 + 이모지 반응 렌더
       renderNoticeReads(f.noticeId, f.noticeReads || []);
       renderNoticeReactions(f.noticeId, f.noticeReactions || []);
@@ -3620,7 +3682,6 @@ async function loadFamilyNotice() {
       const lastSeen = Number(localStorage.getItem('fb_notice_seen') || 0);
       if (updatedAt && updatedAt > lastSeen) {
         $('noticeNewBadge').classList.remove('hidden');
-        // 3초 후 읽음 처리
         setTimeout(() => {
           localStorage.setItem('fb_notice_seen', String(updatedAt));
           $('noticeNewBadge').classList.add('hidden');
@@ -3628,11 +3689,40 @@ async function loadFamilyNotice() {
       } else {
         $('noticeNewBadge').classList.add('hidden');
       }
-      $('noticeCard').classList.remove('hidden');
     } else {
-      $('noticeCard').classList.add('hidden');
+      // 빈 상태: 작성 안내 + 작성 버튼
+      textEl.textContent = '';
+      emptyEl?.classList.remove('hidden');
+      reactRow?.classList.add('hidden');
+      readsEl?.classList.add('hidden');
+      histBtn?.classList.add('hidden');
+      $('noticeMeta').textContent = '';
+      $('noticeNewBadge').classList.add('hidden');
     }
+    $('noticeCard').classList.remove('hidden');
   } catch {}
+}
+
+function openNoticeEditSheet() {
+  const current = $('noticeText')?.textContent || '';
+  const ta = $('noticeEditText');
+  if (ta) ta.value = current;
+  $('noticeEditSheet').classList.remove('hidden');
+  setTimeout(() => {
+    if (!/Mobi|Android/i.test(navigator.userAgent)) ta?.focus();
+  }, 150);
+}
+
+async function saveNoticeEdit() {
+  const notice = ($('noticeEditText')?.value || '').trim();
+  const btn = $('noticeEditSave');
+  if (btn) { btn.disabled = true; btn.textContent = '저장 중…'; }
+  try {
+    await api('/api/family/notice', { method: 'PATCH', body: JSON.stringify({ notice }) });
+    $('noticeEditSheet').classList.add('hidden');
+    loadFamilyNotice();
+  } catch { alert('저장 실패'); }
+  finally { if (btn) { btn.disabled = false; btn.textContent = '저장'; } }
 }
 
 $('famAliasSave').addEventListener('click', async () => {
@@ -3851,11 +3941,24 @@ document.addEventListener('click', async (e) => {
 $('famNoticeSave').addEventListener('click', async () => {
   const notice = $('famNotice').value.trim();
   try {
-    await api('/api/family', { method: 'PATCH', body: JSON.stringify({ notice }) });
+    // 관리자 설정 화면에서는 모든 가족 공통 엔드포인트로 충분 (관리자도 가족이므로 requireAuth 통과)
+    await api('/api/family/notice', { method: 'PATCH', body: JSON.stringify({ notice }) });
     $('famNoticeSave').textContent = '저장됐어요';
     setTimeout(() => $('famNoticeSave').textContent = '공지 저장', 1500);
     loadFamilyNotice();
   } catch { alert('공지 저장 실패'); }
+});
+
+// 공지 카드 인라인 편집 버튼 + 빈 상태 작성 버튼 (가족 누구나)
+$('noticeEditBtn')?.addEventListener('click', openNoticeEditSheet);
+$('noticeEmptyBtn')?.addEventListener('click', openNoticeEditSheet);
+$('noticeEditCancel')?.addEventListener('click', () => $('noticeEditSheet').classList.add('hidden'));
+$('noticeEditSave')?.addEventListener('click', saveNoticeEdit);
+$('noticeEditSheet')?.addEventListener('click', (e) => {
+  if (e.target.id === 'noticeEditSheet') $('noticeEditSheet').classList.add('hidden');
+});
+$('noticeEditText')?.addEventListener('keydown', (e) => {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); saveNoticeEdit(); }
 });
 
 async function loadUsers() {

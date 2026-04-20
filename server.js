@@ -1106,6 +1106,28 @@ app.post('/api/notice/:id/read', requireAuth, async (req, res) => {
   res.json({ ok: true });
 });
 
+// 공지만 수정 — 가족 구성원 누구나 가능
+app.patch('/api/family/notice', requireAuth, async (req, res) => {
+  try {
+    const raw = req.body?.notice;
+    const n = raw == null ? '' : String(raw).trim();
+    const text = n.slice(0, 500) || null;
+    const at = text ? new Date() : null;
+    const by = text ? req.user.id : null;
+    await getPool().query(
+      'UPDATE families SET notice = ?, notice_updated_at = ?, notice_updated_by = ? WHERE id = ?',
+      [text, at, by, req.user.family_id]
+    );
+    if (text) {
+      await getPool().query(
+        'INSERT INTO notice_history (family_id, text, author_id) VALUES (?, ?, ?)',
+        [req.user.family_id, text, req.user.id]
+      );
+    }
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: 'internal', message: e.message }); }
+});
+
 app.patch('/api/family', requireAdmin, async (req, res) => {
   try {
     const { alias, displayName, notice, photoUrl } = req.body || {};
@@ -1545,58 +1567,73 @@ app.get('/api/weather', async (_req, res) => {
   } catch (e) { res.status(502).json({ error: 'weather-fetch-failed', message: e.message }); }
 });
 
-/** Google Pollen API 에서 TREE/GRASS/WEED 통합 + plantInfo 종별(스기/히노키 등)
- *  꽃가루 지수(UPI 0–5) 가져오기. 키 미설정·호출 실패 시 null → Open-Meteo 폴백. */
+/** UPI 0–5 → 레벨 문자열 */
+function pollenUpiToLevel(v) {
+  return v <= 1 ? 'good' : v === 2 ? 'normal' : v <= 4 ? 'bad' : 'worst';
+}
+
+/** Google API 의 1일치 dailyInfo 를 내부 포맷으로 매핑 */
+function mapPollenDay(day) {
+  const types = day.pollenTypeInfo || [];
+  const plants = day.plantInfo || [];
+  const maxValue = types.reduce((mx, t) => {
+    const v = t.indexInfo?.value;
+    return typeof v === 'number' && v > mx ? v : mx;
+  }, 0);
+  const plantsWithValue = plants
+    .filter((p) => typeof p.indexInfo?.value === 'number')
+    .map((p) => ({
+      code: p.code,
+      name: p.displayName || p.code,
+      value: p.indexInfo.value,
+      category: p.indexInfo.category ?? null,
+      inSeason: p.inSeason ?? null,
+    }))
+    .sort((a, b) => b.value - a.value);
+  const d = day.date || {};
+  const dateStr = d.year && d.month && d.day
+    ? `${d.year}-${String(d.month).padStart(2, '0')}-${String(d.day).padStart(2, '0')}`
+    : null;
+  return {
+    date: dateStr,
+    maxValue,
+    level: pollenUpiToLevel(maxValue),
+    topPlant: plantsWithValue[0] || null,
+    plants: plantsWithValue,
+    types: types.map((t) => ({
+      code: t.code,
+      name: t.displayName,
+      value: t.indexInfo?.value ?? null,
+      category: t.indexInfo?.category ?? null,
+    })),
+  };
+}
+
+/** Google Pollen API 로 3일치 꽃가루 예보(오늘+2일) + 종별 상세 가져오기.
+ *  키 미설정·호출 실패 시 null → Open-Meteo 폴백. */
 async function fetchGooglePollen(lat, lon) {
   const apiKey = (process.env.GOOGLE_POLLEN_API_KEY || '').trim();
   if (!apiKey) return null;
   try {
     const url = `https://pollen.googleapis.com/v1/forecast:lookup?key=${encodeURIComponent(apiKey)}` +
-      `&location.latitude=${lat}&location.longitude=${lon}&days=1&languageCode=ko`;
+      `&location.latitude=${lat}&location.longitude=${lon}&days=3&languageCode=ko`;
     const r = await fetch(url);
     if (!r.ok) {
       console.warn('[google-pollen] HTTP', r.status, await r.text().catch(() => ''));
       return null;
     }
     const j = await r.json();
-    const day = j.dailyInfo?.[0];
-    if (!day) return null;
-    const types = day.pollenTypeInfo || [];
-    const plants = day.plantInfo || [];
-    // 통합 TREE/GRASS/WEED 최대치 (전체 지수)
-    const maxValue = types.reduce((mx, t) => {
-      const v = t.indexInfo?.value;
-      return typeof v === 'number' && v > mx ? v : mx;
-    }, 0);
-    // 종별(plantInfo) 중 가장 높은 값의 종 — "누가 범인인지" 에 해당
-    const plantsWithValue = plants
-      .filter((p) => typeof p.indexInfo?.value === 'number')
-      .map((p) => ({
-        code: p.code,
-        name: p.displayName || p.code,
-        value: p.indexInfo.value,
-        category: p.indexInfo.category ?? null,
-        inSeason: p.inSeason ?? null,
-      }))
-      .sort((a, b) => b.value - a.value);
-    const top = plantsWithValue[0] || null;
-    // Google UPI 0–5 → 프론트 level 매핑
-    const pollenLevel = maxValue <= 1 ? 'good'
-      : maxValue === 2 ? 'normal'
-      : maxValue <= 4 ? 'bad'
-      : 'worst';
+    const daily = (j.dailyInfo || []).map(mapPollenDay);
+    if (!daily.length) return null;
+    const today = daily[0];
     return {
-      pollen: maxValue,
-      pollenLevel,
+      pollen: today.maxValue,
+      pollenLevel: today.level,
       pollenSource: 'google',
-      pollenTypes: types.map((t) => ({
-        code: t.code,
-        name: t.displayName,
-        value: t.indexInfo?.value ?? null,
-        category: t.indexInfo?.category ?? null,
-      })),
-      plants: plantsWithValue,
-      topPlant: top,
+      pollenTypes: today.types,
+      plants: today.plants,
+      topPlant: today.topPlant,
+      days: daily,
     };
   } catch (e) {
     console.warn('[google-pollen]', e.message);
@@ -1636,6 +1673,7 @@ app.get('/api/air', async (_req, res) => {
       pollenTypes: google ? google.pollenTypes : null,
       pollenPlants: google ? google.plants : null,
       pollenTopPlant: google ? google.topPlant : null,
+      pollenDays: google ? google.days : null,
     };
     cacheSet(key, out);
     res.json(out);
