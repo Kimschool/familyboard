@@ -24,6 +24,25 @@
     });
   });
 
+  // 도움말 시트 토글
+  $('btnHelp') && $('btnHelp').addEventListener('click', function () {
+    const dlg = $('helpSheet');
+    dlg.classList.remove('hidden');
+    dlg.style.display = 'flex';
+  });
+  $('btnHelpClose') && $('btnHelpClose').addEventListener('click', function () {
+    const dlg = $('helpSheet');
+    dlg.classList.add('hidden');
+    dlg.style.display = 'none';
+  });
+  $('helpSheet') && $('helpSheet').addEventListener('click', function (e) {
+    if (e.target.id === 'helpSheet') {
+      const dlg = $('helpSheet');
+      dlg.classList.add('hidden');
+      dlg.style.display = 'none';
+    }
+  });
+
   $('btnJoin').addEventListener('click', function () {
     const code = ($('joinCode').value || '').trim().toUpperCase();
     if (!code) return;
