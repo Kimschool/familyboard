@@ -64,7 +64,7 @@
       const a = (VIEW.scores && VIEW.scores[i]) || 0;
       if (a > b) popScore('+' + (a - b) + '점', 'opp-' + i);
     });
-    // 3) 게임 종료 감지 — 큰 승/패 스크린
+    // 3) 게임 종료 감지 — 큰 승/패 스크린 + 결과 오버레이
     if (VIEW.finished && !PREV_VIEW.finished) {
       const winner = VIEW.winner;
       if (winner === me) {
@@ -75,8 +75,67 @@
       } else {
         bigCallout('무승부', 'neutral', 2000);
       }
+      // 2.5초 뒤 결과 오버레이 표시
+      setTimeout(function () { showEndDialog(); }, 2000);
     }
   }
+
+  function showEndDialog() {
+    if (!VIEW || !VIEW.finished) return;
+    const me = VIEW.myIndex;
+    const dlg = $('endDialog');
+    const crown = $('endCrown');
+    const title = $('endTitle');
+    const sub = $('endSub');
+    const list = $('endScoreList');
+    const winner = VIEW.winner;
+    if (winner === me) {
+      crown.textContent = '🏆';
+      title.textContent = '승리!';
+      title.style.color = '#C67200';
+    } else if (winner != null) {
+      crown.textContent = '🙃';
+      title.textContent = VIEW.players[winner].name + '님 승';
+      title.style.color = '#374151';
+    } else {
+      crown.textContent = '🤝';
+      title.textContent = '무승부';
+      title.style.color = '#7C3AED';
+    }
+    sub.textContent = '최종 점수';
+    // 점수 정렬 (내림차순)
+    const ranked = VIEW.players.map(function (p, i) { return { name: p.name, score: VIEW.scores[i] || 0, idx: i }; });
+    ranked.sort(function (a, b) { return b.score - a.score; });
+    list.innerHTML = ranked.map(function (r, rank) {
+      const isMe = r.idx === me;
+      const isWinner = r.idx === winner;
+      return '<li class="g-end-row' + (isMe ? ' is-me' : '') + (isWinner ? ' is-winner' : '') + '">' +
+        '<span class="g-end-rank">' + (rank + 1) + '</span>' +
+        '<span class="g-end-name">' + escapeHtml(r.name) + (isMe ? ' (나)' : '') + '</span>' +
+        '<span class="g-end-score">' + r.score + '점</span>' +
+        '</li>';
+    }).join('');
+    dlg.classList.remove('hidden');
+    dlg.style.display = 'flex';
+  }
+
+  // 결과 오버레이 버튼
+  $('btnRematch').addEventListener('click', function () {
+    socket().emit('game:rematch', null, function (res) {
+      if (!res || !res.ok) return alert('재대결 시작 실패: ' + (res && res.error));
+      $('endDialog').style.display = 'none';
+      $('endDialog').classList.add('hidden');
+      PREV_VIEW = null;
+    });
+  });
+  $('btnEndExit').addEventListener('click', function () {
+    $('endDialog').style.display = 'none';
+    $('endDialog').classList.add('hidden');
+    socket().emit('room:leave', null, function () {});
+    $('game').classList.add('hidden');
+    $('lobby').classList.remove('hidden');
+    VIEW = null; PREV_VIEW = null;
+  });
 
   // 중앙 큰 콜아웃 — "먹었다!" "3점 달성!" "고!" "승리!"
   function bigCallout(text, tone, duration) {

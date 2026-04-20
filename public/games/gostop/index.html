@@ -4,7 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover" />
 <title>고스톱 (테스트)</title>
-<link rel="stylesheet" href="./gostop.css?v=13" />
+<link rel="stylesheet" href="./gostop.css?v=14" />
 </head>
 <body>
 <div id="lobby" class="screen">
@@ -102,6 +102,20 @@
   </details>
 </div>
 
+<!-- 게임 종료 오버레이 -->
+<div id="endDialog" class="g-dlg-backdrop hidden" style="display:none">
+  <div class="g-dlg g-end-dlg">
+    <div class="g-end-crown" id="endCrown">🏆</div>
+    <h2 id="endTitle">승리!</h2>
+    <p id="endSub" class="g-end-sub">—</p>
+    <ul id="endScoreList" class="g-end-scores"></ul>
+    <div class="g-dlg-actions">
+      <button id="btnRematch" class="g-primary g-dlg-go">🔁 다시하기</button>
+      <button id="btnEndExit" class="g-primary g-dlg-stop">← 로비로</button>
+    </div>
+  </div>
+</div>
+
 <!-- 고/스톱 다이얼로그 -->
 <div id="goStopDialog" class="g-dlg-backdrop hidden" style="display:none">
   <div class="g-dlg">
@@ -115,9 +129,9 @@
 </div>
 
 <script src="/gostop/socket/socket.io.js"></script>
-<script src="./engine.js?v=13"></script>
-<script src="./cards-svg.js?v=13"></script>
-<script src="./lobby.js?v=13"></script>
-<script src="./game.js?v=13"></script>
+<script src="./engine.js?v=14"></script>
+<script src="./cards-svg.js?v=14"></script>
+<script src="./lobby.js?v=14"></script>
+<script src="./game.js?v=14"></script>
 </body>
 </html>

@@ -231,6 +231,27 @@ function attachGostopServer(httpServer) {
       });
     });
 
+    // 재대결 — 게임 끝난 방의 플레이어들에게 새 게임 생성
+    socket.on('game:rematch', (_payload, ack) => {
+      try {
+        const roomId = socket.data.roomId;
+        const room = ROOMS.get(roomId);
+        if (!room) throw new Error('not-in-room');
+        if (!room.game || !room.game.finished) throw new Error('game-not-finished');
+        // 새 게임 생성 — 플레이어 순서 유지, 딜러 로테이션 (단순히 seed 만 새로)
+        room.game = engine.createGame({
+          players: room.players.map((p) => ({ userId: p.userId, name: p.name, icon: p.icon, photoUrl: p.photoUrl })),
+          playerCount: room.playerCount,
+          seed: Date.now(),
+        });
+        io.to(`room:${room.id}`).emit('game:started', { room: serializeRoom(room) });
+        broadcastGameView(room);
+        if (typeof ack === 'function') ack({ ok: true });
+      } catch (e) {
+        if (typeof ack === 'function') ack({ ok: false, error: e.message });
+      }
+    });
+
     socket.on('disconnect', () => {
       const roomId = socket.data.roomId;
       const room = ROOMS.get(roomId);

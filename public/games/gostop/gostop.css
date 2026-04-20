@@ -629,6 +629,77 @@ body { min-height: 100vh; padding-bottom: 40px; }
 .g-callout-defeat  { background: linear-gradient(135deg,#6B7280,#374151); color: #fff; font-size: 56px; }
 .g-callout-neutral { background: linear-gradient(135deg,#A78BFA,#7C3AED); color: #fff; }
 
+/* ===== 게임 종료 오버레이 ===== */
+.g-end-dlg {
+  text-align: center;
+  max-width: 380px;
+}
+.g-end-crown {
+  font-size: 72px;
+  line-height: 1;
+  margin: 8px 0 6px;
+  animation: endCrownBounce 1.8s ease-in-out infinite;
+}
+@keyframes endCrownBounce {
+  0%, 100% { transform: translateY(0) rotate(0); }
+  50%      { transform: translateY(-6px) rotate(4deg); }
+}
+.g-end-dlg h2 {
+  font-size: 36px;
+  margin: 0 0 4px;
+  letter-spacing: -1px;
+}
+.g-end-sub {
+  font-size: 13px;
+  color: var(--sub);
+  margin: 0 0 16px;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+.g-end-scores {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 20px;
+}
+.g-end-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  margin-bottom: 6px;
+  background: var(--bg);
+  font-size: 16px;
+  font-weight: 700;
+  text-align: left;
+}
+.g-end-row.is-winner {
+  background: linear-gradient(135deg, #FFF4D5, #FFE3B5);
+  border: 2px solid #F5A742;
+  box-shadow: 0 2px 8px rgba(245,167,66,.25);
+}
+.g-end-row.is-me { outline: 2px dashed #0A84FF; outline-offset: -2px; }
+.g-end-rank {
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  background: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 900;
+  color: var(--sub);
+  flex-shrink: 0;
+}
+.g-end-row.is-winner .g-end-rank { background: #F5A742; color: #fff; }
+.g-end-name { flex: 1; color: var(--text); }
+.g-end-score {
+  color: var(--primary);
+  font-size: 18px;
+  font-weight: 900;
+}
+.g-end-row.is-winner .g-end-score { color: #C67200; }
+
 /* ===== 컨페티 파티클 ===== */
 .g-confetti {
   position: fixed;
