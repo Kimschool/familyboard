@@ -262,6 +262,61 @@ body { min-height: 100vh; padding-bottom: 40px; }
 .hwa-card-wrap.is-highlight .hwa-img { box-shadow: 0 0 0 3px #FFD84D, 0 0 18px rgba(255,200,0,.6); }
 .hwa-card-wrap.is-selected .hwa-img { box-shadow: 0 4px 16px rgba(0,0,0,.25); }
 
+/* 최종 폴리시 — 보조 버튼 / 푸터 / 도움말 시트 / 접근성 */
+.g-primary.g-secondary {
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--line);
+}
+.g-primary.g-secondary:hover { background: var(--card); }
+
+.g-foot {
+  text-align: center;
+  padding: 20px 16px 40px;
+  font-size: 11.5px;
+  color: var(--sub);
+  line-height: 1.6;
+}
+.g-foot a { color: var(--primary); text-decoration: none; }
+.g-foot a:hover { text-decoration: underline; }
+
+.g-help-dlg { max-width: 420px; max-height: 80vh; overflow-y: auto; }
+.g-help-content { text-align: left; font-size: 14px; color: var(--text); line-height: 1.6; }
+.g-help-content h3 {
+  margin: 14px 0 6px;
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--primary);
+}
+.g-help-content p { margin: 0 0 8px; }
+.g-help-content b { font-weight: 800; }
+.g-help-list { list-style: none; padding: 0; margin: 0 0 8px; }
+.g-help-list li {
+  padding: 6px 0;
+  border-bottom: 1px dashed var(--line);
+  font-size: 13.5px;
+}
+.g-help-list li:last-child { border-bottom: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .hwa-card-wrap.is-flipped-in,
+  .hwa-card-wrap.is-from-me,
+  .hwa-card-wrap.is-from-opp,
+  .hwa-card-wrap.is-new,
+  .g-confetti,
+  .g-big-callout,
+  .g-turn-arrow,
+  .g-opp.is-turn,
+  .g-me-wrap.is-turn,
+  .g-score-pop,
+  .g-bump,
+  .hwa-card-wrap.is-bbuk::before,
+  .g-go-badge {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
 /* 가족 랭킹 리스트 */
 .g-ranking { list-style: none; padding: 0; margin: 0; }
 .g-rank-row {
