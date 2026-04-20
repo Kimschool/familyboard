@@ -1960,6 +1960,14 @@ function renderCalendar() {
     cell.className = 'cal-cell empty';
     grid.appendChild(cell);
   }
+  // 이번 주 판별 — 오늘이 이 달에 있을 때만 의미 있음
+  let thisWeekStart = -1, thisWeekEnd = -1;
+  if (y === todayY && m === todayM) {
+    const todayDay = new Date(y, m, todayD).getDay();
+    thisWeekStart = todayD - todayDay;
+    thisWeekEnd   = todayD + (6 - todayDay);
+  }
+
   for (let d = 1; d <= lastDay; d++) {
     const cell = document.createElement('div');
     cell.className = 'cal-cell';
@@ -1971,6 +1979,14 @@ function renderCalendar() {
     const evs = eventMap.get(d);
     if (isToday) cell.classList.add('is-today');
     if (bdPeople) cell.classList.add('is-birthday');
+    if (d >= thisWeekStart && d <= thisWeekEnd) cell.classList.add('is-this-week');
+    // 접근성 레이블 — 스크린리더가 "3월 5일 금요일 오늘 병원 방문 외 1개" 식으로 읽음
+    const weekdayKo = ['일','월','화','수','목','금','토'][weekday];
+    const ariaParts = [`${m + 1}월 ${d}일 ${weekdayKo}요일`];
+    if (isToday) ariaParts.push('오늘');
+    if (bdPeople) ariaParts.push(`${bdPeople.map((p) => p.displayName).join(', ')} 생일`);
+    if (evs) ariaParts.push(`일정 ${evs.length}개`);
+    cell.setAttribute('aria-label', ariaParts.join(', '));
     if (evs) cell.classList.add('has-event');
     const icons = [];
     if (bdPeople) icons.push(...bdPeople.slice(0, 2).map((p) => iconEmoji(p.icon)));

@@ -1385,6 +1385,26 @@ body.tod-night .hero-weather { color: rgba(242,242,247,.8); }
 }
 .cal-cell.is-birthday:active { transform: scale(.94); }
 
+/* 이번 주 하이라이트 — 은은한 배경 띠 (오늘 셀·생일 셀 색 위에 덧씌우지 않게 투명 배경) */
+.cal-cell.is-this-week:not(.is-today):not(.is-birthday) {
+  background: rgba(10, 132, 255, .04);
+}
+@media (prefers-color-scheme: dark) {
+  .cal-cell.is-this-week:not(.is-today):not(.is-birthday) {
+    background: rgba(10, 132, 255, .08);
+  }
+  /* 다크모드에서 주말 색 명도 조정 — 너무 진하지 않게 */
+  .cal-cell.is-sunday .cal-day { color: #FF8FAB; }
+  .cal-cell.is-saturday .cal-day { color: #5DB5FF; }
+}
+/* 폰트 타이포 안정화 — 숫자 tabular-nums 로 정렬 맞춤 */
+.cal-day,
+.cal-ev-more,
+#calTitle {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum';
+}
+
 .cal-bd {
   font-size: 11px;
   line-height: 1;
