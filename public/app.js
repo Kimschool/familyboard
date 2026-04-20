@@ -5194,30 +5194,51 @@ async function loadMoreGallery() {
 
 function openGalleryDetail(p) {
   GALLERY_DETAIL_ID = p.id;
+  GALLERY_COMMENTS_EXPANDED = false;
   renderGalleryDetail(p);
   $('galleryDetailSheet').classList.remove('hidden');
   loadGalleryComments(p.id);
 }
 
+function formatLikeLabel(n) {
+  n = Number(n) || 0;
+  if (n === 0) return '가장 먼저 좋아요를 눌러 보세요';
+  return `좋아요 ${n.toLocaleString('ko-KR')}개`;
+}
+
+/** Instagram 스타일 짧은 상대시간: "3일", "1주", "방금" */
+function igShortTime(dateStr) {
+  const d = new Date(dateStr);
+  const sec = Math.floor((Date.now() - d.getTime()) / 1000);
+  if (sec < 60) return '방금';
+  if (sec < 3600) return `${Math.floor(sec / 60)}분`;
+  if (sec < 86400) return `${Math.floor(sec / 3600)}시간`;
+  if (sec < 604800) return `${Math.floor(sec / 86400)}일`;
+  if (sec < 2592000) return `${Math.floor(sec / 604800)}주`;
+  if (sec < 31536000) return `${Math.floor(sec / 2592000)}개월`;
+  return `${Math.floor(sec / 31536000)}년`;
+}
+
 /** 현재 상세 사진 렌더 + 앞/뒤 네비 버튼 상태 업데이트 */
 function renderGalleryDetail(p) {
   $('galleryDetailImg').src = p.url;
-  const author = `${iconEmoji(p.uploaderIcon)} ${p.uploaderName || '알 수 없음'}`;
-  $('galleryDetailAuthor').textContent = author;
+  $('galleryDetailAuthor').textContent = p.uploaderName || '알 수 없음';
   $('galleryDetailCaption').textContent = p.caption || '';
-  $('galleryDetailTime').textContent = p.createdAt ? relativeTime(p.createdAt) : '';
+  $('galleryDetailTime').textContent = p.createdAt ? `${igShortTime(p.createdAt)} 전` : '';
   $('galleryDetailDeleteBtn').classList.toggle('hidden', !p.canDelete);
   // 좋아요 상태
   const likeBtn = $('galleryLikeBtn');
-  if (likeBtn) {
+  const heart = $('galleryLikeHeart');
+  if (likeBtn && heart) {
     likeBtn.classList.toggle('on', !!p.liked);
-    likeBtn.querySelector('.gallery-like-heart').textContent = p.liked ? '♥' : '♡';
-    $('galleryLikeCount').textContent = String(p.likeCount || 0);
+    heart.textContent = p.liked ? '♥' : '♡';
+    $('galleryLikeCount').textContent = formatLikeLabel(p.likeCount);
   }
-  $('galleryCommentBadgeCount').textContent = String(p.commentCount || 0);
-  // 입력창 초기화
+  // 입력창 초기화 + 게시 버튼 비활성
   const input = $('galleryCommentInput');
   if (input) input.value = '';
+  const sendBtn = $('galleryCommentSend');
+  if (sendBtn) sendBtn.disabled = true;
   // 앞/뒤 네비 + 카운터
   const idx = GALLERY_CACHE.findIndex((x) => x.id === p.id);
   const total = GALLERY_CACHE.length;
@@ -5236,28 +5257,47 @@ function renderGalleryDetail(p) {
   }
 }
 
+// 댓글 리스트 뷰 상태 — 접힌 상태에선 최근 2개만, "모두 보기" 누르면 전부
+let GALLERY_COMMENTS_EXPANDED = false;
+const IG_COMMENT_COLLAPSED_COUNT = 2;
+
 async function loadGalleryComments(photoId) {
   const ul = $('galleryCommentList');
+  const viewAll = $('galleryCommentsViewAll');
   if (!ul) return;
   ul.innerHTML = '';
   try {
     const list = await api(`/api/gallery/${photoId}/comments`);
-    $('galleryCommentBadgeCount').textContent = String(list.length);
     const p = GALLERY_CACHE.find((x) => x.id === photoId);
     if (p) p.commentCount = list.length;
-    for (const c of list) {
+
+    // "댓글 N개 모두 보기" 버튼 상태
+    const collapsed = !GALLERY_COMMENTS_EXPANDED && list.length > IG_COMMENT_COLLAPSED_COUNT;
+    if (viewAll) {
+      if (list.length > IG_COMMENT_COLLAPSED_COUNT) {
+        viewAll.classList.remove('hidden');
+        viewAll.textContent = collapsed
+          ? `댓글 ${list.length.toLocaleString('ko-KR')}개 모두 보기`
+          : '접기';
+      } else {
+        viewAll.classList.add('hidden');
+      }
+    }
+
+    const shown = collapsed ? list.slice(-IG_COMMENT_COLLAPSED_COUNT) : list;
+    for (const c of shown) {
       const li = document.createElement('li');
+      const canDelete = c.author_id === ME.id || ME.role === 'admin';
       li.innerHTML = `
-        <span class="cm-icon">${inlineAvatarHtml({ id: c.author_id, name: c.author_name, icon: c.author_icon, photoUrl: c.author_photo }, 22)}</span>
-        <div class="cm-body">
-          <div class="cm-head"><span class="cm-name"></span></div>
-          <div class="cm-text"></div>
-        </div>
-        ${c.author_id === ME.id || ME.role === 'admin' ? `<button class="cm-del" data-cid="${c.id}" aria-label="삭제">✕</button>` : ''}`;
-      li.querySelector('.cm-name').textContent = (c.author_name || '') + '님';
-      li.querySelector('.cm-text').textContent = c.text;
-      const del = li.querySelector('.cm-del');
-      if (del) del.onclick = async () => {
+        <span class="ig-comment-text">
+          <strong></strong><span class="ig-comment-body"></span>
+        </span>
+        ${canDelete ? `<button class="ig-comment-del" data-cid="${c.id}" aria-label="삭제">✕</button>` : ''}`;
+      li.querySelector('strong').textContent = c.author_name || '알 수 없음';
+      li.querySelector('.ig-comment-body').textContent = c.text;
+      const del = li.querySelector('.ig-comment-del');
+      if (del) del.onclick = async (e) => {
+        e.stopPropagation();
         try {
           await api(`/api/gallery/${photoId}/comments/${c.id}`, { method: 'DELETE' });
           loadGalleryComments(photoId);
@@ -5281,9 +5321,13 @@ async function sendGalleryComment() {
       method: 'POST', body: JSON.stringify({ text }),
     });
     if (input) input.value = '';
+    // 새 댓글이 바로 보이도록 확장 상태로 리로드
+    GALLERY_COMMENTS_EXPANDED = true;
     loadGalleryComments(id);
-  } catch { alert('저장 실패'); }
-  finally { if (btn) btn.disabled = false; }
+  } catch {
+    alert('저장 실패');
+    if (btn) btn.disabled = false;
+  }
 }
 
 async function toggleGalleryLike() {
@@ -5295,8 +5339,9 @@ async function toggleGalleryLike() {
   try {
     const res = await api(`/api/gallery/${id}/like`, { method: 'POST' });
     btn.classList.toggle('on', !!res.liked);
-    btn.querySelector('.gallery-like-heart').textContent = res.liked ? '♥' : '♡';
-    $('galleryLikeCount').textContent = String(res.likeCount || 0);
+    const heart = $('galleryLikeHeart');
+    if (heart) heart.textContent = res.liked ? '♥' : '♡';
+    $('galleryLikeCount').textContent = formatLikeLabel(res.likeCount);
     const p = GALLERY_CACHE.find((x) => x.id === id);
     if (p) { p.liked = !!res.liked; p.likeCount = res.likeCount || 0; }
     // 그리드 뱃지 갱신
@@ -5424,6 +5469,20 @@ $('galleryLikeBtn')?.addEventListener('click', toggleGalleryLike);
 $('galleryCommentSend')?.addEventListener('click', sendGalleryComment);
 $('galleryCommentInput')?.addEventListener('keydown', (e) => {
   if (e.key === 'Enter') { e.preventDefault(); sendGalleryComment(); }
+});
+// "게시" 버튼은 입력이 있을 때만 활성
+$('galleryCommentInput')?.addEventListener('input', (e) => {
+  const btn = $('galleryCommentSend');
+  if (btn) btn.disabled = !e.target.value.trim();
+});
+// 💬 아이콘 → 입력창 포커스
+$('galleryCommentFocusBtn')?.addEventListener('click', () => {
+  $('galleryCommentInput')?.focus();
+});
+// "댓글 N개 모두 보기" 토글
+$('galleryCommentsViewAll')?.addEventListener('click', () => {
+  GALLERY_COMMENTS_EXPANDED = !GALLERY_COMMENTS_EXPANDED;
+  if (GALLERY_DETAIL_ID != null) loadGalleryComments(GALLERY_DETAIL_ID);
 });
 $('galleryDetailImg')?.addEventListener('click', () => {
   const src = $('galleryDetailImg').getAttribute('src');

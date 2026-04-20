@@ -1104,29 +1104,31 @@
         <button type="button" id="galleryDetailNext" class="gallery-nav-btn gallery-nav-next hidden" aria-label="다음 사진">›</button>
         <div class="gallery-detail-counter" id="galleryDetailCounter"></div>
       </div>
-      <div class="gallery-detail-meta">
-        <div class="gallery-detail-author" id="galleryDetailAuthor"></div>
-        <div class="gallery-detail-caption" id="galleryDetailCaption"></div>
-        <div class="gallery-detail-time" id="galleryDetailTime"></div>
-      </div>
-      <div class="gallery-detail-actions">
-        <button type="button" id="galleryLikeBtn" class="gallery-like-btn" aria-label="좋아요">
-          <span class="gallery-like-heart">♡</span>
-          <span class="gallery-like-count" id="galleryLikeCount">0</span>
+      <div class="ig-action-bar">
+        <button type="button" id="galleryLikeBtn" class="ig-icon-btn" aria-label="좋아요">
+          <span class="ig-heart" id="galleryLikeHeart">♡</span>
         </button>
-        <span class="gallery-comment-badge">
-          <span>💬</span>
-          <span id="galleryCommentBadgeCount">0</span>
-        </span>
+        <button type="button" id="galleryCommentFocusBtn" class="ig-icon-btn" aria-label="댓글">💬</button>
+        <button type="button" id="galleryDetailDeleteBtn" class="ig-icon-btn ig-delete-btn hidden" aria-label="사진 삭제">🗑</button>
       </div>
-      <div class="gallery-comment-section" id="galleryCommentSection">
-        <ul class="comment-list" id="galleryCommentList"></ul>
-        <div class="comment-form">
-          <input id="galleryCommentInput" class="comment-input" type="text" maxlength="300" placeholder="따뜻한 한 마디를 남겨 보세요" />
-          <button type="button" id="galleryCommentSend" class="comment-send">보내기</button>
-        </div>
+
+      <div class="ig-like-count" id="galleryLikeCount">좋아요 0개</div>
+
+      <div class="ig-caption">
+        <strong class="ig-caption-author" id="galleryDetailAuthor"></strong>
+        <span class="ig-caption-text" id="galleryDetailCaption"></span>
       </div>
-      <button type="button" id="galleryDetailDeleteBtn" class="ufi-btn danger hidden">사진 삭제</button>
+
+      <button type="button" class="ig-view-all hidden" id="galleryCommentsViewAll"></button>
+
+      <ul class="ig-comment-list" id="galleryCommentList"></ul>
+
+      <div class="ig-time" id="galleryDetailTime"></div>
+
+      <div class="ig-comment-form">
+        <input id="galleryCommentInput" type="text" maxlength="300" placeholder="댓글 달기..." />
+        <button type="button" id="galleryCommentSend" class="ig-post-btn" disabled>게시</button>
+      </div>
     </div>
     <button class="sheet-close" id="galleryDetailClose">닫기</button>
   </div>

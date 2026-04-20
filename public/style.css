@@ -4331,71 +4331,156 @@ li.memo-important .memo-text { font-weight: 700; }
   pointer-events: none;
   z-index: 2;
 }
-.gallery-detail-meta { margin-bottom: 12px; }
-.gallery-detail-author {
+/* ---------- Instagram 스타일 갤러리 상세 ---------- */
+.ig-action-bar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin: 8px -4px 4px;
+}
+.ig-icon-btn {
+  background: none;
+  border: none;
+  padding: 6px 8px;
+  font-size: 26px;
+  line-height: 1;
+  cursor: pointer;
+  color: var(--text);
+  transition: transform .15s, color .15s;
+  -webkit-tap-highlight-color: transparent;
+  font-family: inherit;
+}
+.ig-icon-btn:active { transform: scale(.86); }
+.ig-heart {
+  display: inline-block;
+  transition: transform .2s cubic-bezier(.22, 1.4, .4, 1.1), color .15s;
+}
+.ig-icon-btn.on .ig-heart {
+  color: #ed4956;
+  transform: scale(1.05);
+}
+.ig-delete-btn {
+  margin-left: auto;
+  font-size: 20px;
+  opacity: .65;
+}
+.ig-delete-btn:hover { opacity: 1; }
+
+.ig-like-count {
   font-size: 14px;
   font-weight: 700;
   color: var(--text);
-  margin-bottom: 4px;
+  margin: 2px 0 6px;
+  letter-spacing: -0.2px;
 }
-.gallery-detail-caption {
-  font-size: 15px;
-  color: var(--text);
+
+.ig-caption {
+  font-size: 14.5px;
   line-height: 1.5;
+  color: var(--text);
+  margin: 0 0 8px;
   word-break: keep-all;
-  margin-bottom: 4px;
-  white-space: pre-wrap;
 }
-.gallery-detail-time {
-  font-size: 12px;
-  color: var(--sub);
+.ig-caption-author {
+  font-weight: 700;
+  margin-right: 6px;
 }
-.gallery-detail-actions {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin: 4px 0 12px;
-}
-.gallery-like-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  background: var(--bg);
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  padding: 6px 14px;
+.ig-caption-text { white-space: pre-wrap; }
+.ig-caption-text:empty { display: none; }
+
+.ig-view-all {
+  display: block;
+  background: none;
+  border: none;
+  padding: 4px 0;
   font-size: 14px;
-  font-weight: 600;
   color: var(--sub);
   cursor: pointer;
   font-family: inherit;
-  transition: transform .12s, background .15s, color .15s, border-color .15s;
   -webkit-tap-highlight-color: transparent;
 }
-.gallery-like-btn:active { transform: scale(.94); }
-.gallery-like-btn .gallery-like-heart { font-size: 17px; line-height: 1; }
-.gallery-like-btn.on {
-  background: #ffe9ee;
-  border-color: #ffb7c8;
-  color: #d4375a;
+.ig-view-all:hover { color: var(--text); }
+
+.ig-comment-list {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 6px;
 }
-.gallery-like-btn.on .gallery-like-heart { color: #d4375a; }
-.gallery-comment-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
-  font-size: 13px;
-  font-weight: 600;
+.ig-comment-list li {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 3px 0;
+  font-size: 14.5px;
+  line-height: 1.5;
+  color: var(--text);
+}
+.ig-comment-text { flex: 1; word-break: break-word; }
+.ig-comment-text strong { font-weight: 700; margin-right: 6px; }
+.ig-comment-del {
+  background: none;
+  border: none;
   color: var(--sub);
+  font-size: 13px;
+  cursor: pointer;
+  padding: 2px 4px;
+  opacity: 0;
+  transition: opacity .15s;
+  flex-shrink: 0;
+  font-family: inherit;
 }
-.gallery-comment-section {
-  margin-top: 6px;
-  padding: 12px;
-  background: var(--bg);
-  border-radius: 12px;
-  margin-bottom: 12px;
+.ig-comment-list li:hover .ig-comment-del,
+.ig-comment-list li:focus-within .ig-comment-del { opacity: .7; }
+.ig-comment-del:hover { opacity: 1 !important; color: var(--bad); }
+/* 모바일: 항상 살짝 보이게 */
+@media (hover: none) {
+  .ig-comment-del { opacity: .5; }
 }
+
+.ig-time {
+  font-size: 11px;
+  color: var(--sub);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin: 6px 0 10px;
+}
+
+.ig-comment-form {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 0 4px;
+  border-top: 1px solid var(--line);
+}
+.ig-comment-form input {
+  flex: 1;
+  border: none;
+  outline: none;
+  background: transparent;
+  font-size: 14.5px;
+  color: var(--text);
+  font-family: inherit;
+  padding: 6px 0;
+}
+.ig-comment-form input::placeholder { color: var(--sub); }
+.ig-post-btn {
+  background: none;
+  border: none;
+  padding: 6px 4px;
+  font-size: 14.5px;
+  font-weight: 700;
+  color: #0095f6;
+  cursor: pointer;
+  font-family: inherit;
+  -webkit-tap-highlight-color: transparent;
+  transition: opacity .15s;
+}
+.ig-post-btn:disabled {
+  color: #0095f6;
+  opacity: 0.35;
+  cursor: default;
+}
+.ig-post-btn:not(:disabled):active { opacity: .6; }
 .gallery-thumb-badges {
   position: absolute;
   left: 6px;
