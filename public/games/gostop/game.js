@@ -184,6 +184,11 @@
     }
   }
 
+  function iconEmoji(code) {
+    const m = { star: '⭐', cat: '🐱', dog: '🐶', heart: '❤️', flower: '🌸', sun: '☀️', moon: '🌙' };
+    return m[code] || '⭐';
+  }
+
   function bumpBounce(el) {
     if (!el) return;
     el.classList.remove('g-bump');
@@ -271,25 +276,35 @@
       helpBanner.style.display = 'none';
     }
 
-    // 상대 정보 — 테이블 스타일 (겹친 뒷면 카드 스택)
+    // 상대 정보 — 아바타 + 이름/점수 + 손패 스택 + 턴 화살표
     const oppEl = $('gameOpponents');
     oppEl.innerHTML = '';
     VIEW.players.forEach(function (p, i) {
       if (i === me) return;
       const box = document.createElement('div');
-      box.className = 'g-opp' + (VIEW.turn === i ? ' is-turn' : '');
+      const isTurn = VIEW.turn === i && !VIEW.finished;
+      box.className = 'g-opp' + (isTurn ? ' is-turn' : '');
       const handCount = VIEW.opponentHandCounts[i] || 0;
       const score = VIEW.scores[i] || 0;
-      // 손패: 뒷면 카드를 absolute 로 겹쳐서 고정 너비 안에 표시 (최대 10장)
       const shown = Math.min(handCount, 10);
       let cardsHtml = '';
       for (let k = 0; k < shown; k++) {
         cardsHtml += '<span class="g-opp-card" style="left:' + (k * 8) + 'px">' + GostopCards.faceDownSvg() + '</span>';
       }
+      const avatarHtml = p.photoUrl
+        ? '<img src="' + escapeHtml(p.photoUrl) + '" alt="" />'
+        : iconEmoji(p.icon);
+      const turnArrow = isTurn ? '<span class="g-turn-arrow" aria-hidden="true">▼</span>' : '';
       box.innerHTML =
-        '<div class="g-opp-head"><span>' + escapeHtml(p.name) + '</span><span>' + score + '점 · 손패 ' + handCount + '</span></div>' +
-        '<div class="g-opp-hand">' + cardsHtml + '</div>' +
-        '<div class="g-opp-captured">' + renderCapturedSummary(VIEW.captured[i]) + '</div>';
+        '<div class="g-opp-inner">' +
+          '<span class="g-pl-avatar g-opp-avatar">' + avatarHtml + '</span>' +
+          '<div class="g-opp-body">' +
+            '<div class="g-opp-head"><span>' + escapeHtml(p.name) + '</span><span>' + score + '점 · 손패 ' + handCount + '</span></div>' +
+            '<div class="g-opp-hand">' + cardsHtml + '</div>' +
+            '<div class="g-opp-captured">' + renderCapturedSummary(VIEW.captured[i]) + '</div>' +
+          '</div>' +
+        '</div>' +
+        turnArrow;
       oppEl.appendChild(box);
     });
 
@@ -386,6 +401,17 @@
     if (myScoreEl) myScoreEl.textContent = (VIEW.scores[me] || 0) + '점';
     const myNameEl = $('gameMyName');
     if (myNameEl) myNameEl.textContent = (VIEW.players[me] && VIEW.players[me].name) || '나';
+    // 내 아바타
+    const myAvatarEl = $('gameMyAvatar');
+    if (myAvatarEl) {
+      const mp = VIEW.players[me] || {};
+      myAvatarEl.innerHTML = mp.photoUrl
+        ? '<img src="' + escapeHtml(mp.photoUrl) + '" alt="" />'
+        : iconEmoji(mp.icon);
+    }
+    // 내 차례면 me-wrap 강조
+    const meWrap = document.querySelector('.g-me-wrap');
+    if (meWrap) meWrap.classList.toggle('is-turn', VIEW.turn === me && !VIEW.finished);
     // 덱 카운트
     const deckCount = $('gameDeckCount');
     if (deckCount) deckCount.textContent = String(VIEW.stockCount || 0);
