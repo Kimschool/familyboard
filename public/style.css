@@ -1288,6 +1288,25 @@ body.tod-night .hero-weather { color: rgba(242,242,247,.8); }
   padding: 0;
   background: transparent;
   border-radius: 0;
+  touch-action: pan-y;
+}
+/* 월 전환 슬라이드·페이드 */
+.cal-grid.slide-in-right { animation: calSlideRight .28s ease-out; }
+.cal-grid.slide-in-left  { animation: calSlideLeft  .28s ease-out; }
+@keyframes calSlideRight {
+  from { transform: translateX(20px); opacity: 0; }
+  to   { transform: translateX(0);    opacity: 1; }
+}
+@keyframes calSlideLeft {
+  from { transform: translateX(-20px); opacity: 0; }
+  to   { transform: translateX(0);     opacity: 1; }
+}
+/* '오늘' 버튼 pulse (이번 달 상태에서 다시 누를 때) */
+#calToday.pulse { animation: calTodayPulse .5s ease-out; }
+@keyframes calTodayPulse {
+  0%, 100% { transform: scale(1); }
+  40%      { transform: scale(1.18); }
+  70%      { transform: scale(.95); }
 }
 .cal-cell {
   aspect-ratio: 1 / 1;
@@ -1308,9 +1327,17 @@ body.tod-night .hero-weather { color: rgba(242,242,247,.8); }
   box-shadow: none;
 }
 .cal-cell.empty { background: transparent; }
-.cal-cell.is-clickable { cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.cal-cell.is-clickable {
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: background .25s, transform .12s, box-shadow .12s;
+}
 .cal-cell.is-clickable:hover { background: var(--bg); }
-.cal-cell.is-clickable:active { transform: scale(.94); }
+.cal-cell.is-clickable:active {
+  transform: scale(.94);
+  background: rgba(10, 132, 255, .12);
+  box-shadow: inset 0 0 0 2px rgba(10, 132, 255, .25);
+}
 
 .cal-day {
   font-weight: 600;

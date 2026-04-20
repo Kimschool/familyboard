@@ -2024,11 +2024,67 @@ function openCalendarDaySheet(y, m, d, bdPeople, evs) {
   resetEvEmojiPicker();
   $('eventCreateSheet').classList.remove('hidden');
 }
-$('calPrev').addEventListener('click', () => { CAL_VIEW.setMonth(CAL_VIEW.getMonth() - 1); renderCalendar(); });
-$('calNext').addEventListener('click', () => { CAL_VIEW.setMonth(CAL_VIEW.getMonth() + 1); renderCalendar(); });
+// 월 전환 시 grid 에 slide-fade 애니메이션 — direction 에 따라 좌/우 방향 다르게
+function animateCalChange(direction) {
+  const grid = $('calGrid');
+  if (!grid) return;
+  grid.classList.remove('slide-in-left', 'slide-in-right');
+  // reflow 강제 — 연속 클릭 시에도 애니메이션이 다시 실행되도록
+  void grid.offsetWidth;
+  grid.classList.add(direction > 0 ? 'slide-in-right' : 'slide-in-left');
+}
+
+function changeCalMonth(delta) {
+  CAL_VIEW.setMonth(CAL_VIEW.getMonth() + delta);
+  renderCalendar();
+  animateCalChange(delta);
+}
+
+$('calPrev').addEventListener('click', () => changeCalMonth(-1));
+$('calNext').addEventListener('click', () => changeCalMonth(1));
 $('calToday').addEventListener('click', () => {
-  CAL_VIEW = new Date(); CAL_VIEW.setDate(1); renderCalendar();
+  const now = new Date();
+  now.setDate(1);
+  const sameMonth = now.getFullYear() === CAL_VIEW.getFullYear() && now.getMonth() === CAL_VIEW.getMonth();
+  if (sameMonth) {
+    // 이미 이번 달이면 버튼 자체 pulse
+    const btn = $('calToday');
+    btn.classList.remove('pulse');
+    void btn.offsetWidth;
+    btn.classList.add('pulse');
+    return;
+  }
+  const direction = now > CAL_VIEW ? 1 : -1;
+  CAL_VIEW = now;
+  renderCalendar();
+  animateCalChange(direction);
 });
+
+// 달력 가로 스와이프 → 월 이동
+(function setupCalSwipe() {
+  const grid = $('calGrid');
+  if (!grid) return;
+  let startX = 0, startY = 0, startT = 0, tracking = false;
+  grid.addEventListener('touchstart', (e) => {
+    if (e.touches.length !== 1) { tracking = false; return; }
+    startX = e.touches[0].clientX;
+    startY = e.touches[0].clientY;
+    startT = Date.now();
+    tracking = true;
+  }, { passive: true });
+  grid.addEventListener('touchend', (e) => {
+    if (!tracking) return;
+    tracking = false;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - startX;
+    const dy = t.clientY - startY;
+    const dt = Date.now() - startT;
+    // 가로 60px 이상, 세로 변화의 1.6배 이상, 500ms 이내만 스와이프 판정
+    if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.6 && dt < 500) {
+      changeCalMonth(dx > 0 ? -1 : 1);
+    }
+  }, { passive: true });
+})();
 
 // ---------- 우리 가족 요약 ----------
 function koreanAge(birthYear, birthMonth, birthDay) {
