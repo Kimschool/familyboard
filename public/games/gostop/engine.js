@@ -129,6 +129,7 @@
       pending: null,
       log: [{ ts: Date.now(), msg: '게임 시작' }],
       scores: new Array(playerCount).fill(0),
+      goCounts: new Array(playerCount).fill(0),  // 플레이어별 '고' 누적 횟수
       finished: false,
       winner: null,
     };
@@ -331,13 +332,21 @@
     if (state.phase !== 'choose-go-stop') throw new Error('not in go-stop phase');
     if (state.turn !== playerIdx) throw new Error('not your turn');
     const s = cloneState(state);
+    if (!s.goCounts) s.goCounts = new Array(s.playerCount).fill(0);
     if (choice === 'stop') {
       s.finished = true;
       s.winner = playerIdx;
-      appendLog(s, s.players[playerIdx].name + '님 스톱! ' + s.scores[playerIdx] + '점 승리');
+      const goN = s.goCounts[playerIdx] || 0;
+      const mult = Math.pow(2, goN); // 고 1회=2배, 2회=4배, 3회=8배
+      const baseScore = s.scores[playerIdx];
+      s.scores[playerIdx] = baseScore * mult;
+      const tag = goN >= 1 ? ' (' + goN + '고 ×' + mult + ')' : '';
+      appendLog(s, s.players[playerIdx].name + '님 스톱! ' + s.scores[playerIdx] + '점' + tag + ' 승리');
       return { state: s };
     }
-    appendLog(s, s.players[playerIdx].name + '님 고! 계속 진행합니다');
+    s.goCounts[playerIdx] = (s.goCounts[playerIdx] || 0) + 1;
+    const n = s.goCounts[playerIdx];
+    appendLog(s, s.players[playerIdx].name + '님 ' + n + '고! 계속 진행합니다');
     return endTurn(s);
   }
 
@@ -360,6 +369,7 @@
       winner: state.winner,
       log: state.log.slice(-10),
       bbukGroups: state.bbukGroups || [],
+      goCounts: state.goCounts || new Array(state.playerCount).fill(0),
     };
   }
 

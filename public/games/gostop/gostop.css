@@ -303,6 +303,26 @@ body { min-height: 100vh; padding-bottom: 40px; }
   -webkit-tap-highlight-color: transparent;
 }
 .g-mute-btn.is-muted { opacity: .45; }
+
+/* 고 배수 뱃지 */
+.g-go-badge {
+  display: inline-block;
+  margin-left: 6px;
+  background: linear-gradient(135deg, #D94A2C, #F5A742);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 900;
+  padding: 2px 7px;
+  border-radius: 999px;
+  letter-spacing: .5px;
+  box-shadow: 0 2px 4px rgba(217,74,44,.35);
+  animation: goBadgePulse 1.3s ease-in-out infinite;
+  vertical-align: middle;
+}
+@keyframes goBadgePulse {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.1); }
+}
 .g-mute-btn:active { transform: scale(.92); }
 
 /* 녹색 펠트 테이블 */

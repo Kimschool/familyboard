@@ -96,7 +96,7 @@
       // 2.5초 뒤 결과 오버레이 표시
       setTimeout(function () { showEndDialog(); }, 2000);
     }
-    // 뻑 / 뻑먹기 감지 — 최근 로그 문구 기준
+    // 뻑 / 뻑먹기 / 고 감지
     if (newLog && (!oldLog || newLog.ts !== oldLog.ts)) {
       if (/^뻑!/.test(newLog.msg)) {
         bigCallout('뻑!', 'go', 1600);
@@ -105,7 +105,12 @@
         bigCallout('싹쓸이!', 'gold', 1800);
         if (SFX) SFX.fanfare();
       }
-      if (/고!\s*계속/.test(newLog.msg) && SFX) SFX.gong();
+      const goMatch = newLog.msg.match(/(\d+)고!\s*계속/);
+      if (goMatch && SFX) {
+        const n = Number(goMatch[1]);
+        bigCallout(n + '고!', 'go', 1600);
+        SFX.gong();
+      }
     }
   }
 
@@ -302,11 +307,13 @@
         ? '<img src="' + escapeHtml(p.photoUrl) + '" alt="" />'
         : iconEmoji(p.icon);
       const turnArrow = isTurn ? '<span class="g-turn-arrow" aria-hidden="true">▼</span>' : '';
+      const goCount = (VIEW.goCounts && VIEW.goCounts[i]) || 0;
+      const goBadge = goCount > 0 ? '<span class="g-go-badge">' + goCount + '고</span>' : '';
       box.innerHTML =
         '<div class="g-opp-inner">' +
           '<span class="g-pl-avatar g-opp-avatar">' + avatarHtml + '</span>' +
           '<div class="g-opp-body">' +
-            '<div class="g-opp-head"><span>' + escapeHtml(p.name) + '</span><span>' + score + '점 · 손패 ' + handCount + '</span></div>' +
+            '<div class="g-opp-head"><span>' + escapeHtml(p.name) + goBadge + '</span><span>' + score + '점 · 손패 ' + handCount + '</span></div>' +
             '<div class="g-opp-hand">' + cardsHtml + '</div>' +
             '<div class="g-opp-captured">' + renderCapturedSummary(VIEW.captured[i]) + '</div>' +
           '</div>' +
@@ -410,7 +417,11 @@
     const myScoreEl = $('gameMyScore');
     if (myScoreEl) myScoreEl.textContent = (VIEW.scores[me] || 0) + '점';
     const myNameEl = $('gameMyName');
-    if (myNameEl) myNameEl.textContent = (VIEW.players[me] && VIEW.players[me].name) || '나';
+    if (myNameEl) {
+      const mgo = (VIEW.goCounts && VIEW.goCounts[me]) || 0;
+      myNameEl.innerHTML = escapeHtml((VIEW.players[me] && VIEW.players[me].name) || '나') +
+        (mgo > 0 ? ' <span class="g-go-badge">' + mgo + '고</span>' : '');
+    }
     // 내 아바타
     const myAvatarEl = $('gameMyAvatar');
     if (myAvatarEl) {
@@ -440,12 +451,19 @@
       }, 900);
     }
 
-    // 고/스톱 다이얼로그 — 인라인 style 도 함께 토글 (CSS 캐시 내성)
+    // 고/스톱 다이얼로그 — 배수 프리뷰 포함
     const gsDlg = $('goStopDialog');
     if (VIEW.phase === 'choose-go-stop' && isMyTurn) {
       gsDlg.classList.remove('hidden');
       gsDlg.style.display = 'flex';
-      $('gsScore').textContent = VIEW.scores[me] + '점';
+      const myGo = (VIEW.goCounts && VIEW.goCounts[me]) || 0;
+      const currentMult = Math.pow(2, myGo);
+      const nextMult = Math.pow(2, myGo + 1);
+      const baseScore = VIEW.scores[me];
+      $('gsScore').innerHTML = baseScore + '점' +
+        (myGo >= 1 ? ' × ' + currentMult + ' = <b>' + (baseScore * currentMult) + '점</b>' : '');
+      const goBtn = $('btnGo');
+      if (goBtn) goBtn.textContent = '고! (다음 스톱 ×' + nextMult + ')';
     } else {
       gsDlg.classList.add('hidden');
       gsDlg.style.display = 'none';
