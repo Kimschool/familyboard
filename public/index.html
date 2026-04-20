@@ -1109,6 +1109,21 @@
         <div class="gallery-detail-caption" id="galleryDetailCaption"></div>
         <div class="gallery-detail-time" id="galleryDetailTime"></div>
       </div>
+      <div class="gallery-detail-actions">
+        <button type="button" id="galleryDetailLikeBtn" class="gd-like-btn" aria-pressed="false">
+          <span class="gd-like-emoji">🤍</span>
+          <span class="gd-like-count" id="galleryDetailLikeCount">0</span>
+        </button>
+        <span class="gd-comment-count" id="galleryDetailCommentCount">💬 0</span>
+      </div>
+      <div class="gallery-detail-comments" id="galleryDetailComments">
+        <ul class="gd-comment-list" id="galleryDetailCommentList"></ul>
+        <div class="gd-comment-empty" id="galleryDetailCommentEmpty">첫 댓글을 남겨 보세요 🌸</div>
+        <div class="gd-comment-form">
+          <input id="galleryDetailCommentInput" class="gd-comment-input" type="text" maxlength="300" placeholder="따뜻한 한 마디 남기기" />
+          <button type="button" id="galleryDetailCommentSend" class="gd-comment-send">보내기</button>
+        </div>
+      </div>
       <button type="button" id="galleryDetailDeleteBtn" class="ufi-btn danger hidden">사진 삭제</button>
     </div>
     <button class="sheet-close" id="galleryDetailClose">닫기</button>
@@ -1166,6 +1181,6 @@
     caches.keys().then((ks) => ks.forEach((k) => caches.delete(k))).catch(() => {});
   }
 </script>
-<script src="/app.js?v=42" defer></script>
+<script src="/app.js?v=43" defer></script>
 </body>
 </html>

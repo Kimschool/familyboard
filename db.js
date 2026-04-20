@@ -345,6 +345,27 @@ async function ensureSchema() {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   `);
 
+  await p.query(`
+    CREATE TABLE IF NOT EXISTS gallery_comments (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      photo_id INT NOT NULL,
+      author_id INT NOT NULL,
+      text VARCHAR(300) NOT NULL,
+      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      INDEX idx_photo_time (photo_id, created_at)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  `);
+
+  await p.query(`
+    CREATE TABLE IF NOT EXISTS gallery_likes (
+      photo_id INT NOT NULL,
+      user_id INT NOT NULL,
+      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (photo_id, user_id),
+      INDEX idx_photo (photo_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  `);
+
   // ---------- 가족 채팅 ----------
   await p.query(`
     CREATE TABLE IF NOT EXISTS chat_messages (

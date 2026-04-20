@@ -5174,6 +5174,7 @@ function openGalleryDetail(p) {
   GALLERY_DETAIL_ID = p.id;
   renderGalleryDetail(p);
   $('galleryDetailSheet').classList.remove('hidden');
+  loadGalleryComments(p.id);
 }
 
 /** 현재 상세 사진 렌더 + 앞/뒤 네비 버튼 상태 업데이트 */
@@ -5184,6 +5185,8 @@ function renderGalleryDetail(p) {
   $('galleryDetailCaption').textContent = p.caption || '';
   $('galleryDetailTime').textContent = p.createdAt ? relativeTime(p.createdAt) : '';
   $('galleryDetailDeleteBtn').classList.toggle('hidden', !p.canDelete);
+  renderGalleryLikeButton(p);
+  renderGalleryCommentCount(p.commentCount || 0);
   // 앞/뒤 네비 + 카운터
   const idx = GALLERY_CACHE.findIndex((x) => x.id === p.id);
   const total = GALLERY_CACHE.length;
@@ -5199,6 +5202,135 @@ function renderGalleryDetail(p) {
     prevBtn?.classList.toggle('hidden', idx === 0);
     nextBtn?.classList.toggle('hidden', idx >= total - 1);
     if (counter) counter.textContent = `${idx + 1} / ${total}`;
+  }
+}
+
+function renderGalleryLikeButton(p) {
+  const btn = $('galleryDetailLikeBtn');
+  const emoji = btn?.querySelector('.gd-like-emoji');
+  const count = $('galleryDetailLikeCount');
+  if (!btn || !emoji || !count) return;
+  const liked = !!p.liked;
+  btn.classList.toggle('on', liked);
+  btn.setAttribute('aria-pressed', liked ? 'true' : 'false');
+  emoji.textContent = liked ? '❤️' : '🤍';
+  count.textContent = String(p.likeCount || 0);
+}
+
+function renderGalleryCommentCount(n) {
+  const el = $('galleryDetailCommentCount');
+  if (el) el.textContent = `💬 ${n || 0}`;
+}
+
+async function loadGalleryComments(photoId) {
+  const list = $('galleryDetailCommentList');
+  const empty = $('galleryDetailCommentEmpty');
+  const input = $('galleryDetailCommentInput');
+  if (!list || !input) return;
+  list.innerHTML = '<li class="gd-comment-loading">불러오는 중...</li>';
+  if (input) input.value = '';
+  try {
+    const rows = await api(`/api/gallery/${photoId}/comments`);
+    if (GALLERY_DETAIL_ID !== photoId) return; // 사용자가 다른 사진으로 이미 이동
+    list.innerHTML = '';
+    if (!rows.length) {
+      empty?.classList.remove('hidden');
+    } else {
+      empty?.classList.add('hidden');
+    }
+    for (const c of rows) list.appendChild(buildGalleryCommentItem(photoId, c));
+    renderGalleryCommentCount(rows.length);
+    syncGalleryCacheCounts(photoId, { commentCount: rows.length });
+  } catch {
+    list.innerHTML = '<li class="gd-comment-loading">댓글을 불러오지 못했어요</li>';
+  }
+}
+
+function buildGalleryCommentItem(photoId, c) {
+  const li = document.createElement('li');
+  li.className = 'gd-comment-item';
+  li.dataset.cid = String(c.id);
+  const canDelete = c.canDelete || c.authorId === ME?.id;
+  li.innerHTML = `
+    <span class="gd-comment-avatar">${inlineAvatarHtml({ id: c.authorId, name: c.authorName, icon: c.authorIcon, photoUrl: c.authorPhoto }, 26)}</span>
+    <div class="gd-comment-body">
+      <div class="gd-comment-head">
+        <span class="gd-comment-name"></span>
+        <span class="gd-comment-time"></span>
+      </div>
+      <div class="gd-comment-text"></div>
+    </div>
+    ${canDelete ? `<button type="button" class="gd-comment-del" aria-label="삭제">✕</button>` : ''}`;
+  li.querySelector('.gd-comment-name').textContent = (c.authorName || '알 수 없음') + '님';
+  li.querySelector('.gd-comment-text').textContent = c.text;
+  li.querySelector('.gd-comment-time').textContent = c.createdAt ? relativeTime(c.createdAt) : '';
+  const del = li.querySelector('.gd-comment-del');
+  if (del) del.onclick = () => deleteGalleryComment(photoId, c.id);
+  return li;
+}
+
+function syncGalleryCacheCounts(photoId, patch) {
+  const i = GALLERY_CACHE.findIndex((p) => p.id === photoId);
+  if (i >= 0) GALLERY_CACHE[i] = { ...GALLERY_CACHE[i], ...patch };
+}
+
+async function sendGalleryComment() {
+  const photoId = GALLERY_DETAIL_ID;
+  const input = $('galleryDetailCommentInput');
+  if (!photoId || !input) return;
+  const text = input.value.trim();
+  if (!text) return;
+  const sendBtn = $('galleryDetailCommentSend');
+  if (sendBtn) sendBtn.disabled = true;
+  try {
+    const res = await api(`/api/gallery/${photoId}/comments`, {
+      method: 'POST',
+      body: JSON.stringify({ text }),
+    });
+    input.value = '';
+    if (typeof res?.commentCount === 'number') {
+      renderGalleryCommentCount(res.commentCount);
+      syncGalleryCacheCounts(photoId, { commentCount: res.commentCount });
+    }
+    await loadGalleryComments(photoId);
+  } catch {
+    alert('댓글 저장에 실패했어요');
+  } finally {
+    if (sendBtn) sendBtn.disabled = false;
+  }
+}
+
+async function deleteGalleryComment(photoId, commentId) {
+  try {
+    const res = await api(`/api/gallery/${photoId}/comments/${commentId}`, { method: 'DELETE' });
+    if (typeof res?.commentCount === 'number') {
+      renderGalleryCommentCount(res.commentCount);
+      syncGalleryCacheCounts(photoId, { commentCount: res.commentCount });
+    }
+    await loadGalleryComments(photoId);
+  } catch (e) {
+    alert(e.status === 403 ? '삭제 권한이 없어요' : '삭제 실패');
+  }
+}
+
+async function toggleGalleryLike() {
+  const photoId = GALLERY_DETAIL_ID;
+  if (!photoId) return;
+  const btn = $('galleryDetailLikeBtn');
+  if (btn) btn.disabled = true;
+  try {
+    const res = await api(`/api/gallery/${photoId}/like`, { method: 'POST' });
+    const patch = { liked: !!res.liked, likeCount: res.likeCount || 0 };
+    syncGalleryCacheCounts(photoId, patch);
+    const p = GALLERY_CACHE.find((x) => x.id === photoId);
+    if (p) renderGalleryLikeButton(p);
+    if (btn) {
+      btn.classList.remove('pop');
+      void btn.offsetWidth;
+      btn.classList.add('pop');
+    }
+  } catch {} finally {
+    if (btn) btn.disabled = false;
   }
 }
 
@@ -5316,6 +5448,20 @@ $('galleryDetailSheet')?.addEventListener('click', (e) => {
 });
 $('galleryDetailDeleteBtn')?.addEventListener('click', () => {
   if (GALLERY_DETAIL_ID != null) deleteGalleryPhoto(GALLERY_DETAIL_ID);
+});
+$('galleryDetailLikeBtn')?.addEventListener('click', (e) => {
+  e.stopPropagation();
+  toggleGalleryLike();
+});
+$('galleryDetailCommentSend')?.addEventListener('click', (e) => {
+  e.stopPropagation();
+  sendGalleryComment();
+});
+$('galleryDetailCommentInput')?.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.isComposing) {
+    e.preventDefault();
+    sendGalleryComment();
+  }
 });
 $('galleryDetailImg')?.addEventListener('click', () => {
   const src = $('galleryDetailImg').getAttribute('src');
