@@ -122,7 +122,30 @@ body { min-height: 100vh; padding-bottom: 40px; }
 }
 .hwa-card-wrap:hover { transform: translateY(-4px); }
 .hwa-card-wrap.is-selected { transform: translateY(-10px); }
-.hwa-card-wrap.is-highlight { box-shadow: 0 0 0 3px #FFD84D, 0 4px 12px rgba(255,200,0,.3); border-radius: 10px; }
+.hwa-card-wrap.is-highlight {
+  box-shadow: 0 0 0 3px #FFD84D, 0 0 18px rgba(255,200,0,.6);
+  border-radius: 10px;
+  animation: hwaPulse 1.2s ease-in-out infinite;
+  z-index: 2;
+}
+@keyframes hwaPulse {
+  0%, 100% { box-shadow: 0 0 0 3px #FFD84D, 0 0 8px rgba(255,200,0,.4); }
+  50%      { box-shadow: 0 0 0 5px #FFD84D, 0 0 24px rgba(255,200,0,.9); transform: translateY(-3px); }
+}
+
+.g-help {
+  background: linear-gradient(135deg, #FFF4D5, #FFE3B5);
+  color: #7A5D00;
+  padding: 12px 14px;
+  border-radius: 12px;
+  margin-bottom: 12px;
+  font-size: 14.5px;
+  font-weight: 700;
+  line-height: 1.5;
+  border: 2px dashed #E5B13C;
+  text-align: center;
+}
+.g-help b { color: #9A6600; }
 .hwa-card { width: 100% !important; height: 100% !important; max-width: 100%; max-height: 100%; display: block; filter: drop-shadow(0 2px 4px rgba(0,0,0,.15)); }
 
 /* ========== 게임 화면 ========== */

@@ -52,6 +52,17 @@
         '<span class="g-status-stock">덱 ' + VIEW.stockCount + '장</span>';
     }
 
+    // 선택이 필요한 단계에선 도움말 배너를 상단에 추가
+    const helpBanner = $('gameHelp');
+    if (isMyTurn && (VIEW.phase === 'choose-hand-match' || VIEW.phase === 'choose-flip-match')) {
+      helpBanner.innerHTML = '👉 바닥에서 <b>같은 달 카드(노랗게 빛나는)</b> 한 장을 탭해 주세요';
+      helpBanner.classList.remove('hidden');
+      helpBanner.style.display = 'block';
+    } else {
+      helpBanner.classList.add('hidden');
+      helpBanner.style.display = 'none';
+    }
+
     // 상대 정보 (단 2인 맞고 기준 — 상대 1명)
     const oppEl = $('gameOpponents');
     oppEl.innerHTML = '';
