@@ -117,11 +117,25 @@ body { min-height: 100vh; padding-bottom: 40px; }
   flex: 0 0 auto;
   width: 60px; height: 96px;
   cursor: pointer;
-  transition: transform .15s;
+  transition: transform .18s cubic-bezier(.22,1.4,.4,1.1), filter .15s;
   -webkit-tap-highlight-color: transparent;
+  position: relative;
 }
-.hwa-card-wrap:hover { transform: translateY(-4px); }
-.hwa-card-wrap.is-selected { transform: translateY(-10px); }
+.hwa-card-wrap:hover { transform: translateY(-4px); filter: brightness(1.05); }
+.hwa-card-wrap.is-selected { transform: translateY(-12px); filter: brightness(1.08) drop-shadow(0 6px 14px rgba(0,0,0,.25)); }
+/* 새 카드 등장 애니메이션 */
+.hwa-card-wrap.is-new { animation: hwaDealIn .4s ease-out; }
+@keyframes hwaDealIn {
+  from { opacity: 0; transform: translateY(-20px) scale(.8) rotate(-8deg); }
+  to   { opacity: 1; transform: translateY(0) scale(1) rotate(0); }
+}
+/* 뒤집기 — 360도 Y축 플립 */
+.hwa-card-wrap.is-flipping { animation: hwaFlip .55s ease-in-out; }
+@keyframes hwaFlip {
+  0%   { transform: rotateY(0) scale(1); }
+  50%  { transform: rotateY(180deg) scale(1.15); }
+  100% { transform: rotateY(360deg) scale(1); }
+}
 .hwa-card-wrap.is-highlight {
   box-shadow: 0 0 0 3px #FFD84D, 0 0 18px rgba(255,200,0,.6);
   border-radius: 10px;
@@ -167,7 +181,27 @@ body { min-height: 100vh; padding-bottom: 40px; }
   transition: border-color .15s, box-shadow .15s;
   border: 2px solid transparent;
 }
-.g-opp.is-turn { border-color: var(--primary); box-shadow: 0 0 0 2px rgba(10,132,255,.15), 0 2px 8px rgba(10,132,255,.15); }
+.g-opp.is-turn {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px rgba(10,132,255,.15), 0 2px 8px rgba(10,132,255,.15);
+  animation: oppTurnPulse 2s ease-in-out infinite;
+}
+@keyframes oppTurnPulse {
+  0%, 100% { box-shadow: 0 0 0 2px rgba(10,132,255,.15), 0 2px 8px rgba(10,132,255,.15); }
+  50%      { box-shadow: 0 0 0 4px rgba(10,132,255,.3),  0 4px 16px rgba(10,132,255,.3); }
+}
+/* 내 차례일 때 상태바 강조 */
+.g-status-turn.is-me {
+  background: linear-gradient(135deg, #FFD84D, #F5B342);
+  color: #5A3D00;
+  padding: 4px 12px;
+  border-radius: 999px;
+  animation: myTurnGlow 1.5s ease-in-out infinite;
+}
+@keyframes myTurnGlow {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(245,179,66,.6); }
+  50%      { box-shadow: 0 0 0 8px rgba(245,179,66,0); }
+}
 .g-opp-head { font-weight: 700; font-size: 14px; margin-bottom: 6px; }
 .g-opp-hand { display: flex; overflow: hidden; max-height: 50px; padding-left: 14px; }
 .g-opp-card {
