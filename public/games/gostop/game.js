@@ -137,20 +137,29 @@
       title.style.color = '#7C3AED';
     }
     // 박 플래그가 있으면 설명 추가
-    if (VIEW.bakFlags && VIEW.bakFlags.length) {
-      sub.innerHTML = '최종 점수 · <span class="g-end-bak">' + VIEW.bakFlags.map(escapeHtml).join(' · ') + '</span>';
-    } else {
-      sub.textContent = '최종 점수';
-    }
+    const roundN = VIEW.gameRound || 1;
+    const bakHtml = VIEW.bakFlags && VIEW.bakFlags.length
+      ? ' · <span class="g-end-bak">' + VIEW.bakFlags.map(escapeHtml).join(' · ') + '</span>'
+      : '';
+    sub.innerHTML = roundN + '번째 판 최종 점수' + bakHtml;
     // 점수 정렬 (내림차순)
     const ranked = VIEW.players.map(function (p, i) { return { name: p.name, score: VIEW.scores[i] || 0, idx: i }; });
     ranked.sort(function (a, b) { return b.score - a.score; });
+    // 누적 점수 맵 (userId → total)
+    const cumMap = {};
+    (VIEW.cumScores || []).forEach(function (cs) { cumMap[cs.userId] = cs.total; });
+
     list.innerHTML = ranked.map(function (r, rank) {
       const isMe = r.idx === me;
       const isWinner = r.idx === winner;
+      const userId = VIEW.players[r.idx].userId;
+      const cum = cumMap[userId] || 0;
+      const cumHtml = cum > 0
+        ? '<span class="g-end-cum">누적 ' + cum + '점</span>'
+        : '';
       return '<li class="g-end-row' + (isMe ? ' is-me' : '') + (isWinner ? ' is-winner' : '') + '">' +
         '<span class="g-end-rank">' + (rank + 1) + '</span>' +
-        '<span class="g-end-name">' + escapeHtml(r.name) + (isMe ? ' (나)' : '') + '</span>' +
+        '<span class="g-end-name">' + escapeHtml(r.name) + (isMe ? ' (나)' : '') + cumHtml + '</span>' +
         '<span class="g-end-score">' + r.score + '점</span>' +
         '</li>';
     }).join('');
@@ -274,11 +283,13 @@
       const winName = VIEW.winner != null && VIEW.players[VIEW.winner] ? VIEW.players[VIEW.winner].name : '';
       statusEl.innerHTML = '<span class="g-status-end">' + (winName ? (winName + '님 승리!') : '무승부') + ' · 최종 ' + VIEW.scores.join(' : ') + '점</span>';
     } else {
+      const roundNum = VIEW.gameRound || 1;
       statusEl.innerHTML =
         '<span class="g-status-turn' + (isMyTurn ? ' is-me' : '') + '">' +
           (isMyTurn ? '내 차례' : (turnName + '님 차례')) +
         '</span>' +
         '<span class="g-status-phase">' + phaseLabel + '</span>' +
+        (roundNum > 1 ? '<span class="g-status-round">' + roundNum + '판</span>' : '') +
         '<span class="g-status-stock">덱 ' + VIEW.stockCount + '장</span>';
     }
 

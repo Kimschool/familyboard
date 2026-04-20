@@ -166,6 +166,9 @@ function attachGostopServer(httpServer) {
           playerCount: room.playerCount,
           seed: Date.now(),
         });
+        room.cumScores = room.cumScores || {};
+        room.gameHistory = room.gameHistory || [];
+        room.gameResultRecorded = false;
       } catch (e) {
         return typeof ack === 'function' && ack({ ok: false, error: e.message });
       }
@@ -238,12 +241,13 @@ function attachGostopServer(httpServer) {
         const room = ROOMS.get(roomId);
         if (!room) throw new Error('not-in-room');
         if (!room.game || !room.game.finished) throw new Error('game-not-finished');
-        // 새 게임 생성 — 플레이어 순서 유지, 딜러 로테이션 (단순히 seed 만 새로)
+        // 새 게임 생성 — 누적점수/히스토리 유지, gameResultRecorded 만 리셋
         room.game = engine.createGame({
           players: room.players.map((p) => ({ userId: p.userId, name: p.name, icon: p.icon, photoUrl: p.photoUrl })),
           playerCount: room.playerCount,
           seed: Date.now(),
         });
+        room.gameResultRecorded = false;
         io.to(`room:${room.id}`).emit('game:started', { room: serializeRoom(room) });
         broadcastGameView(room);
         if (typeof ack === 'function') ack({ ok: true });
@@ -277,13 +281,40 @@ function attachGostopServer(httpServer) {
     }
   }
 
-  // 각 플레이어에게 본인 시점의 view 만 보내고, 룸 전체엔 공통 이벤트 알림
+  // 각 플레이어에게 본인 시점의 view 만 보내고, 룸 전체엔 공통 이벤트 알림.
+  // 게임이 방금 끝났으면 누적 점수도 업데이트.
   function broadcastGameView(room) {
     const game = room.game;
-    room.players.forEach((p, idx) => {
+    if (!game) return;
+    // 게임 종료 시 1회만 누적 점수 기록
+    if (game.finished && !room.gameResultRecorded) {
+      room.gameResultRecorded = true;
+      room.cumScores = room.cumScores || {};
+      const w = game.winner;
+      if (w != null) {
+        const winnerUserId = game.players[w].userId;
+        const winPts = game.scores[w] || 0;
+        room.cumScores[winnerUserId] = (room.cumScores[winnerUserId] || 0) + winPts;
+        room.gameHistory = room.gameHistory || [];
+        room.gameHistory.push({
+          winnerUserId: winnerUserId,
+          winnerName: game.players[w].name,
+          score: winPts,
+          endedAt: Date.now(),
+        });
+      }
+    }
+    const cumScoresArr = room.players.map((p) => ({
+      userId: p.userId,
+      name: p.name,
+      total: (room.cumScores && room.cumScores[p.userId]) || 0,
+    }));
+    room.players.forEach((p) => {
       const playerIdx = game.players.findIndex((gp) => gp.userId === p.userId);
       if (playerIdx < 0) return;
       const view = engine.viewFor(game, playerIdx);
+      view.cumScores = cumScoresArr;
+      view.gameRound = (room.gameHistory && room.gameHistory.length + (game.finished ? 0 : 1)) || 1;
       io.to(p.socketId).emit('game:view', view);
     });
   }
