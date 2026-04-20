@@ -136,7 +136,12 @@
       title.textContent = '무승부';
       title.style.color = '#7C3AED';
     }
-    sub.textContent = '최종 점수';
+    // 박 플래그가 있으면 설명 추가
+    if (VIEW.bakFlags && VIEW.bakFlags.length) {
+      sub.innerHTML = '최종 점수 · <span class="g-end-bak">' + VIEW.bakFlags.map(escapeHtml).join(' · ') + '</span>';
+    } else {
+      sub.textContent = '최종 점수';
+    }
     // 점수 정렬 (내림차순)
     const ranked = VIEW.players.map(function (p, i) { return { name: p.name, score: VIEW.scores[i] || 0, idx: i }; });
     ranked.sort(function (a, b) { return b.score - a.score; });

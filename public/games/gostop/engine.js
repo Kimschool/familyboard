@@ -328,6 +328,22 @@
     return { state: s };
   }
 
+  // 박 판정 — 승자 vs 패자 1명의 multiplier (× 2 stacking)
+  // 광박: 승자 광 3+ AND 패자 광 0
+  // 멍박: 승자 열끗 7+ AND 패자 열끗 <5
+  // 피박: 승자 피 10+ AND 패자 피 <7
+  function bakMultiplier(winnerCap, loserCap) {
+    let mult = 1;
+    const flags = [];
+    const junkCount = function (pile) {
+      return pile.reduce(function (n, c) { return n + (c.doubleJunk ? 2 : 1); }, 0);
+    };
+    if (winnerCap.light.length >= 3 && loserCap.light.length === 0) { mult *= 2; flags.push('광박'); }
+    if (winnerCap.animal.length >= 7 && loserCap.animal.length < 5) { mult *= 2; flags.push('멍박'); }
+    if (junkCount(winnerCap.junk) >= 10 && junkCount(loserCap.junk) < 7) { mult *= 2; flags.push('피박'); }
+    return { mult: mult, flags: flags };
+  }
+
   function callGoStop(state, playerIdx, choice) {
     if (state.phase !== 'choose-go-stop') throw new Error('not in go-stop phase');
     if (state.turn !== playerIdx) throw new Error('not your turn');
@@ -337,11 +353,24 @@
       s.finished = true;
       s.winner = playerIdx;
       const goN = s.goCounts[playerIdx] || 0;
-      const mult = Math.pow(2, goN); // 고 1회=2배, 2회=4배, 3회=8배
+      const goMult = Math.pow(2, goN);
       const baseScore = s.scores[playerIdx];
-      s.scores[playerIdx] = baseScore * mult;
-      const tag = goN >= 1 ? ' (' + goN + '고 ×' + mult + ')' : '';
-      appendLog(s, s.players[playerIdx].name + '님 스톱! ' + s.scores[playerIdx] + '점' + tag + ' 승리');
+      // 각 패자별 박 multiplier 계산 · 합산
+      let total = 0;
+      const bakFlagsAll = [];
+      for (let i = 0; i < s.playerCount; i++) {
+        if (i === playerIdx) continue;
+        const bak = bakMultiplier(s.captured[playerIdx], s.captured[i]);
+        const pay = baseScore * goMult * bak.mult;
+        total += pay;
+        if (bak.flags.length) bakFlagsAll.push(s.players[i].name + ': ' + bak.flags.join(', '));
+      }
+      s.scores[playerIdx] = total;
+      s.bakFlags = bakFlagsAll;
+      let tag = '';
+      if (goN >= 1) tag += ' ' + goN + '고(×' + goMult + ')';
+      if (bakFlagsAll.length) tag += ' [' + bakFlagsAll.join(' / ') + ']';
+      appendLog(s, s.players[playerIdx].name + '님 스톱! ' + total + '점' + tag + ' 승리');
       return { state: s };
     }
     s.goCounts[playerIdx] = (s.goCounts[playerIdx] || 0) + 1;
@@ -370,6 +399,7 @@
       log: state.log.slice(-10),
       bbukGroups: state.bbukGroups || [],
       goCounts: state.goCounts || new Array(state.playerCount).fill(0),
+      bakFlags: state.bakFlags || [],
     };
   }
 
