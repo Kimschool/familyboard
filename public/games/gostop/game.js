@@ -4,6 +4,7 @@
   const $ = function (id) { return document.getElementById(id); };
 
   let VIEW = null;            // 서버가 보내준 내 시점 뷰
+  let PREV_VIEW = null;        // 직전 뷰 — diff 로 애니메이션 트리거
   let PENDING_HAND_CARD = null; // 선택해 둔 손패 카드 id (멀티매칭 선택 중)
   let _autoFlipPending = false; // 자동 뒤집기 중복 호출 방지 플래그
 
@@ -23,8 +24,76 @@
   }
 
   function onView(view) {
+    PREV_VIEW = VIEW;
     VIEW = view;
     render();
+    // 변경점 기반 피드백: 토스트 · 점수 팝업
+    fireDiffEffects();
+  }
+
+  function fireDiffEffects() {
+    if (!PREV_VIEW || !VIEW) return;
+    // 1) 최근 로그가 바뀌었으면 토스트
+    const newLog = VIEW.log && VIEW.log.length ? VIEW.log[VIEW.log.length - 1] : null;
+    const oldLog = PREV_VIEW.log && PREV_VIEW.log.length ? PREV_VIEW.log[PREV_VIEW.log.length - 1] : null;
+    if (newLog && (!oldLog || newLog.ts !== oldLog.ts)) {
+      showToast(newLog.msg);
+    }
+    // 2) 내 점수가 올랐으면 플로터
+    const me = VIEW.myIndex;
+    const before = (PREV_VIEW.scores && PREV_VIEW.scores[me]) || 0;
+    const after  = (VIEW.scores && VIEW.scores[me]) || 0;
+    if (after > before) popScore('+' + (after - before) + '점', 'me');
+    // 상대 점수 상승 — 상대 이름 옆에 플로터
+    VIEW.players.forEach(function (_, i) {
+      if (i === me) return;
+      const b = (PREV_VIEW.scores && PREV_VIEW.scores[i]) || 0;
+      const a = (VIEW.scores && VIEW.scores[i]) || 0;
+      if (a > b) popScore('+' + (a - b) + '점', 'opp-' + i);
+    });
+  }
+
+  function showToast(msg) {
+    let t = $('gameToast');
+    if (!t) {
+      t = document.createElement('div');
+      t.id = 'gameToast';
+      t.className = 'g-toast';
+      document.body.appendChild(t);
+    }
+    t.textContent = msg;
+    t.classList.remove('hidden', 'show');
+    // reflow 강제해 애니메이션 재시작
+    void t.offsetWidth;
+    t.classList.add('show');
+    clearTimeout(t._hideTimer);
+    t._hideTimer = setTimeout(function () {
+      t.classList.remove('show');
+    }, 2400);
+  }
+
+  function popScore(text, slot) {
+    const holder = document.createElement('div');
+    holder.className = 'g-score-pop g-score-pop--' + slot;
+    holder.textContent = text;
+    document.body.appendChild(holder);
+    // 위치 계산 — slot='me' 이면 내 점수 옆, 'opp-i' 면 상대 박스 옆
+    let anchor;
+    if (slot === 'me') anchor = $('gameMyScore');
+    else {
+      const idx = Number(slot.split('-')[1]);
+      const boxes = document.querySelectorAll('.g-opp');
+      anchor = boxes[idx] || null;
+    }
+    if (anchor) {
+      const rect = anchor.getBoundingClientRect();
+      holder.style.left = (rect.left + rect.width / 2) + 'px';
+      holder.style.top  = (rect.top - 4) + 'px';
+    } else {
+      holder.style.left = '50%';
+      holder.style.top  = '30%';
+    }
+    setTimeout(function () { holder.remove(); }, 1400);
   }
 
   function render() {
@@ -82,12 +151,14 @@
       oppEl.appendChild(box);
     });
 
-    // 바닥
+    // 바닥 — 이전 렌더와 비교해 새로 생긴 카드는 deal-in 애니메이션
     const boardEl = $('gameBoard');
     boardEl.innerHTML = '';
     const highlightIds = VIEW.pending && VIEW.pending.choices ? new Set(VIEW.pending.choices) : new Set();
+    const prevBoardIds = new Set((PREV_VIEW && PREV_VIEW.board ? PREV_VIEW.board : []).map(function (c) { return c.id; }));
     VIEW.board.forEach(function (c) {
       const wrap = GostopCards.renderCard(c, { highlight: highlightIds.has(c.id) });
+      if (!prevBoardIds.has(c.id)) wrap.classList.add('is-new');
       if ((VIEW.phase === 'choose-hand-match' || VIEW.phase === 'choose-flip-match') && highlightIds.has(c.id) && isMyTurn) {
         wrap.onclick = function () { chooseMatch(c.id); };
       }
@@ -106,9 +177,10 @@
       handEl.appendChild(wrap);
     });
 
-    // 내 획득 카드 요약
+    // 내 획득 카드 — 요약(칩) + 카드 스택 피크
     const capEl = $('gameMyCaptured');
     capEl.innerHTML = renderCapturedSummary(VIEW.captured[me]);
+    renderCapturedPeek(VIEW.captured[me], 'gameMyCapturedPeek');
     $('gameMyScore').textContent = (VIEW.scores[me] || 0) + '점';
 
     // 덱 뒤집기는 자동 실행 — 손패 낸 뒤 900ms 지연 후 서버에 game:flip 전송
@@ -158,6 +230,32 @@
       '<span class="g-cap-chip cap-animal">열끗 ' + counts.animal + '</span>' +
       '<span class="g-cap-chip cap-ribbon">띠 ' + counts.ribbon + '</span>' +
       '<span class="g-cap-chip cap-junk">피 ' + counts.junk + '</span>';
+  }
+
+  // 획득 카드 피크 — 그룹별로 가장 최근 몇 장을 작은 카드 스택으로 보여줌
+  function renderCapturedPeek(cap, containerId) {
+    const el = document.getElementById(containerId);
+    if (!el) return;
+    el.innerHTML = '';
+    ['light', 'animal', 'ribbon', 'junk'].forEach(function (type) {
+      const pile = cap[type];
+      if (!pile || !pile.length) return;
+      const group = document.createElement('div');
+      group.className = 'g-cap-stack cap-stack-' + type;
+      pile.slice(-4).forEach(function (c, i) {
+        const mini = GostopCards.renderCard(c, {});
+        mini.classList.add('g-cap-mini');
+        mini.style.marginLeft = (i === 0 ? 0 : -12) + 'px';
+        group.appendChild(mini);
+      });
+      if (pile.length > 4) {
+        const more = document.createElement('span');
+        more.className = 'g-cap-more';
+        more.textContent = '+' + (pile.length - 4);
+        group.appendChild(more);
+      }
+      el.appendChild(group);
+    });
   }
 
   function playCard(cardId) {
