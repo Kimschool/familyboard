@@ -116,6 +116,7 @@ function publicUser(u) {
     birthMonth: u.birth_month ?? u.birthMonth ?? null,
     birthDay:   u.birth_day   ?? u.birthDay   ?? null,
     isLunar: !!(u.is_lunar ?? u.isLunar),
+    isPet: !!(u.is_pet ?? u.isPet),
     photoUrl:  u.photo_url   ?? u.photoUrl   ?? null,
   };
 }

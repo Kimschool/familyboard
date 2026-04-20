@@ -367,6 +367,65 @@ app.post(
   }
 );
 
+// ---------- 프로필 사진 업로드 (관리자가 다른 가족 멤버/펫 대상) ----------
+app.post(
+  '/api/users/:id/photo',
+  requireAdmin,
+  (req, res, next) => {
+    profileUpload.single('photo')(req, res, (err) => {
+      if (err) {
+        const msg = err.message === 'invalid-image-type' ? '이미지 파일만 올릴 수 있어요' : (err.message || '업로드 실패');
+        return res.status(400).json({ error: 'upload-failed', message: msg });
+      }
+      if (!req.file) return res.status(400).json({ error: 'no-file', message: '파일이 없어요' });
+      next();
+    });
+  },
+  async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+      if (!Number.isInteger(id)) {
+        fs.unlink(req.file.path, () => {});
+        return res.status(400).json({ error: 'bad-id' });
+      }
+      // 같은 가족인지 확인
+      const [rows] = await getPool().query(
+        'SELECT id, photo_url FROM users WHERE id = ? AND family_id = ? LIMIT 1',
+        [id, req.user.family_id]
+      );
+      if (!rows.length) {
+        fs.unlink(req.file.path, () => {});
+        return res.status(404).json({ error: 'not-found' });
+      }
+      const prev = rows[0].photo_url || null;
+      const publicPath = `/uploads/profiles/${familySubDir(req)}/${req.file.filename}`;
+      await getPool().query('UPDATE users SET photo_url = ? WHERE id = ?', [publicPath, id]);
+      safeUnlinkProfileFile(prev, id);
+      res.json({ ok: true, photoUrl: publicPath });
+    } catch (e) {
+      fs.unlink(req.file.path, () => {});
+      res.status(500).json({ error: 'internal', message: e.message });
+    }
+  }
+);
+
+// ---------- 프로필 사진 삭제 (관리자) ----------
+app.delete('/api/users/:id/photo', requireAdmin, async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id)) return res.status(400).json({ error: 'bad-id' });
+    const [rows] = await getPool().query(
+      'SELECT photo_url FROM users WHERE id = ? AND family_id = ? LIMIT 1',
+      [id, req.user.family_id]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'not-found' });
+    const prev = rows[0].photo_url || null;
+    await getPool().query('UPDATE users SET photo_url = NULL WHERE id = ?', [id]);
+    safeUnlinkProfileFile(prev, id);
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: 'internal', message: e.message }); }
+});
+
 // ---------- 주간 미션 ----------
 app.get('/api/missions/week', requireAuth, async (req, res) => {
   try {
@@ -520,7 +579,7 @@ app.post('/api/invite/:token/accept', async (req, res) => {
 // ---------- 가족 관리 (관리자) ----------
 app.get('/api/users', requireAdmin, async (req, res) => {
   const [rows] = await getPool().query(
-    `SELECT id, username, display_name, role, icon, birth_year, birth_month, birth_day, is_lunar, phone, photo_url,
+    `SELECT id, username, display_name, role, icon, birth_year, birth_month, birth_day, is_lunar, is_pet, phone, photo_url,
             (password_hash IS NOT NULL) AS activated,
             invite_token, invite_expires_at
        FROM users WHERE family_id = ? ORDER BY role DESC, id ASC`,
@@ -528,6 +587,7 @@ app.get('/api/users', requireAdmin, async (req, res) => {
   );
   res.json(rows.map((r) => ({
     ...publicUser(r),
+    isPet: !!r.is_pet,
     phone: normalizePhoneOut(r.phone),
     activated: !!r.activated,
     inviteToken: r.invite_token,
@@ -593,7 +653,7 @@ app.patch('/api/users/:id', requireAdmin, async (req, res) => {
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'bad-id' });
 
   const updates = [], args = [];
-  const { displayName, role, icon, birthYear, birthMonth, birthDay, isLunar, password, phone } = req.body || {};
+  const { displayName, role, icon, birthYear, birthMonth, birthDay, isLunar, isPet, password, phone } = req.body || {};
   if (displayName !== undefined) { updates.push('display_name = ?'); args.push(String(displayName).trim()); }
   if (role !== undefined && (role === 'admin' || role === 'member')) { updates.push('role = ?'); args.push(role); }
   if (icon !== undefined) { updates.push('icon = ?'); args.push(String(icon).trim() || 'star'); }
@@ -601,6 +661,7 @@ app.patch('/api/users/:id', requireAdmin, async (req, res) => {
   if (birthMonth !== undefined) { updates.push('birth_month = ?'); args.push(Number(birthMonth) || null); }
   if (birthDay !== undefined)   { updates.push('birth_day = ?');   args.push(Number(birthDay)   || null); }
   if (isLunar !== undefined)    { updates.push('is_lunar = ?');    args.push(isLunar ? 1 : 0); }
+  if (isPet !== undefined)      { updates.push('is_pet = ?');      args.push(isPet ? 1 : 0); }
   if (phone !== undefined)      { updates.push('phone = ?');       args.push(normalizePhoneIn(phone)); }
   if (password) { updates.push('password_hash = ?'); args.push(bcrypt.hashSync(password, 10)); }
 
@@ -2525,6 +2586,25 @@ function zodiacOf(year) {
   if (!year) return null;
   return ZODIAC[((year % 12) + 12) % 12];
 }
+// 펫 전용 운세 풀 — 일반 띠 운세 대신 펫에게는 여기서 골라 보여줌
+const PET_FORTUNE = [
+  '오늘은 간식을 평소보다 한 입 더 받게 될 거예요',
+  '지나가는 새를 많이 보게 되는 행운이 생길지도',
+  '햇살 좋은 자리에서 낮잠 자기 좋은 날',
+  '주인이 평소보다 한 번 더 안아 줄 거예요',
+  '산책길에 새로운 친구를 만날 수도 있어요',
+  '좋아하는 장난감이 다시 눈에 띄는 날',
+  '식사 시간이 아주 행복한 하루',
+  '꼬리를 흔들 일이 많은 하루',
+  '낯선 소리에도 평소보다 의젓해지는 날',
+  '낮잠이 유난히 달콤한 하루',
+  '익숙한 가족 냄새가 가장 큰 위로가 돼요',
+  '평소보다 더 많이 쓰다듬어 주실 거예요',
+  '간식 주머니가 오늘은 좀 후할지도 몰라요',
+  '뛰어놀고 싶은 에너지가 솟는 하루',
+  '귀여움을 한껏 발휘하면 좋은 일이 생겨요',
+];
+
 const FORTUNE = {
   '쥐':  ['꼼꼼함이 빛을 발하는 하루','작은 정보 하나가 큰 도움이 돼요','돈 관리에 좋은 흐름','가족과의 대화가 기분을 올려줘요','서두르지 않으면 좋은 결과가 있어요','새로운 시도가 재미있을 거예요','조용한 휴식이 필요한 날'],
   '소':  ['한 걸음씩 나아가는 힘이 있어요','꾸준함이 복을 불러와요','무리하지 말고 쉬어 가세요','든든한 한 끼가 마음을 채워줘요','오랜 친구에게 연락해 보세요','작은 성취에 기뻐하는 하루','마음을 비우면 편해져요'],
@@ -2545,17 +2625,28 @@ function dayOfYear(d = new Date()) {
 
 app.get('/api/zodiac', requireAuth, async (req, res) => {
   const [rows] = await getPool().query(
-    `SELECT id, display_name, icon, birth_year FROM users
-      WHERE family_id = ? AND birth_year IS NOT NULL
-      ORDER BY role DESC, id ASC`,
+    `SELECT id, display_name, icon, photo_url, birth_year, is_pet FROM users
+      WHERE family_id = ?
+        AND (birth_year IS NOT NULL OR is_pet = 1)
+      ORDER BY is_pet ASC, role DESC, id ASC`,
     [req.user.family_id]
   );
   const doy = dayOfYear();
   res.json(rows.map((u) => {
+    if (u.is_pet) {
+      const fortune = PET_FORTUNE[(doy + u.id) % PET_FORTUNE.length];
+      return {
+        name: u.display_name, icon: u.icon, photoUrl: u.photo_url,
+        year: u.birth_year, zodiac: '펫', fortune, isPet: true,
+      };
+    }
     const z = zodiacOf(u.birth_year);
     const pool = FORTUNE[z] || [];
     const fortune = pool.length ? pool[(doy + u.id) % pool.length] : '좋은 하루 되세요';
-    return { name: u.display_name, icon: u.icon, year: u.birth_year, zodiac: z, fortune };
+    return {
+      name: u.display_name, icon: u.icon, photoUrl: u.photo_url,
+      year: u.birth_year, zodiac: z, fortune, isPet: false,
+    };
   }));
 });
 

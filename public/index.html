@@ -281,6 +281,18 @@
       <label class="ufi-check" style="margin-top:8px">
         <input id="edAdmin" type="checkbox" /> 관리자 권한
       </label>
+      <label class="ufi-check" style="margin-top:4px">
+        <input id="edPet" type="checkbox" /> 펫(반려동물) — 운세도 펫 전용으로
+      </label>
+      <label class="admin-label" style="margin-top:12px">프로필 사진 (관리자가 대신 올려 줄 수 있어요)</label>
+      <div class="ed-photo-row">
+        <div id="edPhotoPreview" class="ed-photo-preview">없음</div>
+        <div class="ed-photo-actions">
+          <button type="button" id="edPhotoPickBtn" class="ufi-btn">사진 올리기</button>
+          <button type="button" id="edPhotoClearBtn" class="ufi-btn hidden">사진 삭제</button>
+        </div>
+      </div>
+      <input id="edPhotoFile" type="file" class="hidden" accept="image/jpeg,image/png,image/webp,image/heic,image/*" />
       <label class="admin-label" style="margin-top:12px">새 비밀번호 (바꾸려면 입력, 비우면 유지)</label>
       <input id="edPassword" class="ufi" type="password" placeholder="최소 4자" />
       <button id="edSave" type="button" class="user-add" style="margin-top:16px">저장</button>

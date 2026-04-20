@@ -315,11 +315,11 @@ function enterApp() {
   loadChatPeek();
   refreshChatUnread();
 
-  // 관리자 UI — 설정 화면으로 이동 (계정 카드의 '가족 관리' 버튼으로 열림)
+  // 관리자 UI — 가족 공지 위에 아코디언 카드로 노출 (펼침/접힘)
   try {
     if (ME.role === 'admin') {
       $('openSettingsBtn').classList.remove('hidden');
-      migrateAdminToSettings();
+      mountAdminAsAccordion();
       loadUsers();
       loadFamilyInfo();
       renderIconPicker();
@@ -342,6 +342,39 @@ function migrateAdminToSettings() {
     target.appendChild(body);
     adminMigrated = true;
   }
+}
+
+// 관리자 카드를 가족 공지 위로 이동 + 헤더 클릭으로 펼침/접힘 아코디언화 (기본 접힘)
+function mountAdminAsAccordion() {
+  const adminCard = document.getElementById('adminCard');
+  const noticeCard = document.getElementById('noticeCard');
+  const body = document.getElementById('adminBody');
+  if (!adminCard || !noticeCard || !body) return;
+  if (adminCard.dataset.accordionMounted === '1') return;
+  adminCard.dataset.accordionMounted = '1';
+
+  // 보이게 하고 카드 스타일 적용
+  adminCard.removeAttribute('style');
+  adminCard.classList.remove('hidden');
+  adminCard.classList.add('card', 'admin-accordion-card');
+  body.classList.remove('hidden');
+  body.classList.add('admin-accordion-body', 'collapsed');
+
+  // 토글 헤더 삽입
+  const head = document.createElement('button');
+  head.type = 'button';
+  head.className = 'admin-accordion-head';
+  head.setAttribute('aria-expanded', 'false');
+  head.innerHTML = '<span class="aac-title">🛠 관리자 메뉴</span><span class="aac-caret">▾</span>';
+  head.addEventListener('click', () => {
+    const open = body.classList.toggle('collapsed') === false;
+    head.classList.toggle('open', open);
+    head.setAttribute('aria-expanded', open ? 'true' : 'false');
+  });
+  adminCard.insertBefore(head, body);
+
+  // 가족 공지(noticeCard) 바로 위로 이동
+  noticeCard.parentNode.insertBefore(adminCard, noticeCard);
 }
 
 // ---------- Hero ----------
@@ -3257,31 +3290,36 @@ async function loadZodiac() {
     }
     const doy = dayOfYearClient();
     for (const z of list) {
-      const seed = doy + (z.year || 0);
+      const seed = doy + (z.year || z.name?.charCodeAt(0) || 0);
       const color = LUCKY_COLORS[seed % LUCKY_COLORS.length];
       const dir   = LUCKY_DIR[seed % LUCKY_DIR.length];
       const num   = (seed % 9) + 1;
       const li = document.createElement('li');
+      if (z.isPet) li.classList.add('is-pet');
       const activity = TODAY_ACTIVITIES[seed % TODAY_ACTIVITIES.length];
+      // 펫은 행운 chip / 추천 활동 생략 — 펫 운세 한 줄로 깔끔하게
+      const luckyHtml = z.isPet ? '' : `
+          <div class="zodiac-activity">🌿 오늘 추천 <span class="activity-txt"></span></div>
+          <div class="zodiac-lucky">
+            <span class="lucky-chip"><span class="lucky-dot" style="background:${color.hex}"></span>${color.name}</span>
+            <span class="lucky-chip">🧭 ${dir}</span>
+            <span class="lucky-chip">🔢 ${num}</span>
+          </div>`;
       li.innerHTML = `
-        <span class="zodiac-emoji">${inlineAvatarHtml({ name: z.name, icon: z.icon }, 44)}</span>
+        <span class="zodiac-emoji">${inlineAvatarHtml({ name: z.name, icon: z.icon, photoUrl: z.photoUrl }, 44)}</span>
         <div class="zodiac-body">
           <div class="zodiac-top">
             <span class="zodiac-name"></span>
             <span class="zodiac-tag"></span>
           </div>
           <div class="zodiac-fortune"></div>
-          <div class="zodiac-activity">🌿 오늘 추천 <span class="activity-txt"></span></div>
-          <div class="zodiac-lucky">
-            <span class="lucky-chip"><span class="lucky-dot" style="background:${color.hex}"></span>${color.name}</span>
-            <span class="lucky-chip">🧭 ${dir}</span>
-            <span class="lucky-chip">🔢 ${num}</span>
-          </div>
+          ${luckyHtml}
         </div>`;
       li.querySelector('.zodiac-name').textContent = z.name;
-      li.querySelector('.zodiac-tag').textContent = `${z.zodiac}띠`;
+      li.querySelector('.zodiac-tag').textContent = z.isPet ? '🐾 우리 가족 펫' : `${z.zodiac}띠`;
       li.querySelector('.zodiac-fortune').textContent = z.fortune;
-      li.querySelector('.activity-txt').textContent = activity;
+      const aTxt = li.querySelector('.activity-txt');
+      if (aTxt) aTxt.textContent = activity;
       ul.appendChild(li);
     }
   } catch {}
@@ -4494,7 +4532,7 @@ function showStickerNudge() {
   setTimeout(() => el.classList.add('hidden'), 6000);
 }
 
-const REACTION_EMOJIS = ['❤️', '😂', '🥹', '👏', '🙏'];
+const REACTION_EMOJIS = ['❤️', '😂', '🥹', '👏'];
 async function loadYesterdayReveal() {
   try {
     const r = await api('/api/question/yesterday');
@@ -4764,9 +4802,12 @@ function openEditSheet(u) {
   $('edMonth').value = u.birthMonth || '';
   $('edDay').value   = u.birthDay || '';
   $('edLunar').checked = !!u.isLunar;
+  $('edPet').checked = !!u.isPet;
   $('edPhone').value = displayPhone(u.phone);
   $('edAdmin').checked = u.role === 'admin';
   $('edPassword').value = '';
+  // 사진 미리보기
+  renderEdPhotoPreview(u.photoUrl);
   // 아이콘 픽커 (미니)
   const grid = $('edIconPicker');
   grid.innerHTML = '';
@@ -4789,6 +4830,59 @@ $('edClose').addEventListener('click', () => $('editSheet').classList.add('hidde
 $('editSheet').addEventListener('click', (e) => {
   if (e.target.id === 'editSheet') $('editSheet').classList.add('hidden');
 });
+
+function renderEdPhotoPreview(url) {
+  const preview = $('edPhotoPreview');
+  const clearBtn = $('edPhotoClearBtn');
+  if (!preview) return;
+  if (url) {
+    preview.innerHTML = `<img src="${url.replace(/"/g, '')}" alt="" />`;
+    clearBtn?.classList.remove('hidden');
+  } else {
+    preview.innerHTML = '<span class="ed-photo-empty">사진 없음</span>';
+    clearBtn?.classList.add('hidden');
+  }
+}
+
+$('edPhotoPickBtn')?.addEventListener('click', () => $('edPhotoFile')?.click());
+$('edPhotoFile')?.addEventListener('change', async (e) => {
+  const f = e.target.files?.[0];
+  e.target.value = '';
+  if (!f || !EDITING_USER) return;
+  if (!f.type.startsWith('image/')) { alert('이미지 파일을 선택해 주세요'); return; }
+  const btn = $('edPhotoPickBtn');
+  if (btn) { btn.disabled = true; btn.textContent = '올리는 중...'; }
+  try {
+    // 갤러리 업로드처럼 압축 후 전송 (2MB 이하)
+    const blob = await resizeImageToJpegBlob(f, { maxSide: 800, targetBytes: 2 * 1024 * 1024 - 1 });
+    const fd = new FormData();
+    fd.append('photo', blob, 'photo.jpg');
+    const r = await fetch(`/api/users/${EDITING_USER.id}/photo`, {
+      method: 'POST', body: fd, credentials: 'same-origin',
+    });
+    if (!r.ok) {
+      let msg = '업로드 실패';
+      try { const j = await r.json(); if (j.message) msg = j.message; } catch {}
+      throw new Error(msg);
+    }
+    const j = await r.json();
+    EDITING_USER.photoUrl = j.photoUrl;
+    renderEdPhotoPreview(j.photoUrl);
+  } catch (err) {
+    alert(err.message || '업로드 실패');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '사진 올리기'; }
+  }
+});
+$('edPhotoClearBtn')?.addEventListener('click', async () => {
+  if (!EDITING_USER) return;
+  if (!confirm('이 멤버의 사진을 지울까요?')) return;
+  try {
+    await api(`/api/users/${EDITING_USER.id}/photo`, { method: 'DELETE' });
+    EDITING_USER.photoUrl = null;
+    renderEdPhotoPreview(null);
+  } catch { alert('삭제 실패'); }
+});
 $('edSave').addEventListener('click', async () => {
   if (!EDITING_USER) return;
   const body = {
@@ -4798,6 +4892,7 @@ $('edSave').addEventListener('click', async () => {
     birthMonth: $('edMonth').value || null,
     birthDay:   $('edDay').value   || null,
     isLunar: $('edLunar').checked,
+    isPet:   $('edPet').checked,
     phone: $('edPhone').value.trim(),
     role: $('edAdmin').checked ? 'admin' : 'member',
   };
