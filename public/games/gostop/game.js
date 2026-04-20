@@ -103,13 +103,15 @@
     const btnFlip = $('btnFlip');
     btnFlip.classList.toggle('hidden', !(isMyTurn && VIEW.phase === 'flip-stock'));
 
-    // 고/스톱 다이얼로그
+    // 고/스톱 다이얼로그 — 인라인 style 도 함께 토글 (CSS 캐시 내성)
     const gsDlg = $('goStopDialog');
     if (VIEW.phase === 'choose-go-stop' && isMyTurn) {
       gsDlg.classList.remove('hidden');
+      gsDlg.style.display = 'flex';
       $('gsScore').textContent = VIEW.scores[me] + '점';
     } else {
       gsDlg.classList.add('hidden');
+      gsDlg.style.display = 'none';
     }
 
     // 로그
