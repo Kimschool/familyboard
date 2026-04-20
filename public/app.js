@@ -328,10 +328,11 @@ function enterApp() {
     }
   } catch (e) { console.warn('[admin ui]', e); }
 
-  // 계정 카드를 홈 최상단에 올리고 아코디언으로 접힘/펼침 토글
-  mountAccountAsAccordion();
-
   applyCardOrder();
+
+  // 카드 순서 적용 이후에 계정 카드를 최상단으로 이동하고 아코디언 마운트
+  // (applyCardOrder 가 account 카드를 default 순서 맨 뒤로 옮겨버리는 걸 방지)
+  mountAccountAsAccordion();
 }
 
 // 관리자 DOM을 설정 화면 body 로 한 번만 이동

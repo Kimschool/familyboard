@@ -3150,7 +3150,7 @@ body.tod-night .hero-weather { color: rgba(242,242,247,.8); }
   transform: translateY(-50%) rotate(180deg);
   color: var(--text);
 }
-.account-accordion-body.collapsed { display: none; }
+.account-accordion-body.collapsed { display: none !important; }
 
 /* 멤버 편집 시트의 사진 변경 영역 */
 .ed-photo-row {
