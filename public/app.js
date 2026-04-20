@@ -6110,4 +6110,65 @@ setInterval(() => {
   loadChatPeek();
 }, 30000);
 
+// ---------- 바텀 시트 아래로 스와이프 닫기 ----------
+// 상단 핸들 영역(64px) 에서 시작한 아래 방향 드래그만 인식. 100px 넘거나
+// 속도 0.7px/ms 이상이면 닫기, 아니면 원위치로 스냅백. 가로 스와이프·스크롤과 겹치지 않도록
+// 8px 임계값을 넘은 뒤에만 드래그로 확정.
+(function setupSheetSwipeClose() {
+  const HANDLE_REGION = 64;
+  const DIST = 100, VEL = 0.7, VEL_MIN = 40;
+  document.querySelectorAll('.sheet-backdrop').forEach(setupOne);
+
+  function setupOne(backdrop) {
+    const sheet = backdrop.querySelector('.sheet');
+    if (!sheet) return;
+    let startY = 0, startT = 0, dy = 0, armed = false, dragging = false;
+
+    const snapBack = () => {
+      sheet.style.transition = 'transform .22s cubic-bezier(.22,.61,.36,1)';
+      sheet.style.transform = '';
+      setTimeout(() => { sheet.style.transition = ''; }, 230);
+    };
+    const close = () => {
+      sheet.style.transition = 'transform .22s ease-out';
+      sheet.style.transform = 'translateY(100%)';
+      setTimeout(() => {
+        backdrop.classList.add('hidden');
+        sheet.style.transform = '';
+        sheet.style.transition = '';
+      }, 230);
+    };
+
+    sheet.addEventListener('touchstart', (e) => {
+      if (e.touches.length !== 1) { armed = false; return; }
+      const rect = sheet.getBoundingClientRect();
+      const y = e.touches[0].clientY;
+      if (y - rect.top > HANDLE_REGION) { armed = false; return; }
+      startY = y; startT = Date.now(); dy = 0;
+      armed = true; dragging = false;
+    }, { passive: true });
+
+    sheet.addEventListener('touchmove', (e) => {
+      if (!armed || e.touches.length !== 1) return;
+      const d = e.touches[0].clientY - startY;
+      if (d <= 0) { dy = 0; if (dragging) sheet.style.transform = ''; return; }
+      if (!dragging && d > 8) { dragging = true; sheet.style.transition = 'none'; }
+      if (dragging) { dy = d; sheet.style.transform = `translateY(${d}px)`; }
+    }, { passive: true });
+
+    const end = () => {
+      if (!armed) return;
+      armed = false;
+      if (!dragging) return;
+      dragging = false;
+      const dt = Math.max(1, Date.now() - startT);
+      const v = dy / dt;
+      if (dy > DIST || (v > VEL && dy > VEL_MIN)) close();
+      else snapBack();
+    };
+    sheet.addEventListener('touchend', end);
+    sheet.addEventListener('touchcancel', end);
+  }
+})();
+
 boot();
