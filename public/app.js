@@ -2476,19 +2476,22 @@ function renderPollenDays(a) {
   const emojiOf = (lvl) => ({ good: '🌤️',  normal: '🌿',   bad: '🌳',     worst: '⚠️'       }[lvl] || '·');
   // '편백' 같은 토종명만 축약 (모바일 한 줄 유지)
   const shortenPlant = (name) => (name || '').replace(/^일본\s*/, '').replace(/\(.*?\)/g, '').trim();
+  // CSS 캐시/충돌에도 3열 그리드 보장을 위해 핵심 레이아웃은 인라인 style 로 강제
+  const rowStyle = 'display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;';
+  const dayStyle = 'min-width:0;text-align:center;background:var(--card);border-radius:12px;padding:10px 6px 8px;box-shadow:0 1px 3px rgba(0,0,0,.04);border-top:3px solid var(--line);';
   box.innerHTML = `
     <div class="pollen-fc-title">🌸 앞으로 3일 꽃가루</div>
-    <div class="pollen-fc-row">
+    <div class="pollen-fc-row" style="${rowStyle}">
       ${days.slice(0, 3).map((d, i) => {
         const top = d.topPlant && d.topPlant.value >= 2 ? shortenPlant(d.topPlant.name) : '';
         return `
-          <div class="pollen-fc-day lvl-${d.level}">
-            <span class="pollen-fc-day-label">${labelFor(i, d.date)}</span>
-            <div class="pollen-fc-day-body">
-              <span class="pollen-fc-day-emoji">${emojiOf(d.level)}</span>
-              <span class="pollen-fc-day-cat">${catFor(d.level)}</span>
+          <div class="pollen-fc-day lvl-${d.level}" style="${dayStyle}">
+            <span class="pollen-fc-day-label" style="display:block;font-size:12px;font-weight:700;color:var(--sub);">${labelFor(i, d.date)}</span>
+            <div class="pollen-fc-day-body" style="display:flex;align-items:center;justify-content:center;gap:4px;margin:4px 0 3px;">
+              <span class="pollen-fc-day-emoji" style="font-size:18px;line-height:1;">${emojiOf(d.level)}</span>
+              <span class="pollen-fc-day-cat" style="font-size:13.5px;font-weight:800;color:var(--text);">${catFor(d.level)}</span>
             </div>
-            <span class="pollen-fc-day-top">${top ? escapeHtml(top) : ''}</span>
+            <span class="pollen-fc-day-top" style="display:block;font-size:11px;color:var(--sub);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-height:14px;">${top ? escapeHtml(top) : ''}</span>
           </div>`;
       }).join('')}
     </div>`;
@@ -5434,21 +5437,30 @@ async function sendGalleryComment() {
       method: 'POST', body: JSON.stringify({ text }),
     });
     if (input) input.value = '';
-    // 새 댓글이 바로 보이도록 확장 상태로 리로드
     GALLERY_COMMENTS_EXPANDED = true;
-    loadGalleryComments(id);
+    await loadGalleryComments(id);
+    // 방금 올린 댓글을 자연스럽게 보이게 스크롤
+    requestAnimationFrame(() => {
+      const list = $('galleryCommentList');
+      const last = list?.lastElementChild;
+      if (last?.scrollIntoView) {
+        last.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
+    });
   } catch {
     alert('저장 실패');
     if (btn) btn.disabled = false;
   }
 }
 
-async function toggleGalleryLike() {
+async function toggleGalleryLike(opts = {}) {
   const id = GALLERY_DETAIL_ID;
   if (id == null) return;
   const btn = $('galleryLikeBtn');
   if (!btn || btn.disabled) return;
   btn.disabled = true;
+  // 버튼 클릭(더블탭 아닌 경우)에도 펄스 — 피드백 즉시 전달
+  if (!opts.skipPulse) galleryPulseLikeHeart();
   try {
     const res = await api(`/api/gallery/${id}/like`, { method: 'POST' });
     btn.classList.toggle('on', !!res.liked);
@@ -5457,7 +5469,6 @@ async function toggleGalleryLike() {
     $('galleryLikeCount').textContent = formatLikeLabel(res.likeCount);
     const p = GALLERY_CACHE.find((x) => x.id === id);
     if (p) { p.liked = !!res.liked; p.likeCount = res.likeCount || 0; }
-    // 그리드 뱃지 갱신
     renderGalleryCard();
     if (!$('gallerySheet').classList.contains('hidden')) renderGallerySheet(false);
   } catch {} finally { btn.disabled = false; }
@@ -5588,6 +5599,12 @@ $('galleryCommentInput')?.addEventListener('input', (e) => {
   const btn = $('galleryCommentSend');
   if (btn) btn.disabled = !e.target.value.trim();
 });
+// 모바일 키보드 올라온 뒤 입력창이 가려지지 않도록 자동 스크롤
+$('galleryCommentInput')?.addEventListener('focus', () => {
+  setTimeout(() => {
+    $('galleryCommentInput')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, 300);
+});
 // 💬 아이콘 → 입력창 포커스
 $('galleryCommentFocusBtn')?.addEventListener('click', () => {
   $('galleryCommentInput')?.focus();
@@ -5597,10 +5614,46 @@ $('galleryCommentsViewAll')?.addEventListener('click', () => {
   GALLERY_COMMENTS_EXPANDED = !GALLERY_COMMENTS_EXPANDED;
   if (GALLERY_DETAIL_ID != null) loadGalleryComments(GALLERY_DETAIL_ID);
 });
+// 단일 탭 → 라이트박스, 더블 탭 → 좋아요 + 하트 팝 (260ms 디바운스)
+let _galleryImgTapTimer = null;
 $('galleryDetailImg')?.addEventListener('click', () => {
-  const src = $('galleryDetailImg').getAttribute('src');
-  if (src) openLightbox(src);
+  if (_galleryImgTapTimer) {
+    clearTimeout(_galleryImgTapTimer);
+    _galleryImgTapTimer = null;
+    galleryDoubleTapLike();
+    return;
+  }
+  _galleryImgTapTimer = setTimeout(() => {
+    _galleryImgTapTimer = null;
+    const src = $('galleryDetailImg').getAttribute('src');
+    if (src) openLightbox(src);
+  }, 260);
 });
+
+function galleryPlayHeartPop() {
+  const pop = $('galleryHeartPop');
+  if (!pop) return;
+  pop.classList.remove('pop');
+  // 리플로우 강제 — 연속 더블탭에서도 매번 애니메이션이 다시 시작되도록
+  void pop.offsetWidth;
+  pop.classList.add('pop');
+}
+
+function galleryPulseLikeHeart() {
+  const heart = $('galleryLikeHeart');
+  if (!heart) return;
+  heart.classList.remove('pulse');
+  void heart.offsetWidth;
+  heart.classList.add('pulse');
+}
+
+function galleryDoubleTapLike() {
+  galleryPlayHeartPop();
+  galleryPulseLikeHeart();
+  // 좋아요가 꺼진 상태면 ON 으로 (이미 좋아요 상태면 유지 — 인스타와 동일)
+  const p = GALLERY_CACHE.find((x) => x.id === GALLERY_DETAIL_ID);
+  if (p && !p.liked) toggleGalleryLike();
+}
 
 // 네비게이션: 이전/다음 버튼
 $('galleryDetailPrev')?.addEventListener('click', (e) => { e.stopPropagation(); navigateGalleryDetail(-1); });
