@@ -1189,13 +1189,16 @@ app.get('/api/gallery', requireAuth, async (req, res) => {
     const where = before > 0 ? 'WHERE g.family_id = ? AND g.id < ?' : 'WHERE g.family_id = ?';
     const [rows] = await getPool().query(
       `SELECT g.id, g.url, g.caption, g.created_at, g.uploader_id,
-              u.display_name AS uploader_name, u.icon AS uploader_icon, u.photo_url AS uploader_photo
+              u.display_name AS uploader_name, u.icon AS uploader_icon, u.photo_url AS uploader_photo,
+              (SELECT COUNT(*) FROM gallery_likes l WHERE l.photo_id = g.id) AS like_count,
+              (SELECT COUNT(*) FROM gallery_comments c WHERE c.photo_id = g.id) AS comment_count,
+              EXISTS(SELECT 1 FROM gallery_likes l WHERE l.photo_id = g.id AND l.user_id = ?) AS liked
          FROM gallery_photos g
          LEFT JOIN users u ON u.id = g.uploader_id
          ${where}
          ORDER BY g.id DESC
          LIMIT ?`,
-      [...args, limit]
+      [req.user.id, ...args, limit]
     );
     res.json(rows.map((r) => ({
       id: r.id,
@@ -1206,6 +1209,9 @@ app.get('/api/gallery', requireAuth, async (req, res) => {
       uploaderName: r.uploader_name,
       uploaderIcon: r.uploader_icon,
       uploaderPhoto: r.uploader_photo,
+      likeCount: Number(r.like_count) || 0,
+      commentCount: Number(r.comment_count) || 0,
+      liked: !!Number(r.liked),
       canDelete: r.uploader_id === req.user.id || req.user.role === 'admin',
     })));
   } catch (e) { res.status(500).json({ error: 'internal', message: e.message }); }
@@ -1256,8 +1262,106 @@ app.delete('/api/gallery/:id', requireAuth, async (req, res) => {
       return res.status(403).json({ error: 'forbidden' });
     }
     await getPool().query('DELETE FROM gallery_photos WHERE id = ?', [id]);
+    await getPool().query('DELETE FROM gallery_comments WHERE photo_id = ?', [id]);
+    await getPool().query('DELETE FROM gallery_likes WHERE photo_id = ?', [id]);
     safeUnlinkGalleryFile(p.url);
     res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: 'internal', message: e.message }); }
+});
+
+// 같은 가족의 사진인지 확인 (공통)
+async function ensureGalleryPhotoOwnedByFamily(photoId, familyId) {
+  const [rows] = await getPool().query(
+    'SELECT id FROM gallery_photos WHERE id = ? AND family_id = ? LIMIT 1',
+    [photoId, familyId]
+  );
+  return rows.length > 0;
+}
+
+// 댓글 목록
+app.get('/api/gallery/:id/comments', requireAuth, async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id)) return res.status(400).json({ error: 'bad-id' });
+    if (!await ensureGalleryPhotoOwnedByFamily(id, req.user.family_id)) {
+      return res.status(404).json({ error: 'not-found' });
+    }
+    const [rows] = await getPool().query(
+      `SELECT c.id, c.text, c.author_id, c.created_at,
+              u.display_name AS author_name, u.icon AS author_icon, u.photo_url AS author_photo
+         FROM gallery_comments c JOIN users u ON u.id = c.author_id
+        WHERE c.photo_id = ? ORDER BY c.created_at ASC`,
+      [id]
+    );
+    res.json(rows);
+  } catch (e) { res.status(500).json({ error: 'internal', message: e.message }); }
+});
+
+// 댓글 작성
+app.post('/api/gallery/:id/comments', requireAuth, async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id)) return res.status(400).json({ error: 'bad-id' });
+    const text = (req.body?.text || '').toString().trim().slice(0, 300);
+    if (!text) return res.status(400).json({ error: 'empty' });
+    if (!await ensureGalleryPhotoOwnedByFamily(id, req.user.family_id)) {
+      return res.status(404).json({ error: 'not-found' });
+    }
+    const [r] = await getPool().query(
+      'INSERT INTO gallery_comments (photo_id, author_id, text) VALUES (?, ?, ?)',
+      [id, req.user.id, text]
+    );
+    res.json({ ok: true, id: r.insertId });
+  } catch (e) { res.status(500).json({ error: 'internal', message: e.message }); }
+});
+
+// 댓글 삭제 — 작성자 본인 또는 관리자
+app.delete('/api/gallery/:id/comments/:cid', requireAuth, async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const cid = Number(req.params.cid);
+    if (!Number.isInteger(id) || !Number.isInteger(cid)) return res.status(400).json({ error: 'bad-id' });
+    if (!await ensureGalleryPhotoOwnedByFamily(id, req.user.family_id)) {
+      return res.status(404).json({ error: 'not-found' });
+    }
+    const [rows] = await getPool().query(
+      'SELECT author_id FROM gallery_comments WHERE id = ? AND photo_id = ? LIMIT 1',
+      [cid, id]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'not-found' });
+    if (rows[0].author_id !== req.user.id && req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'forbidden' });
+    }
+    await getPool().query('DELETE FROM gallery_comments WHERE id = ?', [cid]);
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: 'internal', message: e.message }); }
+});
+
+// 좋아요 토글
+app.post('/api/gallery/:id/like', requireAuth, async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id)) return res.status(400).json({ error: 'bad-id' });
+    if (!await ensureGalleryPhotoOwnedByFamily(id, req.user.family_id)) {
+      return res.status(404).json({ error: 'not-found' });
+    }
+    const [existing] = await getPool().query(
+      'SELECT 1 FROM gallery_likes WHERE photo_id = ? AND user_id = ? LIMIT 1',
+      [id, req.user.id]
+    );
+    let liked;
+    if (existing.length) {
+      await getPool().query('DELETE FROM gallery_likes WHERE photo_id = ? AND user_id = ?', [id, req.user.id]);
+      liked = false;
+    } else {
+      await getPool().query('INSERT IGNORE INTO gallery_likes (photo_id, user_id) VALUES (?, ?)', [id, req.user.id]);
+      liked = true;
+    }
+    const [cnt] = await getPool().query(
+      'SELECT COUNT(*) AS c FROM gallery_likes WHERE photo_id = ?',
+      [id]
+    );
+    res.json({ ok: true, liked, likeCount: Number(cnt[0].c) || 0 });
   } catch (e) { res.status(500).json({ error: 'internal', message: e.message }); }
 });
 

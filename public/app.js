@@ -5120,10 +5120,20 @@ function renderGalleryCard() {
   for (const p of shown) {
     const div = document.createElement('div');
     div.className = 'gallery-thumb';
-    div.innerHTML = `<img src="${p.url.replace(/"/g, '')}" alt="" loading="lazy" style="width:100%;height:100%;object-fit:cover;display:block" />`;
+    div.innerHTML = `<img src="${p.url.replace(/"/g, '')}" alt="" loading="lazy" style="width:100%;height:100%;object-fit:cover;display:block" />${galleryThumbBadgesHtml(p)}`;
     div.onclick = () => openGalleryDetail(p);
     grid.appendChild(div);
   }
+}
+
+function galleryThumbBadgesHtml(p) {
+  const likes = p.likeCount || 0;
+  const comments = p.commentCount || 0;
+  if (!likes && !comments) return '';
+  const parts = [];
+  if (likes) parts.push(`<span class="gallery-thumb-badge">${p.liked ? '♥' : '♡'} ${likes}</span>`);
+  if (comments) parts.push(`<span class="gallery-thumb-badge">💬 ${comments}</span>`);
+  return `<div class="gallery-thumb-badges">${parts.join('')}</div>`;
 }
 
 function renderGallerySheet(append = false) {
@@ -5135,7 +5145,7 @@ function renderGallerySheet(append = false) {
     const div = document.createElement('div');
     div.className = 'gallery-thumb';
     div.dataset.gid = String(p.id);
-    div.innerHTML = `<img src="${p.url.replace(/"/g, '')}" alt="" loading="lazy" style="width:100%;height:100%;object-fit:cover;display:block" />`;
+    div.innerHTML = `<img src="${p.url.replace(/"/g, '')}" alt="" loading="lazy" style="width:100%;height:100%;object-fit:cover;display:block" />${galleryThumbBadgesHtml(p)}`;
     div.onclick = () => openGalleryDetail(p);
     grid.appendChild(div);
   }
@@ -5174,6 +5184,7 @@ function openGalleryDetail(p) {
   GALLERY_DETAIL_ID = p.id;
   renderGalleryDetail(p);
   $('galleryDetailSheet').classList.remove('hidden');
+  loadGalleryComments(p.id);
 }
 
 /** 현재 상세 사진 렌더 + 앞/뒤 네비 버튼 상태 업데이트 */
@@ -5184,6 +5195,17 @@ function renderGalleryDetail(p) {
   $('galleryDetailCaption').textContent = p.caption || '';
   $('galleryDetailTime').textContent = p.createdAt ? relativeTime(p.createdAt) : '';
   $('galleryDetailDeleteBtn').classList.toggle('hidden', !p.canDelete);
+  // 좋아요 상태
+  const likeBtn = $('galleryLikeBtn');
+  if (likeBtn) {
+    likeBtn.classList.toggle('on', !!p.liked);
+    likeBtn.querySelector('.gallery-like-heart').textContent = p.liked ? '♥' : '♡';
+    $('galleryLikeCount').textContent = String(p.likeCount || 0);
+  }
+  $('galleryCommentBadgeCount').textContent = String(p.commentCount || 0);
+  // 입력창 초기화
+  const input = $('galleryCommentInput');
+  if (input) input.value = '';
   // 앞/뒤 네비 + 카운터
   const idx = GALLERY_CACHE.findIndex((x) => x.id === p.id);
   const total = GALLERY_CACHE.length;
@@ -5200,6 +5222,75 @@ function renderGalleryDetail(p) {
     nextBtn?.classList.toggle('hidden', idx >= total - 1);
     if (counter) counter.textContent = `${idx + 1} / ${total}`;
   }
+}
+
+async function loadGalleryComments(photoId) {
+  const ul = $('galleryCommentList');
+  if (!ul) return;
+  ul.innerHTML = '';
+  try {
+    const list = await api(`/api/gallery/${photoId}/comments`);
+    $('galleryCommentBadgeCount').textContent = String(list.length);
+    const p = GALLERY_CACHE.find((x) => x.id === photoId);
+    if (p) p.commentCount = list.length;
+    for (const c of list) {
+      const li = document.createElement('li');
+      li.innerHTML = `
+        <span class="cm-icon">${inlineAvatarHtml({ id: c.author_id, name: c.author_name, icon: c.author_icon, photoUrl: c.author_photo }, 22)}</span>
+        <div class="cm-body">
+          <div class="cm-head"><span class="cm-name"></span></div>
+          <div class="cm-text"></div>
+        </div>
+        ${c.author_id === ME.id || ME.role === 'admin' ? `<button class="cm-del" data-cid="${c.id}" aria-label="삭제">✕</button>` : ''}`;
+      li.querySelector('.cm-name').textContent = (c.author_name || '') + '님';
+      li.querySelector('.cm-text').textContent = c.text;
+      const del = li.querySelector('.cm-del');
+      if (del) del.onclick = async () => {
+        try {
+          await api(`/api/gallery/${photoId}/comments/${c.id}`, { method: 'DELETE' });
+          loadGalleryComments(photoId);
+        } catch { alert('삭제 실패'); }
+      };
+      ul.appendChild(li);
+    }
+  } catch {}
+}
+
+async function sendGalleryComment() {
+  const id = GALLERY_DETAIL_ID;
+  if (id == null) return;
+  const input = $('galleryCommentInput');
+  const text = (input?.value || '').trim();
+  if (!text) return;
+  const btn = $('galleryCommentSend');
+  if (btn) btn.disabled = true;
+  try {
+    await api(`/api/gallery/${id}/comments`, {
+      method: 'POST', body: JSON.stringify({ text }),
+    });
+    if (input) input.value = '';
+    loadGalleryComments(id);
+  } catch { alert('저장 실패'); }
+  finally { if (btn) btn.disabled = false; }
+}
+
+async function toggleGalleryLike() {
+  const id = GALLERY_DETAIL_ID;
+  if (id == null) return;
+  const btn = $('galleryLikeBtn');
+  if (!btn || btn.disabled) return;
+  btn.disabled = true;
+  try {
+    const res = await api(`/api/gallery/${id}/like`, { method: 'POST' });
+    btn.classList.toggle('on', !!res.liked);
+    btn.querySelector('.gallery-like-heart').textContent = res.liked ? '♥' : '♡';
+    $('galleryLikeCount').textContent = String(res.likeCount || 0);
+    const p = GALLERY_CACHE.find((x) => x.id === id);
+    if (p) { p.liked = !!res.liked; p.likeCount = res.likeCount || 0; }
+    // 그리드 뱃지 갱신
+    renderGalleryCard();
+    if (!$('gallerySheet').classList.contains('hidden')) renderGallerySheet(false);
+  } catch {} finally { btn.disabled = false; }
 }
 
 function navigateGalleryDetail(delta) {
@@ -5316,6 +5407,11 @@ $('galleryDetailSheet')?.addEventListener('click', (e) => {
 });
 $('galleryDetailDeleteBtn')?.addEventListener('click', () => {
   if (GALLERY_DETAIL_ID != null) deleteGalleryPhoto(GALLERY_DETAIL_ID);
+});
+$('galleryLikeBtn')?.addEventListener('click', toggleGalleryLike);
+$('galleryCommentSend')?.addEventListener('click', sendGalleryComment);
+$('galleryCommentInput')?.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') { e.preventDefault(); sendGalleryComment(); }
 });
 $('galleryDetailImg')?.addEventListener('click', () => {
   const src = $('galleryDetailImg').getAttribute('src');

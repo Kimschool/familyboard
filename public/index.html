@@ -1109,6 +1109,23 @@
         <div class="gallery-detail-caption" id="galleryDetailCaption"></div>
         <div class="gallery-detail-time" id="galleryDetailTime"></div>
       </div>
+      <div class="gallery-detail-actions">
+        <button type="button" id="galleryLikeBtn" class="gallery-like-btn" aria-label="좋아요">
+          <span class="gallery-like-heart">♡</span>
+          <span class="gallery-like-count" id="galleryLikeCount">0</span>
+        </button>
+        <span class="gallery-comment-badge">
+          <span>💬</span>
+          <span id="galleryCommentBadgeCount">0</span>
+        </span>
+      </div>
+      <div class="gallery-comment-section" id="galleryCommentSection">
+        <ul class="comment-list" id="galleryCommentList"></ul>
+        <div class="comment-form">
+          <input id="galleryCommentInput" class="comment-input" type="text" maxlength="300" placeholder="따뜻한 한 마디를 남겨 보세요" />
+          <button type="button" id="galleryCommentSend" class="comment-send">보내기</button>
+        </div>
+      </div>
       <button type="button" id="galleryDetailDeleteBtn" class="ufi-btn danger hidden">사진 삭제</button>
     </div>
     <button class="sheet-close" id="galleryDetailClose">닫기</button>
