@@ -64,13 +64,51 @@
     <button id="btnQuit" class="g-back">← 나가기</button>
     <h1>고스톱</h1>
   </header>
-  <section class="g-card">
-    <p class="g-sub">게임 진행은 다음 라운드에서 구현합니다. (엔진/렌더러 골격 완료)</p>
-    <div id="demoHand" class="g-hand"></div>
-  </section>
+
+  <div id="gameStatus" class="g-status"></div>
+
+  <div id="gameOpponents" class="g-opp-wrap"></div>
+
+  <div class="g-board-wrap">
+    <div class="g-board-label">바닥</div>
+    <div id="gameBoard" class="g-board"></div>
+  </div>
+
+  <div class="g-my-wrap">
+    <div class="g-my-head">
+      내 카드
+      <span class="g-my-score" id="gameMyScore">0점</span>
+    </div>
+    <div id="gameMyCaptured" class="g-my-captured"></div>
+    <div id="gameHand" class="g-hand"></div>
+  </div>
+
+  <div class="g-actions">
+    <button id="btnFlip" class="g-primary hidden">덱 뒤집기</button>
+  </div>
+
+  <div class="g-log-wrap">
+    <div class="g-log-head">진행 기록</div>
+    <ul id="gameLog" class="g-log"></ul>
+  </div>
+</div>
+
+<!-- 고/스톱 다이얼로그 -->
+<div id="goStopDialog" class="g-dlg-backdrop hidden">
+  <div class="g-dlg">
+    <h2>🎉 3점 달성!</h2>
+    <p>현재 <b id="gsScore">3점</b>. 여기서 멈출까요, 더 갈까요?</p>
+    <div class="g-dlg-actions">
+      <button id="btnStop" class="g-primary g-dlg-stop">스톱 · 이기기</button>
+      <button id="btnGo" class="g-primary g-dlg-go">고! 계속</button>
+    </div>
+  </div>
 </div>
 
 <script src="/gostop/socket/socket.io.js"></script>
-<script type="module" src="./lobby.js"></script>
+<script src="./engine.js"></script>
+<script src="./cards-svg.js"></script>
+<script src="./lobby.js"></script>
+<script src="./game.js"></script>
 </body>
 </html>

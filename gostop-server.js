@@ -7,7 +7,9 @@
 
 const { Server } = require('socket.io');
 const jwt = require('jsonwebtoken');
+const path = require('path');
 const { getPool } = require('./db');
+const engine = require('./public/games/gostop/engine.js');
 
 // 간단한 쿠키 파서 — fb_token 만 뽑으면 충분
 function parseCookie(header) {
@@ -151,21 +153,82 @@ function attachGostopServer(httpServer) {
       if (typeof ack === 'function') ack({ ok: true });
     });
 
+    // 게임 시작 — 엔진 상태 생성 후 각 플레이어에 맞춤 view 전송
     socket.on('game:start', (_payload, ack) => {
       const roomId = socket.data.roomId;
       const room = ROOMS.get(roomId);
       if (!room) return typeof ack === 'function' && ack({ ok: false, error: 'not-in-room' });
       if (room.hostId !== me.id) return typeof ack === 'function' && ack({ ok: false, error: 'not-host' });
       if (room.players.length < room.playerCount) return typeof ack === 'function' && ack({ ok: false, error: 'not-enough-players' });
-      // TODO: engine.createGame 호출 → 실제 덱·배분·턴 상태
-      room.game = {
-        startedAt: Date.now(),
-        playerCount: room.playerCount,
-        players: room.players.map((p) => ({ userId: p.userId, name: p.name })),
-      };
-      io.to(`room:${room.id}`).emit('game:started', { room: serializeRoom(room), game: room.game });
+      try {
+        room.game = engine.createGame({
+          players: room.players.map((p) => ({ userId: p.userId, name: p.name, icon: p.icon, photoUrl: p.photoUrl })),
+          playerCount: room.playerCount,
+          seed: Date.now(),
+        });
+      } catch (e) {
+        return typeof ack === 'function' && ack({ ok: false, error: e.message });
+      }
+      io.to(`room:${room.id}`).emit('game:started', { room: serializeRoom(room) });
+      broadcastGameView(room);
       if (typeof ack === 'function') ack({ ok: true });
       broadcastRooms(me.familyId);
+    });
+
+    // 내 정보 조회 (클라가 host 판정 등에 사용)
+    socket.on('me', (_payload, ack) => {
+      if (typeof ack === 'function') ack({ user: { id: me.id, name: me.name, icon: me.icon, photoUrl: me.photoUrl } });
+    });
+
+    // 게임 액션: 손패 내기
+    socket.on('game:play', (payload, ack) => {
+      withGame(socket, ack, (room, playerIdx) => {
+        const result = engine.playHandCard(room.game, playerIdx, Number(payload?.cardId), payload?.matchCardId ? Number(payload.matchCardId) : null);
+        room.game = result.state;
+        broadcastGameView(room);
+        return { ok: true, needsMatchChoice: !!result.needsMatchChoice };
+      });
+    });
+
+    // 게임 액션: 같은 달 2장 이상 — 매칭 선택 (손패 단계든 flip 단계든 공용)
+    socket.on('game:match', (payload, ack) => {
+      withGame(socket, ack, (room, playerIdx) => {
+        const matchId = Number(payload?.matchCardId);
+        let result;
+        if (room.game.phase === 'choose-hand-match') {
+          result = engine.resolveHandMatch(room.game, matchId);
+          room.game = result.state;
+          // 매칭 끝나면 flip-stock 단계로 넘어감 — 자동 진행하지 않음 (유저가 flip 버튼 눌러야)
+        } else if (room.game.phase === 'choose-flip-match') {
+          result = engine.resolveFlipMatch(room.game, matchId);
+          room.game = result.state;
+        } else {
+          throw new Error('not in match-choose phase');
+        }
+        broadcastGameView(room);
+        return { ok: true };
+      });
+    });
+
+    // 게임 액션: 덱 뒤집기
+    socket.on('game:flip', (_payload, ack) => {
+      withGame(socket, ack, (room, playerIdx) => {
+        const result = engine.flipStock(room.game, null);
+        room.game = result.state;
+        broadcastGameView(room);
+        return { ok: true, needsMatchChoice: !!result.needsMatchChoice, needsGoStop: !!result.needsGoStop };
+      });
+    });
+
+    // 게임 액션: 고 / 스톱
+    socket.on('game:gostop', (payload, ack) => {
+      withGame(socket, ack, (room, playerIdx) => {
+        const choice = payload?.choice === 'stop' ? 'stop' : 'go';
+        const result = engine.callGoStop(room.game, playerIdx, choice);
+        room.game = result.state;
+        broadcastGameView(room);
+        return { ok: true };
+      });
     });
 
     socket.on('disconnect', () => {
@@ -174,6 +237,35 @@ function attachGostopServer(httpServer) {
       if (room) leaveRoom(room, me.id, socket);
     });
   });
+
+  // 헬퍼: 게임 액션 공통 에러 처리 + 턴 검증
+  function withGame(socket, ack, fn) {
+    try {
+      const roomId = socket.data.roomId;
+      const room = ROOMS.get(roomId);
+      if (!room || !room.game) throw new Error('not-in-game');
+      const playerIdx = room.game.players.findIndex((p) => p.userId === socket.user.id);
+      if (playerIdx < 0) throw new Error('not-a-player');
+      if (room.game.turn !== playerIdx && !['choose-hand-match', 'choose-flip-match', 'choose-go-stop'].includes(room.game.phase)) {
+        // 턴 검증은 phase 에 따라 엔진이 추가로 검증
+      }
+      const res = fn(room, playerIdx);
+      if (typeof ack === 'function') ack(res || { ok: true });
+    } catch (e) {
+      if (typeof ack === 'function') ack({ ok: false, error: e.message });
+    }
+  }
+
+  // 각 플레이어에게 본인 시점의 view 만 보내고, 룸 전체엔 공통 이벤트 알림
+  function broadcastGameView(room) {
+    const game = room.game;
+    room.players.forEach((p, idx) => {
+      const playerIdx = game.players.findIndex((gp) => gp.userId === p.userId);
+      if (playerIdx < 0) return;
+      const view = engine.viewFor(game, playerIdx);
+      io.to(p.socketId).emit('game:view', view);
+    });
+  }
 
   function leaveRoom(room, userId, socket) {
     room.players = room.players.filter((p) => p.userId !== userId);
