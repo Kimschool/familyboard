@@ -173,6 +173,8 @@ async function goStep2(alias) {
 function renderMemberGrid(members) {
   const grid = $('memberGrid');
   grid.innerHTML = '';
+  // 펫은 로그인 대상 아님 — 목록에서 제외
+  members = (members || []).filter((m) => !m.isPet);
   if (!members.length) {
     grid.innerHTML = '<p class="zodiac-empty">구성원이 아직 없어요</p>';
     return;
@@ -189,8 +191,11 @@ function renderMemberGrid(members) {
     const isLast = m.id === lastId;
     const btn = document.createElement('button');
     btn.className = 'member-card' + (m.activated ? '' : ' pending') + (isLast ? ' recent' : '');
+    const avatarHtml = m.photoUrl
+      ? `<img src="${m.photoUrl.replace(/"/g, '')}" alt="" class="member-photo" />`
+      : iconEmoji(m.icon);
     btn.innerHTML = `
-      <span class="member-emoji">${iconEmoji(m.icon)}</span>
+      <span class="member-emoji">${avatarHtml}</span>
       <span class="member-name"></span>
       ${isLast ? '<span class="member-recent-tag">최근 로그인</span>' : ''}
       ${m.activated ? '' : '<span class="member-pending">초대 대기</span>'}
@@ -202,7 +207,12 @@ function renderMemberGrid(members) {
         return;
       }
       PICKED = m;
-      $('pickedIcon').textContent = iconEmoji(m.icon);
+      const pickedIconEl = $('pickedIcon');
+      if (m.photoUrl) {
+        pickedIconEl.innerHTML = `<img src="${m.photoUrl.replace(/"/g, '')}" alt="" class="auth-big-photo" />`;
+      } else {
+        pickedIconEl.textContent = iconEmoji(m.icon);
+      }
       $('pickedName').textContent = m.displayName;
       $('pw').value = '';
       showOnly('step3');

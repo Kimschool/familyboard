@@ -94,6 +94,17 @@ img, video, iframe, svg { max-width: 100%; }
   font-size: 88px;
   line-height: 1;
   margin: 10px 0 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.auth-big-photo {
+  width: 96px;
+  height: 96px;
+  border-radius: 50%;
+  object-fit: cover;
+  display: block;
+  box-shadow: 0 2px 12px rgba(0,0,0,.18);
 }
 .auth-title {
   font-size: 32px;
@@ -219,7 +230,22 @@ html[data-scheme="hc"] .family-welcome-label {
 .member-card:hover { border-color: var(--primary); }
 .member-card:active { transform: scale(.97); }
 .member-card.pending { opacity: .5; }
-.member-emoji { font-size: 56px; line-height: 1; }
+.member-emoji {
+  font-size: 56px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 64px;
+  height: 64px;
+}
+.member-photo {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  object-fit: cover;
+  display: block;
+}
 .member-name { font-size: 19px; font-weight: 700; }
 .member-pending {
   font-size: 11px;
