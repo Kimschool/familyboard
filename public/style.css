@@ -3122,28 +3122,35 @@ body.tod-night .hero-weather { color: rgba(242,242,247,.8); }
 .admin-section { padding: 14px 0; border-top: 1px solid var(--line); }
 .admin-section:first-child { border-top: none; padding-top: 4px; }
 
-/* 관리자 카드 아코디언 (홈 가족 공지 바로 위) */
-.admin-accordion-card { padding: 0; overflow: hidden; }
-.admin-accordion-head {
-  display: flex; align-items: center; justify-content: space-between;
-  width: 100%;
-  background: transparent;
-  border: none;
-  padding: 14px 18px;
-  font-size: 15.5px;
-  font-weight: 800;
-  color: var(--text);
+/* 계정 카드 아코디언 (홈 최상단) — account-row 가 헤더 역할 */
+.account-card .account-row.account-accordion-head {
   cursor: pointer;
-  font-family: inherit;
   -webkit-tap-highlight-color: transparent;
-  letter-spacing: -0.2px;
+  position: relative;
+  padding-right: 34px;
+  transition: background .15s;
+  border-radius: 12px;
+  margin: -6px -6px 6px;
+  padding-left: 6px;
+  padding-top: 6px;
+  padding-bottom: 6px;
 }
-.admin-accordion-head:hover { background: var(--bg); }
-.aac-title { display: inline-flex; align-items: center; gap: 8px; }
-.aac-caret { transition: transform .25s; font-size: 14px; color: var(--sub); }
-.admin-accordion-head.open .aac-caret { transform: rotate(180deg); color: var(--text); }
-.admin-accordion-body { padding: 0 18px 18px; }
-.admin-accordion-body.collapsed { display: none; }
+.account-card .account-row.account-accordion-head:hover { background: var(--bg); }
+.account-card .account-caret {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 15px;
+  color: var(--sub);
+  transition: transform .25s;
+  pointer-events: none;
+}
+.account-card .account-row.open .account-caret {
+  transform: translateY(-50%) rotate(180deg);
+  color: var(--text);
+}
+.account-accordion-body.collapsed { display: none; }
 
 /* 멤버 편집 시트의 사진 변경 영역 */
 .ed-photo-row {

@@ -315,11 +315,11 @@ function enterApp() {
   loadChatPeek();
   refreshChatUnread();
 
-  // 관리자 UI — 가족 공지 위에 아코디언 카드로 노출 (펼침/접힘)
+  // 관리자 UI — 설정 화면으로 이동 (계정 카드의 '가족 관리' 버튼으로 열림)
   try {
     if (ME.role === 'admin') {
       $('openSettingsBtn').classList.remove('hidden');
-      mountAdminAsAccordion();
+      migrateAdminToSettings();
       loadUsers();
       loadFamilyInfo();
       renderIconPicker();
@@ -327,6 +327,9 @@ function enterApp() {
       loadSosAdmin();
     }
   } catch (e) { console.warn('[admin ui]', e); }
+
+  // 계정 카드를 홈 최상단에 올리고 아코디언으로 접힘/펼침 토글
+  mountAccountAsAccordion();
 
   applyCardOrder();
 }
@@ -344,37 +347,51 @@ function migrateAdminToSettings() {
   }
 }
 
-// 관리자 카드를 가족 공지 위로 이동 + 헤더 클릭으로 펼침/접힘 아코디언화 (기본 접힘)
-function mountAdminAsAccordion() {
-  const adminCard = document.getElementById('adminCard');
-  const noticeCard = document.getElementById('noticeCard');
-  const body = document.getElementById('adminBody');
-  if (!adminCard || !noticeCard || !body) return;
-  if (adminCard.dataset.accordionMounted === '1') return;
-  adminCard.dataset.accordionMounted = '1';
+// 계정 카드를 홈 최상단으로 이동 + 헤더 클릭으로 아코디언 토글 (기본 접힘).
+// 헤더 = 기존 .account-row (아바타 + 이름). 나머지(글자 크기·화면 톤·메뉴) 는 접히는 본문.
+function mountAccountAsAccordion() {
+  const card = document.querySelector('.account-card');
+  if (!card || card.dataset.accordionMounted === '1') return;
+  card.dataset.accordionMounted = '1';
 
-  // 보이게 하고 카드 스타일 적용
-  adminCard.removeAttribute('style');
-  adminCard.classList.remove('hidden');
-  adminCard.classList.add('card', 'admin-accordion-card');
-  body.classList.remove('hidden');
-  body.classList.add('admin-accordion-body', 'collapsed');
+  const row = card.querySelector('.account-row');
+  if (!row) return;
 
-  // 토글 헤더 삽입
-  const head = document.createElement('button');
-  head.type = 'button';
-  head.className = 'admin-accordion-head';
-  head.setAttribute('aria-expanded', 'false');
-  head.innerHTML = '<span class="aac-title">🛠 관리자 메뉴</span><span class="aac-caret">▾</span>';
-  head.addEventListener('click', () => {
+  // 본문(나머지 자식 전부) 을 wrapper 로 묶어 collapsed 토글 가능하게
+  const body = document.createElement('div');
+  body.className = 'account-accordion-body collapsed';
+  const children = Array.from(card.children).filter((el) => el !== row);
+  children.forEach((c) => body.appendChild(c));
+  card.appendChild(body);
+
+  // account-row 를 버튼화 — 클릭 시 펼침/접힘
+  row.classList.add('account-accordion-head');
+  row.setAttribute('role', 'button');
+  row.setAttribute('tabindex', '0');
+  row.setAttribute('aria-expanded', 'false');
+
+  // 우측에 caret 삽입
+  const caret = document.createElement('span');
+  caret.className = 'aac-caret account-caret';
+  caret.textContent = '▾';
+  row.appendChild(caret);
+
+  const toggle = () => {
     const open = body.classList.toggle('collapsed') === false;
-    head.classList.toggle('open', open);
-    head.setAttribute('aria-expanded', open ? 'true' : 'false');
+    row.classList.toggle('open', open);
+    row.setAttribute('aria-expanded', open ? 'true' : 'false');
+  };
+  row.addEventListener('click', toggle);
+  row.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); }
   });
-  adminCard.insertBefore(head, body);
 
-  // 가족 공지(noticeCard) 바로 위로 이동
-  noticeCard.parentNode.insertBefore(adminCard, noticeCard);
+  // 홈 #app 의 맨 앞(hero 다음) 에 위치 — notice/공지보다도 위
+  const app = document.getElementById('app');
+  const hero = document.getElementById('heroEl');
+  if (app && hero && hero.nextSibling) {
+    app.insertBefore(card, hero.nextSibling);
+  }
 }
 
 // ---------- Hero ----------
