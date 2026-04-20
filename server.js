@@ -1,4 +1,5 @@
 require('dotenv').config();
+const http = require('http');
 const express = require('express');
 const path = require('path');
 const fs = require('fs');
@@ -10,6 +11,7 @@ const {
   requireAuth, requireAdmin, publicUser,
   newInviteToken, INVITE_TTL_DAYS,
 } = require('./auth');
+const { attachGostopServer } = require('./gostop-server');
 
 const app = express();
 
@@ -2939,5 +2941,8 @@ const PORT = Number(process.env.PORT || 3003);
     console.log('[db] schema ready');
     await bootstrapAdmin();
   } catch (e) { console.warn('[db] init failed (continuing):', e.message); }
-  app.listen(PORT, () => console.log(`familyboard listening on :${PORT}`));
+  // socket.io 는 http.Server 에 attach 해야 하므로 express → http.createServer 래핑
+  const httpServer = http.createServer(app);
+  attachGostopServer(httpServer);
+  httpServer.listen(PORT, () => console.log(`familyboard listening on :${PORT}`));
 })();

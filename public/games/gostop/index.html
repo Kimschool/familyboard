@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover" />
+<title>고스톱 (테스트)</title>
+<link rel="stylesheet" href="./gostop.css" />
+</head>
+<body>
+<div id="lobby" class="screen">
+  <header class="g-head">
+    <button class="g-back" onclick="location.href='/'">← familyboard</button>
+    <h1>🎴 고스톱</h1>
+    <span class="g-badge">TEST</span>
+  </header>
+
+  <section class="g-card">
+    <h2>방 만들기</h2>
+    <p class="g-sub">인원수를 고르고 방을 만들면 가족 로비에 표시됩니다.</p>
+    <div class="g-pc-picker">
+      <button class="g-pc-btn is-selected" data-pc="2">2인<br><span>맞고</span></button>
+      <button class="g-pc-btn" data-pc="3">3인<br><span>고스톱</span></button>
+      <button class="g-pc-btn" data-pc="4">4인<br><span>고스톱</span></button>
+    </div>
+    <button id="btnCreate" class="g-primary">방 만들기</button>
+  </section>
+
+  <section class="g-card">
+    <h2>참여할 수 있는 방</h2>
+    <ul id="roomList" class="g-room-list"></ul>
+    <p id="roomEmpty" class="g-empty">아직 열려 있는 방이 없어요.</p>
+  </section>
+
+  <section class="g-card">
+    <h2>방 코드로 입장</h2>
+    <div class="g-join-row">
+      <input id="joinCode" type="text" maxlength="6" placeholder="예: K9P7X2" autocapitalize="characters" />
+      <button id="btnJoin" class="g-primary">입장</button>
+    </div>
+  </section>
+</div>
+
+<div id="room" class="screen hidden">
+  <header class="g-head">
+    <button id="btnLeave" class="g-back">← 로비</button>
+    <h1 id="roomTitle">방</h1>
+    <span class="g-badge" id="roomCode">—</span>
+  </header>
+  <section class="g-card">
+    <h2>참가자 <span id="roomCount" class="g-sub">(0/0)</span></h2>
+    <ul id="playerList" class="g-player-list"></ul>
+    <button id="btnStart" class="g-primary hidden">게임 시작</button>
+    <p class="g-sub" id="waitingMsg">방장이 게임을 시작하면 카드가 분배됩니다.</p>
+  </section>
+  <section class="g-card">
+    <h2>방 공유</h2>
+    <p class="g-sub">가족에게 이 코드를 알려주세요.</p>
+    <div class="g-code-big" id="bigCode">—</div>
+  </section>
+</div>
+
+<div id="game" class="screen hidden">
+  <header class="g-head">
+    <button id="btnQuit" class="g-back">← 나가기</button>
+    <h1>고스톱</h1>
+  </header>
+  <section class="g-card">
+    <p class="g-sub">게임 진행은 다음 라운드에서 구현합니다. (엔진/렌더러 골격 완료)</p>
+    <div id="demoHand" class="g-hand"></div>
+  </section>
+</div>
+
+<script src="/gostop/socket/socket.io.js"></script>
+<script type="module" src="./lobby.js"></script>
+</body>
+</html>

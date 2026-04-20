@@ -1,0 +1,123 @@
+/* 고스톱 테스트 페이지 — familyboard 와 비슷한 톤, 독립 스타일 */
+:root {
+  --bg: #FAF3E3;
+  --card: #FFFFFF;
+  --text: #1C1C1E;
+  --sub: #6E6E73;
+  --line: #E5E5EA;
+  --primary: #0A84FF;
+  --accent: #C24A2E;
+  --success: #34C759;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  -webkit-text-size-adjust: 100%; }
+body { min-height: 100vh; padding-bottom: 40px; }
+
+.screen { max-width: 560px; margin: 0 auto; padding: 16px; }
+.screen.hidden { display: none; }
+
+.g-head {
+  display: flex; align-items: center; gap: 12px;
+  margin: 8px 0 18px;
+}
+.g-head h1 { font-size: 22px; margin: 0; letter-spacing: -0.5px; }
+.g-back {
+  background: transparent; border: none; color: var(--primary);
+  font-size: 14.5px; font-weight: 700; cursor: pointer; padding: 6px 0;
+}
+.g-badge {
+  margin-left: auto; background: var(--accent); color: #fff;
+  font-size: 10px; font-weight: 800; padding: 3px 8px; border-radius: 999px;
+  letter-spacing: 1px;
+}
+
+.g-card {
+  background: var(--card); border-radius: 14px; padding: 16px 18px;
+  box-shadow: 0 1px 2px rgba(0,0,0,.04), 0 4px 16px rgba(0,0,0,.04);
+  margin-bottom: 14px;
+}
+.g-card h2 { margin: 0 0 8px; font-size: 16px; }
+.g-sub { color: var(--sub); font-size: 13.5px; margin: 0 0 12px; line-height: 1.55; }
+
+.g-pc-picker { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 10px 0 12px; }
+.g-pc-btn {
+  background: var(--bg); border: 2px solid transparent; border-radius: 12px;
+  padding: 12px 6px; font-family: inherit; color: var(--text);
+  font-size: 16px; font-weight: 800; cursor: pointer; line-height: 1.3;
+  -webkit-tap-highlight-color: transparent; transition: transform .12s, border-color .15s;
+}
+.g-pc-btn span { display: block; font-size: 11.5px; font-weight: 600; color: var(--sub); margin-top: 3px; }
+.g-pc-btn.is-selected { border-color: var(--primary); background: rgba(10,132,255,.08); }
+.g-pc-btn:active { transform: scale(.96); }
+
+.g-primary {
+  display: block; width: 100%; height: 48px; border: none; border-radius: 12px;
+  background: var(--primary); color: #fff;
+  font-size: 16px; font-weight: 800; cursor: pointer; font-family: inherit;
+  -webkit-tap-highlight-color: transparent; transition: transform .12s, opacity .15s;
+}
+.g-primary:active { transform: scale(.98); }
+.g-primary:disabled { opacity: .45; cursor: default; }
+
+.g-room-list { list-style: none; padding: 0; margin: 0; }
+.g-room-list li {
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px; border: 1px solid var(--line); border-radius: 12px;
+  margin-bottom: 8px; cursor: pointer;
+  transition: transform .12s, border-color .15s;
+}
+.g-room-list li:active { transform: scale(.98); border-color: var(--primary); }
+.g-rl-code { font-weight: 800; font-size: 15px; }
+.g-rl-meta { color: var(--sub); font-size: 13px; margin-left: auto; }
+.g-empty { color: var(--sub); text-align: center; padding: 16px 0; font-size: 14px; }
+
+.g-join-row { display: flex; gap: 8px; }
+.g-join-row input {
+  flex: 1; height: 48px; border: 1px solid var(--line); border-radius: 12px;
+  padding: 0 14px; font-size: 16px; font-weight: 700; letter-spacing: 2px;
+  text-transform: uppercase; text-align: center;
+  font-family: inherit; background: var(--bg);
+}
+.g-join-row button { flex: 0 0 auto; padding: 0 18px; }
+
+.g-player-list { list-style: none; padding: 0; margin: 0 0 12px; }
+.g-player-list li {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 4px; border-top: 1px solid var(--line); font-size: 15px;
+}
+.g-player-list li:first-child { border-top: none; }
+.g-pl-avatar {
+  width: 32px; height: 32px; border-radius: 50%; background: var(--bg);
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 18px; overflow: hidden; flex-shrink: 0;
+}
+.g-pl-avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.g-pl-name { font-weight: 700; }
+.g-pl-host { font-size: 11px; font-weight: 800; color: var(--primary);
+  background: rgba(10,132,255,.12); padding: 2px 7px; border-radius: 999px; margin-left: auto; }
+.g-pl-waiting { color: var(--sub); font-style: italic; }
+
+.g-code-big {
+  text-align: center; font-size: 36px; font-weight: 900; letter-spacing: 5px;
+  color: var(--primary); background: rgba(10,132,255,.08); padding: 18px;
+  border-radius: 12px; font-family: 'SF Mono', 'Courier New', monospace;
+  user-select: all;
+}
+
+/* 손패 표시 (데모) */
+.g-hand {
+  display: flex; gap: 4px; overflow-x: auto; padding: 8px 2px;
+  margin-top: 10px;
+}
+.hwa-card-wrap {
+  flex: 0 0 auto;
+  width: 60px; height: 96px;
+  cursor: pointer;
+  transition: transform .15s;
+  -webkit-tap-highlight-color: transparent;
+}
+.hwa-card-wrap:hover { transform: translateY(-4px); }
+.hwa-card-wrap.is-selected { transform: translateY(-8px); }
+.hwa-card { width: 100%; height: 100%; display: block; filter: drop-shadow(0 2px 4px rgba(0,0,0,.15)); }
