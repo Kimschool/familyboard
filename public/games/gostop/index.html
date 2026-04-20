@@ -4,7 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover" />
 <title>고스톱 (테스트)</title>
-<link rel="stylesheet" href="./gostop.css?v=14" />
+<link rel="stylesheet" href="./gostop.css?v=15" />
 </head>
 <body>
 <div id="lobby" class="screen">
@@ -63,6 +63,7 @@
   <header class="g-head g-table-head">
     <button id="btnQuit" class="g-back">← 나가기</button>
     <div id="gameStatus" class="g-status g-status-compact"></div>
+    <button id="btnMute" class="g-mute-btn" aria-label="음소거 토글" title="소리 켜기/끄기">🔊</button>
   </header>
 
   <!-- 상대 영역 (상단) -->
@@ -129,9 +130,10 @@
 </div>
 
 <script src="/gostop/socket/socket.io.js"></script>
-<script src="./engine.js?v=14"></script>
-<script src="./cards-svg.js?v=14"></script>
-<script src="./lobby.js?v=14"></script>
-<script src="./game.js?v=14"></script>
+<script src="./engine.js?v=15"></script>
+<script src="./cards-svg.js?v=15"></script>
+<script src="./sfx.js?v=15"></script>
+<script src="./lobby.js?v=15"></script>
+<script src="./game.js?v=15"></script>
 </body>
 </html>

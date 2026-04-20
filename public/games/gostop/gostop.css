@@ -265,6 +265,21 @@ body { min-height: 100vh; padding-bottom: 40px; }
 .g-status-compact .g-status-turn.is-me { background: none; color: #FFF07A; animation: none; padding: 0; }
 .g-status-compact .g-status-phase { opacity: .8; font-weight: 500; }
 .g-status-compact .g-status-stock { margin-left: auto; opacity: .6; font-size: 11px; }
+.g-mute-btn {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  width: 34px; height: 34px;
+  font-size: 16px;
+  cursor: pointer;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  -webkit-tap-highlight-color: transparent;
+}
+.g-mute-btn.is-muted { opacity: .45; }
+.g-mute-btn:active { transform: scale(.92); }
 
 /* 녹색 펠트 테이블 */
 .g-felt {

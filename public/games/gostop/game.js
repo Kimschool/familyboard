@@ -34,6 +34,22 @@
   function fireDiffEffects() {
     if (!PREV_VIEW || !VIEW) return;
     const me = VIEW.myIndex;
+    const SFX = window.GostopSFX ? window.GostopSFX.sfx : null;
+    // 새 카드 등장 — 출처에 따라 효과음
+    const prevBoardIds = new Set(PREV_VIEW.board.map(function (c) { return c.id; }));
+    const newBoardCount = VIEW.board.filter(function (c) { return !prevBoardIds.has(c.id); }).length;
+    if (newBoardCount > 0 && SFX) {
+      const stockDropped = PREV_VIEW.stockCount > VIEW.stockCount;
+      if (stockDropped) SFX.flip();
+      else SFX.slap();
+    }
+    // 캡처 발생 — ching
+    const prevTotal = PREV_VIEW.board.length;
+    const curTotal = VIEW.board.length;
+    const captured = PREV_VIEW.board.filter(function (c) { return !VIEW.board.find(function (b) { return b.id === c.id; }); });
+    if (captured.length && SFX) SFX.ching();
+    // 내 차례로 바뀌었으면 알림 삐
+    if (PREV_VIEW.turn !== VIEW.turn && VIEW.turn === me && !VIEW.finished && SFX) SFX.myturn();
     // 1) 최근 로그가 바뀌었으면 토스트
     const newLog = VIEW.log && VIEW.log.length ? VIEW.log[VIEW.log.length - 1] : null;
     const oldLog = PREV_VIEW.log && PREV_VIEW.log.length ? PREV_VIEW.log[PREV_VIEW.log.length - 1] : null;
@@ -70,13 +86,19 @@
       if (winner === me) {
         bigCallout('승리!', 'victory', 2500);
         fireConfetti();
+        if (SFX) SFX.fanfare();
       } else if (winner != null) {
         bigCallout(VIEW.players[winner].name + '님 승', 'defeat', 2500);
+        if (SFX) SFX.lose();
       } else {
         bigCallout('무승부', 'neutral', 2000);
       }
       // 2.5초 뒤 결과 오버레이 표시
       setTimeout(function () { showEndDialog(); }, 2000);
+    }
+    // 고/스톱 로그 감지 시 해당 사운드
+    if (newLog && (!oldLog || newLog.ts !== oldLog.ts) && SFX) {
+      if (/고!\s*계속/.test(newLog.msg)) SFX.gong();
     }
   }
 
@@ -464,6 +486,26 @@
       if (!res || !res.ok) alert(res && res.error || '뒤집기 실패');
     });
   });
+
+  // 음소거 토글
+  (function setupMute() {
+    const btn = $('btnMute');
+    if (!btn || !window.GostopSFX) return;
+    const render = function () {
+      const m = window.GostopSFX.isMuted();
+      btn.textContent = m ? '🔇' : '🔊';
+      btn.classList.toggle('is-muted', m);
+    };
+    render();
+    btn.addEventListener('click', function () {
+      window.GostopSFX.setMuted(!window.GostopSFX.isMuted());
+      // 첫 제스처이므로 AudioContext resume
+      window.GostopSFX.ensure && window.GostopSFX.ensure();
+      render();
+      // 음 켠 직후 짧은 확인 효과음
+      if (!window.GostopSFX.isMuted()) window.GostopSFX.sfx.myturn();
+    });
+  })();
   $('btnGo').addEventListener('click', function () {
     socket().emit('game:gostop', { choice: 'go' }, function () {});
   });
