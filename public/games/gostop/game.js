@@ -5,6 +5,7 @@
 
   let VIEW = null;            // 서버가 보내준 내 시점 뷰
   let PENDING_HAND_CARD = null; // 선택해 둔 손패 카드 id (멀티매칭 선택 중)
+  let _autoFlipPending = false; // 자동 뒤집기 중복 호출 방지 플래그
 
   function socket() { return window.GostopSocket; }
 
@@ -110,9 +111,17 @@
     capEl.innerHTML = renderCapturedSummary(VIEW.captured[me]);
     $('gameMyScore').textContent = (VIEW.scores[me] || 0) + '점';
 
-    // 액션 버튼
+    // 덱 뒤집기는 자동 실행 — 손패 낸 뒤 900ms 지연 후 서버에 game:flip 전송
+    // (사용자가 방금 낸 카드 결과를 볼 시간 확보 + 연속 호출 방지)
     const btnFlip = $('btnFlip');
-    btnFlip.classList.toggle('hidden', !(isMyTurn && VIEW.phase === 'flip-stock'));
+    btnFlip.classList.add('hidden'); // 버튼은 숨김 (필요 시 수동 백업용)
+    if (isMyTurn && VIEW.phase === 'flip-stock' && !_autoFlipPending) {
+      _autoFlipPending = true;
+      setTimeout(function () {
+        _autoFlipPending = false;
+        socket().emit('game:flip', null, function () {});
+      }, 900);
+    }
 
     // 고/스톱 다이얼로그 — 인라인 style 도 함께 토글 (CSS 캐시 내성)
     const gsDlg = $('goStopDialog');
