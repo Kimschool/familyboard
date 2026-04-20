@@ -1511,7 +1511,7 @@ body.tod-night .hero-weather { color: rgba(242,242,247,.8); }
 }
 .ev-emoji-picker {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: 6px;
 }
 .ev-emoji-opt {
@@ -3131,12 +3131,21 @@ body.tod-night .hero-weather { color: rgba(242,242,247,.8); }
 .ufi, .ufi-s {
   height: 44px; border: 1px solid var(--line); border-radius: var(--r-sm);
   background: var(--bg); color: var(--text); padding: 0 12px;
-  /* 16px 미만이면 iOS Safari 가 포커스 시 자동 확대하므로 16px 로 고정 */
   font-size: 16px; outline: none;
   min-width: 0;
   box-sizing: border-box;
 }
 .ufi { flex: 1; width: 100%; }
+
+/* ===== iOS Safari 포커스 시 자동 확대 방지 — 모든 입력 16px 이상 강제 ===== */
+/* 16px 미만이면 iOS 는 포커스 시 확대 → 레이아웃 전체가 줌 됨. 폰트 크기를 16px 로
+   통일해 레이아웃을 유지한다. (텍스트성 input / textarea / select 만, 버튼·체크박스·파일
+   등 실제 폰트가 필요 없는 타입은 제외.) */
+input:not([type="submit"]):not([type="button"]):not([type="reset"]):not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="hidden"]):not([type="range"]):not([type="color"]),
+textarea,
+select {
+  font-size: 16px !important;
+}
 .ufi:focus, .ufi-s:focus { border-color: var(--primary); background: var(--card); }
 .ufi-btn {
   height: 44px; padding: 0 14px; border: 1px solid var(--line); border-radius: var(--r-sm);
@@ -4371,8 +4380,8 @@ li.memo-important .memo-text { font-weight: 700; }
   font-size: 15px;
   font-weight: 600;
 }
-/* 공용 확인 다이얼로그 — 다른 시트보다 항상 위에 뜨도록 z-index 우선 */
-#confirmSheet { z-index: 1100; }
+/* 공용 확인 다이얼로그 — 다른 시트(1000)·이미지 라이트박스 포함 모든 오버레이보다 위 */
+#confirmSheet { z-index: 2000 !important; }
 .confirm-sheet {
   max-width: 420px;
   margin: 0 auto;

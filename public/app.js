@@ -1823,9 +1823,9 @@ $('evEmojiPicker')?.addEventListener('click', (e) => {
 
 function resetEvEmojiPicker() {
   const hidden = $('evEmoji');
-  if (hidden) hidden.value = '📅';
+  if (hidden) hidden.value = '🏥';
   document.querySelectorAll('#evEmojiPicker .ev-emoji-opt').forEach((b) => {
-    b.classList.toggle('is-selected', b.dataset.emoji === '📅');
+    b.classList.toggle('is-selected', b.dataset.emoji === '🏥');
   });
 }
 
@@ -5044,6 +5044,10 @@ function showConfirm({ title = '확인', message = '', confirmLabel = '확인', 
     okBtn.textContent = confirmLabel;
     cancelBtn.textContent = cancelLabel;
     okBtn.classList.toggle('danger', !!danger);
+    // 다른 시트(갤러리 상세 등) 위에 확실히 뜨도록 DOM 순서도 body 마지막으로 이동
+    if (sheet.parentNode !== document.body || sheet !== document.body.lastElementChild) {
+      document.body.appendChild(sheet);
+    }
     sheet.classList.remove('hidden');
     let done = false;
     function cleanup(result) {

@@ -191,27 +191,24 @@
       <div class="sheet-handle"></div>
       <h2 class="sheet-title">📅 새 일정 <span id="evDateHeader" class="ev-date-header"></span></h2>
       <div id="evDayPreview" class="ev-day-preview hidden"></div>
-      <input id="evTitle" class="ufi" type="text" placeholder="일정 이름 (예: 병원 방문)" maxlength="100" style="margin-bottom: 8px;" />
+      <input id="evTitle" class="ufi" type="text" placeholder="일정 이름 (예: 병원 방문)" maxlength="100" style="display:block;width:100%;margin-bottom:8px;" />
       <div class="ev-emoji-picker-label">아이콘</div>
       <div class="ev-emoji-picker" id="evEmojiPicker" role="radiogroup" aria-label="일정 아이콘">
-        <button type="button" class="ev-emoji-opt is-selected" data-emoji="📅" aria-label="기본"><span class="ev-e">📅</span><span class="ev-el">기본</span></button>
-        <button type="button" class="ev-emoji-opt" data-emoji="🏥" aria-label="병원"><span class="ev-e">🏥</span><span class="ev-el">병원</span></button>
+        <button type="button" class="ev-emoji-opt is-selected" data-emoji="🏥" aria-label="병원"><span class="ev-e">🏥</span><span class="ev-el">병원</span></button>
         <button type="button" class="ev-emoji-opt" data-emoji="🍽️" aria-label="식사"><span class="ev-e">🍽️</span><span class="ev-el">식사</span></button>
         <button type="button" class="ev-emoji-opt" data-emoji="✈️" aria-label="여행"><span class="ev-e">✈️</span><span class="ev-el">여행</span></button>
         <button type="button" class="ev-emoji-opt" data-emoji="⛳" aria-label="골프"><span class="ev-e">⛳</span><span class="ev-el">골프</span></button>
         <button type="button" class="ev-emoji-opt" data-emoji="💼" aria-label="업무"><span class="ev-e">💼</span><span class="ev-el">업무</span></button>
-        <button type="button" class="ev-emoji-opt" data-emoji="💪" aria-label="운동"><span class="ev-e">💪</span><span class="ev-el">운동</span></button>
         <button type="button" class="ev-emoji-opt" data-emoji="🛒" aria-label="쇼핑"><span class="ev-e">🛒</span><span class="ev-el">쇼핑</span></button>
         <button type="button" class="ev-emoji-opt" data-emoji="🎉" aria-label="기념일"><span class="ev-e">🎉</span><span class="ev-el">기념일</span></button>
-        <button type="button" class="ev-emoji-opt" data-emoji="☕" aria-label="모임"><span class="ev-e">☕</span><span class="ev-el">모임</span></button>
       </div>
-      <input id="evEmoji" type="hidden" value="📅" />
-      <div class="ufi-row" style="margin-bottom: 8px; margin-top: 8px;">
-        <input id="evDate" class="ufi" type="date" />
-        <input id="evTime" class="ufi-s" type="time" style="flex: 0 0 120px;" />
+      <input id="evEmoji" type="hidden" value="🏥" />
+      <div style="display:flex;gap:8px;margin:8px 0;">
+        <input id="evDate" class="ufi" type="date" style="flex:1;min-width:0;" />
+        <input id="evTime" class="ufi-s" type="time" style="flex:0 0 120px;" />
       </div>
-      <input id="evLocation" class="ufi" type="text" placeholder="장소 (선택)" maxlength="100" style="margin-bottom: 8px;" />
-      <input id="evNote" class="ufi" type="text" placeholder="메모 (선택)" maxlength="300" style="margin-bottom: 12px;" />
+      <input id="evLocation" class="ufi" type="text" placeholder="장소 (선택)" maxlength="100" style="display:block;width:100%;margin-bottom:8px;" />
+      <input id="evNote" class="ufi" type="text" placeholder="메모 (선택)" maxlength="300" style="display:block;width:100%;margin-bottom:12px;" />
       <button id="evCreate" type="button" class="auth-btn">추가</button>
       <button class="sheet-close" id="evCreateClose">취소</button>
     </div>
