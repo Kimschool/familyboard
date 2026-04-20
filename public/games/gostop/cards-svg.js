@@ -33,7 +33,7 @@
     const hi  = opts.highlight ? '<rect x="0" y="0" width="100" height="160" rx="12" ry="12" fill="#FFF7A8" fill-opacity=".5" />' : '';
     const doubleMark = card.doubleJunk ? '<text x="50" y="138" text-anchor="middle" font-size="11" font-weight="700" fill="' + b.fg + '">쌍</text>' : '';
     return '' +
-      '<svg viewBox="0 0 100 160" xmlns="http://www.w3.org/2000/svg" class="hwa-card" data-id="' + card.id + '">' +
+      '<svg viewBox="0 0 100 160" width="100%" height="100%" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg" class="hwa-card" data-id="' + card.id + '">' +
         '<defs>' +
           '<linearGradient id="gM' + card.id + '" x1="0" y1="0" x2="0" y2="1">' +
             '<stop offset="0" stop-color="' + t.bg1 + '"/>' +
@@ -54,7 +54,7 @@
 
   function faceDownSvg() {
     return '' +
-      '<svg viewBox="0 0 100 160" xmlns="http://www.w3.org/2000/svg" class="hwa-card face-down">' +
+      '<svg viewBox="0 0 100 160" width="100%" height="100%" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg" class="hwa-card face-down">' +
         '<defs>' +
           '<pattern id="backPat" width="12" height="12" patternUnits="userSpaceOnUse">' +
             '<rect width="12" height="12" fill="#7D1F1F"/>' +
