@@ -1368,6 +1368,42 @@ body.tod-night .hero-weather { color: rgba(242,242,247,.8); }
   opacity: .85;
 }
 
+/* 라운드2: 이벤트 이모지 2개 + "+N" 오버플로우 · 생일 카운트 */
+.cal-events {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  max-width: 100%;
+  line-height: 1;
+}
+.cal-ev-em {
+  font-size: 12px;
+  line-height: 1;
+}
+.cal-ev-more {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--sub);
+  background: var(--bg);
+  padding: 1px 4px;
+  border-radius: 999px;
+  line-height: 1.3;
+}
+/* 생일 dot 옆에 카운트 (2명 이상 생일 겹칠 때만) */
+.cal-cell[data-bd]:not([data-bd="1"])::after {
+  content: attr(data-bd);
+  position: absolute;
+  top: 2px;
+  right: 14px;
+  font-size: 9px;
+  font-weight: 700;
+  color: #ff6b8a;
+  line-height: 1;
+}
+/* 이벤트·생일 둘 다 있으면 일정 행이 살짝 눌림 */
+.cal-cell.is-birthday .cal-events { margin-top: 0; }
+
 /* 공지 NEW 배지 */
 .notice-new {
   background: var(--bad);

@@ -1975,10 +1975,22 @@ function renderCalendar() {
     const icons = [];
     if (bdPeople) icons.push(...bdPeople.slice(0, 2).map((p) => iconEmoji(p.icon)));
     if (evs) icons.push(...evs.slice(0, 2).map((e) => e.emoji));
+    // 이벤트 이모지 최대 2개 + 오버플로우 표시 (생일은 분홍 dot 으로 우상단 별도)
+    let markers = '';
+    if (evs && evs.length) {
+      const shown = evs.slice(0, 2).map((e) =>
+        `<span class="cal-ev-em">${e.emoji}</span>`).join('');
+      const extra = evs.length > 2 ? `<span class="cal-ev-more">+${evs.length - 2}</span>` : '';
+      markers = `<div class="cal-events">${shown}${extra}</div>`;
+    }
+    const bdCount = bdPeople ? bdPeople.length : 0;
+    const bdAttr = bdCount > 1 ? ` data-bd-count="${bdCount}"` : '';
     cell.innerHTML = `
       <span class="cal-day">${d}</span>
-      ${icons.length ? `<span class="cal-bd">${icons.slice(0, 3).join('')}</span>` : ''}
+      ${markers}
     `;
+    // 생일 있으면 우상단 dot 에 카운트 표시(2명 이상일 때만 숫자)
+    if (bdCount > 0) cell.setAttribute('data-bd', String(bdCount));
     cell.classList.add('is-clickable');
     cell.onclick = () => openCalendarDaySheet(y, m, d, bdPeople, evs);
     grid.appendChild(cell);
