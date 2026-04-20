@@ -782,6 +782,66 @@ body { min-height: 100vh; padding-bottom: 40px; }
 .g-callout-defeat  { background: linear-gradient(135deg,#6B7280,#374151); color: #fff; font-size: 56px; }
 .g-callout-neutral { background: linear-gradient(135deg,#A78BFA,#7C3AED); color: #fff; }
 
+/* ===== 상대 상세 오버레이 (박스 탭 시 획득 카드 표시) ===== */
+.g-opp-detail-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  padding: 20px;
+  animation: gDlgFade .2s ease-out;
+}
+.g-opp-detail {
+  background: var(--card);
+  border-radius: 16px;
+  padding: 14px 16px 16px;
+  max-width: 420px;
+  width: 100%;
+  box-shadow: 0 12px 36px rgba(0,0,0,.3);
+  animation: gDlgPop .26s cubic-bezier(.22,1.4,.36,1);
+}
+.g-opp-detail-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.g-opp-detail-name { font-size: 16px; font-weight: 800; color: var(--text); }
+.g-opp-detail-score {
+  margin-left: auto;
+  font-size: 16px;
+  font-weight: 900;
+  color: var(--primary);
+  background: rgba(10,132,255,.1);
+  padding: 3px 12px;
+  border-radius: 999px;
+}
+.g-opp-detail-close {
+  background: none;
+  border: none;
+  font-size: 18px;
+  color: var(--sub);
+  cursor: pointer;
+  padding: 4px 8px;
+  font-weight: 700;
+}
+.g-opp-detail-cap {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.g-opp-detail-cap .g-cap-stack { padding: 3px 8px 3px 3px; }
+.g-opp-detail-cap .g-cap-mini { width: 32px !important; height: 52px !important; }
+
+/* 다인 레이아웃 상대 박스 탭 힌트 */
+.g-opp-wrap.g-opp-wrap-2 .g-opp,
+.g-opp-wrap.g-opp-wrap-3 .g-opp { cursor: pointer; }
+.g-opp-wrap.g-opp-wrap-2 .g-opp:active,
+.g-opp-wrap.g-opp-wrap-3 .g-opp:active { transform: scale(.97); }
+
 /* ===== 게임 종료 오버레이 ===== */
 .g-end-dlg {
   text-align: center;

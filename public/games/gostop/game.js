@@ -215,6 +215,44 @@
     return m[code] || '⭐';
   }
 
+  // 상대 박스 탭 시 큰 획득 요약 오버레이 (4인 모드에서 유용)
+  function showOpponentDetail(idx) {
+    if (!VIEW) return;
+    const p = VIEW.players[idx];
+    const cap = VIEW.captured[idx];
+    if (!p || !cap) return;
+    let dlg = $('oppDetailDlg');
+    if (!dlg) {
+      dlg = document.createElement('div');
+      dlg.id = 'oppDetailDlg';
+      dlg.className = 'g-opp-detail-backdrop';
+      dlg.addEventListener('click', function (e) {
+        if (e.target === dlg) dlg.remove();
+      });
+      document.body.appendChild(dlg);
+    }
+    const goN = (VIEW.goCounts && VIEW.goCounts[idx]) || 0;
+    const avatarHtml = p.photoUrl
+      ? '<img src="' + escapeHtml(p.photoUrl) + '" alt="" />'
+      : iconEmoji(p.icon);
+    dlg.innerHTML =
+      '<div class="g-opp-detail">' +
+        '<div class="g-opp-detail-head">' +
+          '<span class="g-pl-avatar g-opp-avatar">' + avatarHtml + '</span>' +
+          '<span class="g-opp-detail-name">' + escapeHtml(p.name) + '</span>' +
+          '<span class="g-opp-detail-score">' + (VIEW.scores[idx] || 0) + '점</span>' +
+          (goN > 0 ? '<span class="g-go-badge">' + goN + '고</span>' : '') +
+          '<button class="g-opp-detail-close">✕</button>' +
+        '</div>' +
+        '<div class="g-opp-detail-cap" id="oppDetailCap"></div>' +
+      '</div>';
+    dlg.querySelector('.g-opp-detail-close').onclick = function () { dlg.remove(); };
+    renderCapturedPeek(cap, 'oppDetailCap');
+    // 3초 자동 닫힘
+    clearTimeout(dlg._timer);
+    dlg._timer = setTimeout(function () { if (document.body.contains(dlg)) dlg.remove(); }, 4000);
+  }
+
   function bumpBounce(el) {
     if (!el) return;
     el.classList.remove('g-bump');
@@ -337,6 +375,12 @@
           '</div>' +
         '</div>' +
         turnArrow;
+      // 컴팩트(3인/4인) 모드에서 상대 박스 탭 → 획득 요약 오버레이 토글
+      box.dataset.playerIdx = String(i);
+      box.addEventListener('click', function (e) {
+        e.stopPropagation();
+        showOpponentDetail(i);
+      });
       oppEl.appendChild(box);
     });
 
