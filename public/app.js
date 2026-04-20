@@ -1809,12 +1809,33 @@ function renderEventsCard() {
   }
 }
 
+// 이모지 픽커 — 선택된 값을 hidden input (#evEmoji) 에 저장
+$('evEmojiPicker')?.addEventListener('click', (e) => {
+  const btn = e.target.closest('.ev-emoji-opt');
+  if (!btn) return;
+  const emoji = btn.dataset.emoji;
+  if (!emoji) return;
+  document.querySelectorAll('#evEmojiPicker .ev-emoji-opt').forEach((b) => b.classList.remove('is-selected'));
+  btn.classList.add('is-selected');
+  const hidden = $('evEmoji');
+  if (hidden) hidden.value = emoji;
+});
+
+function resetEvEmojiPicker() {
+  const hidden = $('evEmoji');
+  if (hidden) hidden.value = '📅';
+  document.querySelectorAll('#evEmojiPicker .ev-emoji-opt').forEach((b) => {
+    b.classList.toggle('is-selected', b.dataset.emoji === '📅');
+  });
+}
+
 $('eventNewBtn').addEventListener('click', () => {
   $('evDate').value = new Date().toISOString().slice(0, 10);
   const preview = $('evDayPreview');
   if (preview) { preview.innerHTML = ''; preview.classList.add('hidden'); }
   const header = $('evDateHeader');
   if (header) header.textContent = '';
+  resetEvEmojiPicker();
   $('eventCreateSheet').classList.remove('hidden');
 });
 $('evCreateClose').addEventListener('click', () => $('eventCreateSheet').classList.add('hidden'));
@@ -1934,6 +1955,7 @@ function openCalendarDaySheet(y, m, d, bdPeople, evs) {
   // 날짜 헤더
   const header = $('evDateHeader');
   if (header) header.textContent = `${m + 1}월 ${d}일`;
+  resetEvEmojiPicker();
   $('eventCreateSheet').classList.remove('hidden');
 }
 $('calPrev').addEventListener('click', () => { CAL_VIEW.setMonth(CAL_VIEW.getMonth() - 1); renderCalendar(); });

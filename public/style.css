@@ -1501,6 +1501,45 @@ body.tod-night .hero-weather { color: rgba(242,242,247,.8); }
   color: var(--sub);
   margin-left: 8px;
 }
+/* 일정 아이콘 픽커 */
+.ev-emoji-picker-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--sub);
+  margin: 8px 0 6px;
+  letter-spacing: 0.3px;
+}
+.ev-emoji-picker {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 6px;
+}
+.ev-emoji-opt {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  background: var(--bg);
+  border: 1.5px solid transparent;
+  border-radius: 10px;
+  padding: 6px 2px 4px;
+  cursor: pointer;
+  font-family: inherit;
+  color: var(--text);
+  -webkit-tap-highlight-color: transparent;
+  transition: background .15s, border-color .15s, transform .12s;
+  min-height: 56px;
+}
+.ev-emoji-opt .ev-e { font-size: 22px; line-height: 1; }
+.ev-emoji-opt .ev-el { font-size: 11px; color: var(--sub); font-weight: 600; }
+.ev-emoji-opt:hover { background: var(--card); }
+.ev-emoji-opt:active { transform: scale(.94); }
+.ev-emoji-opt.is-selected {
+  background: rgba(10,132,255,.12);
+  border-color: var(--primary);
+}
+.ev-emoji-opt.is-selected .ev-el { color: var(--primary); }
 .ev-day-preview {
   background: var(--bg);
   border-radius: 10px;
@@ -3091,10 +3130,13 @@ body.tod-night .hero-weather { color: rgba(242,242,247,.8); }
 .user-form { display: flex; flex-direction: column; gap: 8px; }
 .ufi, .ufi-s {
   height: 44px; border: 1px solid var(--line); border-radius: var(--r-sm);
-  background: var(--bg); color: var(--text); padding: 0 12px; font-size: 15px; outline: none;
+  background: var(--bg); color: var(--text); padding: 0 12px;
+  /* 16px 미만이면 iOS Safari 가 포커스 시 자동 확대하므로 16px 로 고정 */
+  font-size: 16px; outline: none;
   min-width: 0;
+  box-sizing: border-box;
 }
-.ufi { flex: 1; }
+.ufi { flex: 1; width: 100%; }
 .ufi:focus, .ufi-s:focus { border-color: var(--primary); background: var(--card); }
 .ufi-btn {
   height: 44px; padding: 0 14px; border: 1px solid var(--line); border-radius: var(--r-sm);
@@ -4329,7 +4371,8 @@ li.memo-important .memo-text { font-weight: 700; }
   font-size: 15px;
   font-weight: 600;
 }
-/* 공용 확인 다이얼로그 */
+/* 공용 확인 다이얼로그 — 다른 시트보다 항상 위에 뜨도록 z-index 우선 */
+#confirmSheet { z-index: 1100; }
 .confirm-sheet {
   max-width: 420px;
   margin: 0 auto;
@@ -4625,10 +4668,12 @@ li.memo-important .memo-text { font-weight: 700; }
   border: none;
   outline: none;
   background: transparent;
-  font-size: 14.5px;
+  /* iOS 포커스 시 자동 확대 방지 — 16px 이상 유지 */
+  font-size: 16px;
   color: var(--text);
   font-family: inherit;
   padding: 6px 0;
+  min-width: 0;
 }
 .ig-comment-form input::placeholder { color: var(--sub); }
 .ig-post-btn {
