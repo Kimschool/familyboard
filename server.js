@@ -225,7 +225,7 @@ app.get('/api/family/:alias', async (req, res) => {
     );
     if (!f.length) return res.status(404).json({ error: 'not-found' });
     const [users] = await getPool().query(
-      `SELECT id, display_name, icon, role, birth_year, birth_month, birth_day,
+      `SELECT id, display_name, icon, role, birth_year, birth_month, birth_day, is_pet,
               phone, photo_url, mood, mood_date,
               (password_hash IS NOT NULL) AS activated
          FROM users WHERE family_id = ?
@@ -255,6 +255,7 @@ app.get('/api/family/:alias', async (req, res) => {
           photoUrl: u.photo_url || null,
           mood: moodToday,
           activated: !!u.activated,
+          isPet: !!u.is_pet,
         };
       }),
     });

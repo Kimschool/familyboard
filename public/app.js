@@ -3717,7 +3717,8 @@ function renderNoticeReads(noticeId, reads) {
   const el = $('noticeReads');
   if (!el || !noticeId) return;
   const readIds = new Set(reads.map((r) => r.userId));
-  const members = (FAMILY_CACHE || []).filter((m) => m.activated);
+  // 펫은 공지를 읽을 수 없으므로 읽음 대상에서 제외
+  const members = (FAMILY_CACHE || []).filter((m) => m.activated && !m.isPet);
   if (!members.length) { el.classList.add('hidden'); return; }
   el.innerHTML = '<span class="nr-label">읽음</span>' + members.map((m) => {
     const read = readIds.has(m.id);
