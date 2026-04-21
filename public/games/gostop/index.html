@@ -4,7 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover" />
 <title>고스톱 (테스트)</title>
-<link rel="stylesheet" href="./gostop.css?v=29" />
+<link rel="stylesheet" href="./gostop.css?v=30" />
 </head>
 <body>
 <div id="lobby" class="screen">
@@ -16,11 +16,19 @@
 
   <section class="g-card">
     <h2>방 만들기</h2>
-    <p class="g-sub">인원수를 고르고 방을 만들면 가족 로비에 표시됩니다.</p>
+    <p class="g-sub">인원수와 승리 기준 점수를 고르세요.</p>
     <div class="g-pc-picker">
       <button class="g-pc-btn is-selected" data-pc="2">2인<br><span>맞고</span></button>
       <button class="g-pc-btn" data-pc="3">3인<br><span>고스톱</span></button>
       <button class="g-pc-btn" data-pc="4">4인<br><span>고스톱</span></button>
+    </div>
+    <div class="g-ws-row">
+      <span class="g-ws-label">승리 점수</span>
+      <div class="g-ws-picker">
+        <button class="g-ws-btn is-selected" data-ws="3">3점<br><span>빠름</span></button>
+        <button class="g-ws-btn" data-ws="5">5점<br><span>표준</span></button>
+        <button class="g-ws-btn" data-ws="7">7점<br><span>길게</span></button>
+      </div>
     </div>
     <button id="btnCreate" class="g-primary">방 만들기</button>
   </section>
