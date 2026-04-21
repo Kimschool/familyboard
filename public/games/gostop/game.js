@@ -519,7 +519,14 @@
       oppEl.appendChild(box);
     });
 
-    // 바닥 — 이전 렌더와 비교해 새 카드는 카테고리별 애니메이션
+    // 바닥 — 같은 월끼리 붙어 보이게 정렬, 2장 이상 월은 그룹 배경
+    VIEW.board.sort(function (a, b) {
+      if (a.month !== b.month) return a.month - b.month;
+      return a.id - b.id;
+    });
+    const monthCounts = {};
+    VIEW.board.forEach(function (c) { monthCounts[c.month] = (monthCounts[c.month] || 0) + 1; });
+    // 이전 렌더와 비교해 새 카드는 카테고리별 애니메이션
     // (A) 덱에서 뒤집힌 카드: stock 감소 + 해당 카드가 새로 등장 → flip 애니
     // (B) 플레이어 손패에서 낸 카드: 손패 감소 + 새 카드 등장 → 슬라이드 애니
     const boardEl = $('gameBoard');
@@ -551,6 +558,7 @@
     VIEW.board.forEach(function (c, idx) {
       const wrap = GostopCards.renderCard(c, { highlight: highlightIds.has(c.id) });
       if (bbukMonths.has(c.month)) wrap.classList.add('is-bbuk');
+      if (monthCounts[c.month] >= 2) wrap.classList.add('has-month-mate');
       if (!prevBoardIds.has(c.id)) {
         // 새 등장
         if (stockDropped && handDropFromIdx < 0) {

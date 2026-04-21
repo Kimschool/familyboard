@@ -212,6 +212,14 @@ body { min-height: 100vh; padding-bottom: 40px; }
   60%  { opacity: 1; transform: translateY(8px) scale(1.05); }
   100% { transform: translateY(0) scale(1); }
 }
+/* 바닥 같은 월 카드 — 은은한 주황 테두리로 묶음 표시 */
+.hwa-card-wrap.has-month-mate:not(.is-bbuk) .hwa-img,
+.hwa-card-wrap.has-month-mate:not(.is-bbuk) .hwa-card {
+  outline: 2px solid rgba(255, 216, 77, .6);
+  outline-offset: -1px;
+  box-shadow: 0 0 10px rgba(255, 200, 0, .3);
+}
+
 /* 뻑 그룹 — 바닥에 쌓인 같은 달 3장에 빨간 링 */
 .hwa-card-wrap.is-bbuk::before {
   content: '뻑';
