@@ -145,6 +145,11 @@
     if (lightCount === 5) score += 15;
     else if (lightCount >= 3) score += lightCount;
 
+    // 고도리 — 매조+흑싸리+공산 열끗 세트 = 5점 보너스
+    const animalLabels = captured.animal.map(function (c) { return c.label; });
+    const godori = ['매조 열끗', '흑싸리 열끗', '공산 열끗'].every(function (l) { return animalLabels.indexOf(l) >= 0; });
+    if (godori) score += 5;
+
     const animalCount = captured.animal.length;
     if (animalCount >= 5) score += (animalCount - 4);
 
@@ -160,6 +165,58 @@
     if (junkCount >= 10) score += (junkCount - 9);
 
     return score;
+  }
+
+  // 점수 브레이크다운 — 클라에서 설명용
+  function scoreBreakdown(captured) {
+    const parts = [];
+    let total = 0;
+    const push = function (label, pts, pending) {
+      parts.push({ label: label, pts: pts, pending: pending || '' });
+      if (pts > 0) total += pts;
+    };
+    const cap = captured || { light: [], animal: [], ribbon: [], junk: [] };
+
+    // 광
+    const lc = cap.light.length;
+    if (lc === 5) push('광 5장', 15);
+    else if (lc === 4) push('광 4장', 4);
+    else if (lc === 3) push('광 3장', 3);
+    else if (lc > 0) push('광 ' + lc + '장', 0, (3 - lc) + '장 더');
+    else push('광 0장', 0, '3장부터 득점');
+
+    // 고도리
+    const alab = cap.animal.map(function (c) { return c.label; });
+    const godori = ['매조 열끗', '흑싸리 열끗', '공산 열끗'].filter(function (l) { return alab.indexOf(l) >= 0; }).length;
+    if (godori === 3) push('고도리 (3/3)', 5);
+    else if (godori > 0) push('고도리 ' + godori + '/3', 0, (3 - godori) + '장 더');
+
+    // 열끗
+    const ac = cap.animal.length;
+    if (ac >= 5) push('열끗 ' + ac + '장', ac - 4);
+
+    // 단 세트
+    const rlab = cap.ribbon.map(function (c) { return c.label; });
+    const hd = ['송학 홍단', '벚꽃 홍단', '매조 홍단'].filter(function (l) { return rlab.indexOf(l) >= 0; }).length;
+    const cd = ['모란 청단', '국화 청단', '단풍 청단'].filter(function (l) { return rlab.indexOf(l) >= 0; }).length;
+    const chod = ['흑싸리 초단', '난초 초단', '홍싸리 초단'].filter(function (l) { return rlab.indexOf(l) >= 0; }).length;
+    if (hd === 3) push('홍단 (3/3)', 3);
+    else if (hd > 0) push('홍단 ' + hd + '/3', 0, (3 - hd) + '장 더');
+    if (cd === 3) push('청단 (3/3)', 3);
+    else if (cd > 0) push('청단 ' + cd + '/3', 0, (3 - cd) + '장 더');
+    if (chod === 3) push('초단 (3/3)', 3);
+    else if (chod > 0) push('초단 ' + chod + '/3', 0, (3 - chod) + '장 더');
+
+    // 띠 (5장 이상)
+    const rc = cap.ribbon.length;
+    if (rc >= 5) push('띠 ' + rc + '장', rc - 4);
+
+    // 피
+    const jc = cap.junk.reduce(function (n, c) { return n + (c.doubleJunk ? 2 : 1); }, 0);
+    if (jc >= 10) push('피 ' + jc + '장', jc - 9);
+    else if (jc > 0) push('피 ' + jc + '장', 0, (10 - jc) + '장 더');
+
+    return { parts: parts, total: total };
   }
 
   function cloneState(s) { return JSON.parse(JSON.stringify(s)); }
@@ -409,6 +466,7 @@
     createGame: createGame,
     findMatches: findMatches,
     calculateScore: calculateScore,
+    scoreBreakdown: scoreBreakdown,
     playHandCard: playHandCard,
     resolveHandMatch: resolveHandMatch,
     flipStock: flipStock,

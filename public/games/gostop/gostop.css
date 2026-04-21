@@ -1142,6 +1142,82 @@ body { min-height: 100vh; padding-bottom: 40px; }
   font-weight: 900 !important;
 }
 
+/* 점수 브레이크다운 팝업 */
+.is-clickable-score {
+  cursor: pointer;
+  text-decoration: underline dotted rgba(10,132,255,.4);
+}
+.g-score-bd-backdrop {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,.55);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 10001;
+  padding: 20px;
+  animation: gDlgFade .2s ease-out;
+}
+.g-score-bd {
+  background: var(--card);
+  border-radius: 16px;
+  padding: 16px 18px;
+  max-width: 360px;
+  width: 100%;
+  box-shadow: 0 12px 32px rgba(0,0,0,.3);
+  animation: gDlgPop .26s cubic-bezier(.22,1.4,.36,1);
+}
+.g-score-bd-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 15px;
+  color: var(--text);
+  margin-bottom: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--line);
+}
+.g-score-bd-close {
+  background: none;
+  border: none;
+  font-size: 16px;
+  cursor: pointer;
+  color: var(--sub);
+}
+.g-bd-list { list-style: none; padding: 0; margin: 0 0 12px; }
+.g-bd-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 2px;
+  border-bottom: 1px dashed var(--line);
+  font-size: 14.5px;
+}
+.g-bd-row:last-child { border-bottom: none; }
+.g-bd-row.is-active .g-bd-pts {
+  color: #C67200;
+  font-weight: 900;
+  background: #FFF4D5;
+  padding: 2px 10px;
+  border-radius: 999px;
+}
+.g-bd-row.is-pending { opacity: .65; }
+.g-bd-row.is-pending .g-bd-pending {
+  font-size: 12px;
+  color: var(--sub);
+  font-weight: 600;
+}
+.g-bd-empty { text-align: center; color: var(--sub); padding: 16px 0; font-size: 14px; }
+.g-bd-total {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding-top: 10px;
+  border-top: 2px solid var(--line);
+  font-size: 15px;
+  font-weight: 700;
+}
+.g-bd-total b { font-size: 22px; color: var(--primary); }
+.g-bd-mult { color: var(--accent); font-weight: 900; }
+.g-bd-mult b { color: var(--accent); font-size: 22px; }
+
 .g-actions {
   display: flex; justify-content: center; margin: 12px 0;
 }

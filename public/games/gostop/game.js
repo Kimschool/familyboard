@@ -253,6 +253,50 @@
     dlg._timer = setTimeout(function () { if (document.body.contains(dlg)) dlg.remove(); }, 4000);
   }
 
+  // 점수 브레이크다운 팝업 — 현재 획득 카드로 점수가 어떻게 구성됐는지
+  function showScoreBreakdown(playerIdx) {
+    if (!VIEW) return;
+    const p = VIEW.players[playerIdx];
+    const cap = VIEW.captured[playerIdx];
+    if (!p || !cap || !window.GostopEngine || !window.GostopEngine.scoreBreakdown) return;
+    const bd = window.GostopEngine.scoreBreakdown(cap);
+    const goN = (VIEW.goCounts && VIEW.goCounts[playerIdx]) || 0;
+    const goMult = Math.pow(2, goN);
+    let dlg = $('scoreBdDlg');
+    if (!dlg) {
+      dlg = document.createElement('div');
+      dlg.id = 'scoreBdDlg';
+      dlg.className = 'g-score-bd-backdrop';
+      dlg.addEventListener('click', function (e) { if (e.target === dlg) dlg.remove(); });
+      document.body.appendChild(dlg);
+    }
+    const rowsHtml = bd.parts.map(function (part) {
+      const hasPts = part.pts > 0;
+      return '<li class="g-bd-row' + (hasPts ? ' is-active' : ' is-pending') + '">' +
+        '<span class="g-bd-label">' + escapeHtml(part.label) + '</span>' +
+        (hasPts
+          ? '<span class="g-bd-pts">+' + part.pts + '점</span>'
+          : '<span class="g-bd-pending">' + escapeHtml(part.pending || '-') + '</span>') +
+        '</li>';
+    }).join('');
+    const baseTotal = bd.total;
+    const finalTotal = baseTotal * goMult;
+    dlg.innerHTML =
+      '<div class="g-score-bd">' +
+        '<div class="g-score-bd-head">' +
+          '<b>' + escapeHtml(p.name) + '</b> 점수 계산' +
+          '<button class="g-score-bd-close" aria-label="닫기">✕</button>' +
+        '</div>' +
+        '<ul class="g-bd-list">' + (rowsHtml || '<li class="g-bd-empty">아직 득점 없음</li>') + '</ul>' +
+        '<div class="g-bd-total">' +
+          '<span>합계</span>' +
+          '<b>' + baseTotal + '점</b>' +
+          (goN > 0 ? ' <span class="g-bd-mult">× ' + goMult + ' = <b>' + finalTotal + '점</b></span>' : '') +
+        '</div>' +
+      '</div>';
+    dlg.querySelector('.g-score-bd-close').onclick = function () { dlg.remove(); };
+  }
+
   function bumpBounce(el) {
     if (!el) return;
     el.classList.remove('g-bump');
@@ -477,7 +521,12 @@
     if (capEl) capEl.innerHTML = renderCapturedSummary(VIEW.captured[me]);
     renderCapturedPeek(VIEW.captured[me], 'gameMyCapturedPeek');
     const myScoreEl = $('gameMyScore');
-    if (myScoreEl) myScoreEl.textContent = (VIEW.scores[me] || 0) + '점';
+    if (myScoreEl) {
+      myScoreEl.textContent = (VIEW.scores[me] || 0) + '점';
+      myScoreEl.classList.add('is-clickable-score');
+      myScoreEl.onclick = function () { showScoreBreakdown(me); };
+      myScoreEl.title = '점수 계산 보기';
+    }
     const myNameEl = $('gameMyName');
     if (myNameEl) {
       const mgo = (VIEW.goCounts && VIEW.goCounts[me]) || 0;
