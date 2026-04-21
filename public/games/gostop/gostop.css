@@ -486,6 +486,39 @@ body { min-height: 100vh; padding-bottom: 40px; }
 }
 .g-mute-btn.is-muted { opacity: .45; }
 
+/* 턴 타이머 */
+.g-turn-timer {
+  min-width: 42px;
+  height: 34px;
+  padding: 0 10px;
+  border-radius: 17px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--sub);
+  font-family: 'SF Mono', 'Courier New', monospace;
+}
+.g-turn-timer.is-warning {
+  background: #FFE5E5;
+  border-color: #FF8080;
+  color: #B00020;
+  animation: timerPulse .6s ease-in-out infinite;
+}
+.g-turn-timer.is-expired {
+  background: #FF4040;
+  color: #fff;
+  border-color: #FF4040;
+  animation: none;
+}
+@keyframes timerPulse {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.12); }
+}
+
 /* 고 배수 뱃지 */
 .g-go-badge {
   display: inline-block;

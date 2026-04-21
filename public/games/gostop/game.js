@@ -7,6 +7,9 @@
   let PREV_VIEW = null;        // 직전 뷰 — diff 로 애니메이션 트리거
   let PENDING_HAND_CARD = null; // 선택해 둔 손패 카드 id (멀티매칭 선택 중)
   let _autoFlipPending = false; // 자동 뒤집기 중복 호출 방지 플래그
+  let TURN_TIMER_START = 0;    // 현재 턴이 시작된 시각 (클라 기준)
+  let TURN_TIMER_ID = null;    // setInterval 핸들
+  const TURN_LIMIT_MS = 30000; // 30 초 제한
 
   function socket() { return window.GostopSocket; }
 
@@ -26,9 +29,66 @@
   function onView(view) {
     PREV_VIEW = VIEW;
     VIEW = view;
+    // 턴 변화 감지 → 타이머 리셋
+    if (!PREV_VIEW || PREV_VIEW.turn !== view.turn || !TURN_TIMER_START) {
+      TURN_TIMER_START = Date.now();
+    }
     render();
     // 변경점 기반 피드백: 토스트 · 점수 팝업
     fireDiffEffects();
+    // 타이머 재시작
+    startTurnTimer();
+  }
+
+  function startTurnTimer() {
+    stopTurnTimer();
+    if (!VIEW || VIEW.finished) return;
+    TURN_TIMER_ID = setInterval(tickTurnTimer, 500);
+    tickTurnTimer();
+  }
+  function stopTurnTimer() {
+    if (TURN_TIMER_ID) { clearInterval(TURN_TIMER_ID); TURN_TIMER_ID = null; }
+  }
+  function tickTurnTimer() {
+    if (!VIEW || VIEW.finished) { stopTurnTimer(); return; }
+    const el = $('turnTimer');
+    if (!el) return;
+    const elapsed = Date.now() - TURN_TIMER_START;
+    const remaining = Math.max(0, TURN_LIMIT_MS - elapsed);
+    const sec = Math.ceil(remaining / 1000);
+    el.textContent = sec + 's';
+    el.classList.toggle('is-warning', sec <= 10 && sec > 0);
+    el.classList.toggle('is-expired', sec === 0);
+    // 자동 패 — 내 차례에만, play-hand 또는 choose-go-stop 에서 시간 초과 시
+    const me = VIEW.myIndex;
+    const isMyTurn = VIEW.turn === me;
+    if (sec === 0 && isMyTurn) {
+      // 한 번만 자동 실행
+      if (el.dataset.autoPlayed === '1') return;
+      el.dataset.autoPlayed = '1';
+      autoPlayFallback();
+    } else {
+      el.dataset.autoPlayed = '0';
+    }
+  }
+  function autoPlayFallback() {
+    if (!VIEW) return;
+    const me = VIEW.myIndex;
+    if (VIEW.phase === 'play-hand' && VIEW.myHand.length) {
+      const c = VIEW.myHand[Math.floor(Math.random() * VIEW.myHand.length)];
+      socket().emit('game:play', { cardId: c.id }, function () {});
+      showToast('⏰ 시간 초과! 자동으로 냈어요');
+    } else if (VIEW.phase === 'choose-hand-match' && VIEW.pending && VIEW.pending.choices && VIEW.pending.choices.length) {
+      const m = VIEW.pending.choices[0];
+      socket().emit('game:match', { matchCardId: m }, function () {});
+    } else if (VIEW.phase === 'choose-flip-match' && VIEW.pending && VIEW.pending.choices && VIEW.pending.choices.length) {
+      const m = VIEW.pending.choices[0];
+      socket().emit('game:match', { matchCardId: m }, function () {});
+    } else if (VIEW.phase === 'choose-go-stop') {
+      // 자동으로 '스톱' (안전 선택)
+      socket().emit('game:gostop', { choice: 'stop' }, function () {});
+      showToast('⏰ 시간 초과! 자동 스톱');
+    }
   }
 
   function fireDiffEffects() {
