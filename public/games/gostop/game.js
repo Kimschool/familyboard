@@ -80,6 +80,37 @@
       const a = (VIEW.scores && VIEW.scores[i]) || 0;
       if (a > b) popScore('+' + (a - b) + '점', 'opp-' + i);
     });
+    // 2-b) 세트 완성·임박 감지 — 내 획득 카드만 (상대는 과도한 알림 방지)
+    const myCap = VIEW.captured && VIEW.captured[me];
+    const myCapPrev = PREV_VIEW.captured && PREV_VIEW.captured[me];
+    if (myCap && myCapPrev) {
+      const prevS = analyzeCaptured(myCapPrev);
+      const curS = analyzeCaptured(myCap);
+      if (prevS && curS) {
+        // 세트별 3/3 완성 감지
+        const setDefs = [
+          { key: 'godori',    name: '고도리', pts: 5 },
+          { key: 'hongdan',   name: '홍단',   pts: 3 },
+          { key: 'cheongdan', name: '청단',   pts: 3 },
+          { key: 'chodan',    name: '초단',   pts: 3 },
+        ];
+        setDefs.forEach(function (def) {
+          const p = prevS[def.key] || 0, c = curS[def.key] || 0;
+          if (p < 3 && c >= 3) {
+            bigCallout(def.name + ' 완성! +' + def.pts + '점', 'gold', 1800);
+            if (SFX) SFX.fanfare();
+          } else if (p < 2 && c === 2) {
+            showToast(def.name + ' 2/3 — 한 장만 더!');
+          }
+        });
+        // 광 3장 최초 달성
+        if (prevS.light < 3 && curS.light >= 3) {
+          bigCallout('광 ' + curS.light + '장! +' + curS.light + '점', 'gold', 1700);
+          if (SFX) SFX.fanfare();
+        }
+      }
+    }
+
     // 3) 게임 종료 감지 — 큰 승/패 스크린 + 결과 오버레이
     if (VIEW.finished && !PREV_VIEW.finished) {
       const winner = VIEW.winner;
