@@ -595,12 +595,21 @@
       }
     }
 
-    // 내 손패
+    // 내 손패 — 월 오름차순 + 타입 우선순위(광→열끗→띠→피) 로 자동 정렬
     const handEl = $('gameHand');
     handEl.innerHTML = '';
-    VIEW.myHand.forEach(function (c) {
+    const typeOrder = { light: 0, animal: 1, ribbon: 2, junk: 3 };
+    const sortedHand = VIEW.myHand.slice().sort(function (a, b) {
+      if (a.month !== b.month) return a.month - b.month;
+      return (typeOrder[a.type] || 9) - (typeOrder[b.type] || 9);
+    });
+    // 매칭 가능 카드(바닥에 같은 달) 힌트 계산
+    const boardMonths = new Set(VIEW.board.map(function (c) { return c.month; }));
+    sortedHand.forEach(function (c) {
       const opts = { selected: PENDING_HAND_CARD === c.id };
       const wrap = GostopCards.renderCard(c, opts);
+      // 바닥에 같은 달 있으면 하단 점으로 힌트
+      if (boardMonths.has(c.month)) wrap.classList.add('is-matchable');
       if (isMyTurn && VIEW.phase === 'play-hand') {
         wrap.onclick = function () { playCard(c.id); };
       }
