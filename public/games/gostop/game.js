@@ -792,6 +792,42 @@
     });
   });
 
+  // 이모티콘 빠른 채팅
+  (function setupEmojiBar() {
+    const bar = document.querySelector('.g-emoji-bar');
+    if (!bar) return;
+    bar.addEventListener('click', function (e) {
+      const btn = e.target.closest('.g-emoji-btn');
+      if (!btn) return;
+      const emoji = btn.dataset.e;
+      btn.classList.add('is-sent');
+      setTimeout(function () { btn.classList.remove('is-sent'); }, 400);
+      socket().emit('chat:emoji', { emoji: emoji }, function (res) {
+        if (!res || !res.ok) {} // 스팸이면 무시
+      });
+    });
+  })();
+
+  // 수신한 이모지를 해당 플레이어 박스 위에 말풍선으로 표시
+  if (window.GostopSocket) {
+    window.GostopSocket.on('chat:emoji', function (msg) {
+      if (!VIEW) return;
+      // userId 로 playerIdx 찾기
+      const idx = VIEW.players.findIndex(function (p) { return p.userId === msg.userId; });
+      if (idx < 0) return;
+      const me = VIEW.myIndex;
+      let anchor;
+      if (idx === me) anchor = document.querySelector('.g-me-wrap') || document.querySelector('.g-me-meta');
+      else anchor = document.querySelectorAll('.g-opp')[idx > me ? idx - 1 : idx];
+      if (!anchor) return;
+      const bubble = document.createElement('div');
+      bubble.className = 'g-emoji-bubble';
+      bubble.textContent = msg.emoji;
+      anchor.appendChild(bubble);
+      setTimeout(function () { bubble.remove(); }, 2400);
+    });
+  }
+
   // 음소거 토글
   (function setupMute() {
     const btn = $('btnMute');

@@ -238,6 +238,28 @@ function attachGostopServer(httpServer) {
       });
     });
 
+    // 이모티콘 빠른 채팅 — 같은 방의 모든 플레이어에게 릴레이
+    socket.on('chat:emoji', (payload, ack) => {
+      const roomId = socket.data.roomId;
+      const room = ROOMS.get(roomId);
+      if (!room) return typeof ack === 'function' && ack({ ok: false });
+      const allowed = ['😀', '👍', '🎉', '🔥', '😢', '😎', '🤔', '👏'];
+      const emoji = allowed.includes(String(payload?.emoji)) ? String(payload.emoji) : '👍';
+      // 스팸 방지 — 1.2s 당 1회
+      const now = Date.now();
+      if (socket.data.lastEmojiAt && now - socket.data.lastEmojiAt < 1200) {
+        return typeof ack === 'function' && ack({ ok: false, error: 'too-fast' });
+      }
+      socket.data.lastEmojiAt = now;
+      io.to(`room:${room.id}`).emit('chat:emoji', {
+        userId: me.id,
+        userName: me.name,
+        emoji: emoji,
+        ts: now,
+      });
+      if (typeof ack === 'function') ack({ ok: true });
+    });
+
     // 재대결 — 게임 끝난 방의 플레이어들에게 새 게임 생성
     socket.on('game:rematch', (_payload, ack) => {
       try {

@@ -835,6 +835,56 @@ body { min-height: 100vh; padding-bottom: 40px; }
 .game-table .g-my-wrap { display: none; }
 
 /* 로그 접힘 */
+/* 이모티콘 빠른 채팅 */
+.g-emoji-bar {
+  display: flex;
+  gap: 4px;
+  padding: 6px 4px;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+.g-emoji-btn {
+  width: 38px;
+  height: 38px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  font-size: 20px;
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform .15s, background .15s;
+}
+.g-emoji-btn:hover { background: var(--bg); }
+.g-emoji-btn:active { transform: scale(.88); }
+.g-emoji-btn.is-sent { transform: scale(1.3); background: #FFE5B4; }
+
+.g-emoji-bubble {
+  position: absolute;
+  top: -14px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #fff;
+  border: 2px solid #0A84FF;
+  border-radius: 999px;
+  padding: 4px 12px;
+  font-size: 28px;
+  line-height: 1;
+  box-shadow: 0 4px 12px rgba(0,0,0,.2);
+  z-index: 50;
+  animation: bubbleIn .25s cubic-bezier(.22,1.4,.36,1), bubbleOut .3s ease-out 2.1s forwards;
+  pointer-events: none;
+}
+@keyframes bubbleIn {
+  from { transform: translateX(-50%) scale(0); opacity: 0; }
+  to   { transform: translateX(-50%) scale(1); opacity: 1; }
+}
+@keyframes bubbleOut {
+  to { transform: translateX(-50%) translateY(-10px) scale(.9); opacity: 0; }
+}
+
 .g-log-wrap[open] { background: var(--card); }
 .g-log-wrap summary {
   list-style: none;
