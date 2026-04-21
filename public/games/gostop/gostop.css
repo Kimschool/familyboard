@@ -161,6 +161,15 @@ body { min-height: 100vh; padding-bottom: 40px; }
 .hwa-card-wrap.is-selected { transform: translateY(-12px); filter: brightness(1.08) drop-shadow(0 6px 14px rgba(0,0,0,.25)); }
 /* 새 카드 등장 (기본) */
 .hwa-card-wrap.is-new { animation: hwaDealIn .4s ease-out; }
+/* 첫 딜링 stagger — 새 판 시작 시 손패 카드가 순차 등장 */
+.hwa-card-wrap.is-handdeal {
+  animation: handDealIn .5s cubic-bezier(.22,1.4,.4,1.1) backwards;
+}
+@keyframes handDealIn {
+  from { transform: translateY(80px) rotate(-12deg); opacity: 0; }
+  60%  { transform: translateY(-6px) rotate(2deg); opacity: 1; }
+  to   { transform: translateY(0) rotate(0); opacity: 1; }
+}
 /* 손패 중 바닥과 매칭 가능한 카드 — 하단에 녹색 점 */
 .hwa-card-wrap.is-matchable::before {
   content: '';

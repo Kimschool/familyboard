@@ -301,6 +301,21 @@
     }
   }
 
+  function animateScoreCount(el, from, to) {
+    const duration = 650;
+    const start = performance.now();
+    const diff = to - from;
+    function tick(now) {
+      const t = Math.min(1, (now - start) / duration);
+      // easeOutCubic
+      const eased = 1 - Math.pow(1 - t, 3);
+      const cur = Math.round(from + diff * eased);
+      el.textContent = cur + '점';
+      if (t < 1) requestAnimationFrame(tick);
+    }
+    requestAnimationFrame(tick);
+  }
+
   function iconEmoji(code) {
     const m = { star: '⭐', cat: '🐱', dog: '🐶', heart: '❤️', flower: '🌸', sun: '☀️', moon: '🌙' };
     return m[code] || '⭐';
@@ -605,19 +620,24 @@
 
     // 내 손패 — 월 오름차순 + 타입 우선순위(광→열끗→띠→피) 로 자동 정렬
     const handEl = $('gameHand');
+    const wasEmpty = handEl.children.length === 0;
     handEl.innerHTML = '';
     const typeOrder = { light: 0, animal: 1, ribbon: 2, junk: 3 };
     const sortedHand = VIEW.myHand.slice().sort(function (a, b) {
       if (a.month !== b.month) return a.month - b.month;
       return (typeOrder[a.type] || 9) - (typeOrder[b.type] || 9);
     });
-    // 매칭 가능 카드(바닥에 같은 달) 힌트 계산
     const boardMonths = new Set(VIEW.board.map(function (c) { return c.month; }));
-    sortedHand.forEach(function (c) {
+    const prevHandIds = new Set((PREV_VIEW && PREV_VIEW.myHand ? PREV_VIEW.myHand : []).map(function (c) { return c.id; }));
+    sortedHand.forEach(function (c, i) {
       const opts = { selected: PENDING_HAND_CARD === c.id };
       const wrap = GostopCards.renderCard(c, opts);
-      // 바닥에 같은 달 있으면 하단 점으로 힌트
       if (boardMonths.has(c.month)) wrap.classList.add('is-matchable');
+      // 첫 딜링(이전에 손패 없었고 지금 생김) → stagger deal-in
+      if (wasEmpty || !prevHandIds.has(c.id)) {
+        wrap.classList.add('is-handdeal');
+        wrap.style.animationDelay = (i * 0.06) + 's';
+      }
       if (isMyTurn && VIEW.phase === 'play-hand') {
         wrap.onclick = function () { playCard(c.id); };
       }
@@ -630,7 +650,13 @@
     renderCapturedPeek(VIEW.captured[me], 'gameMyCapturedPeek');
     const myScoreEl = $('gameMyScore');
     if (myScoreEl) {
-      myScoreEl.textContent = (VIEW.scores[me] || 0) + '점';
+      const newScore = VIEW.scores[me] || 0;
+      const prevScore = PREV_VIEW ? (PREV_VIEW.scores[me] || 0) : 0;
+      if (newScore !== prevScore) {
+        animateScoreCount(myScoreEl, prevScore, newScore);
+      } else {
+        myScoreEl.textContent = newScore + '점';
+      }
       myScoreEl.classList.add('is-clickable-score');
       myScoreEl.onclick = function () { showScoreBreakdown(me); };
       myScoreEl.title = '점수 계산 보기';
