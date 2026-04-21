@@ -542,19 +542,59 @@
     if (VIEW.phase !== 'choose-hand-match') PENDING_HAND_CARD = null;
   }
 
-  function renderCapturedSummary(cap) {
-    if (!cap) return '';
-    const counts = {
-      light: cap.light.length,
-      animal: cap.animal.length,
-      ribbon: cap.ribbon.length,
-      junk: cap.junk.reduce(function (n, c) { return n + (c.doubleJunk ? 2 : 1); }, 0),
+  // 획득 카드 의미 그룹 분석 — 광·고도리·홍단·청단·초단·일반피
+  const GODORI_LABELS = new Set(['매조 열끗', '흑싸리 열끗', '공산 열끗']);
+  const HONGDAN_LABELS = new Set(['송학 홍단', '벚꽃 홍단', '매조 홍단']);
+  const CHEONGDAN_LABELS = new Set(['모란 청단', '국화 청단', '단풍 청단']);
+  const CHODAN_LABELS = new Set(['흑싸리 초단', '난초 초단', '홍싸리 초단']);
+
+  function analyzeCaptured(cap) {
+    if (!cap) return null;
+    const a = cap.animal || [];
+    const r = cap.ribbon || [];
+    const godori = a.filter(function (c) { return GODORI_LABELS.has(c.label); }).length;
+    const hongdan = r.filter(function (c) { return HONGDAN_LABELS.has(c.label); }).length;
+    const cheongdan = r.filter(function (c) { return CHEONGDAN_LABELS.has(c.label); }).length;
+    const chodan = r.filter(function (c) { return CHODAN_LABELS.has(c.label); }).length;
+    const junk = (cap.junk || []).reduce(function (n, c) { return n + (c.doubleJunk ? 2 : 1); }, 0);
+    return {
+      light: (cap.light || []).length,
+      animalAll: a.length,
+      godori: godori,
+      animalRegular: a.length - godori,
+      ribbonAll: r.length,
+      hongdan: hongdan,
+      cheongdan: cheongdan,
+      chodan: chodan,
+      junk: junk,
     };
-    return '' +
-      '<span class="g-cap-chip cap-light">광 ' + counts.light + '</span>' +
-      '<span class="g-cap-chip cap-animal">열끗 ' + counts.animal + '</span>' +
-      '<span class="g-cap-chip cap-ribbon">띠 ' + counts.ribbon + '</span>' +
-      '<span class="g-cap-chip cap-junk">피 ' + counts.junk + '</span>';
+  }
+
+  function renderCapturedSummary(cap) {
+    const s = analyzeCaptured(cap);
+    if (!s) return '';
+    const row = function (label, count, total, cls) {
+      const done = total && count >= total;
+      return '<span class="g-cap-chip ' + cls + (done ? ' is-complete' : '') + '">' +
+        label + ' ' + count + (total ? '/' + total : '') + '</span>';
+    };
+    let html = '';
+    // 광은 수 그대로
+    html += row('광', s.light, 0, 'cap-light');
+    // 고도리 (3장 세트)
+    if (s.godori > 0 || s.animalAll > 0) html += row('고도리', s.godori, 3, 'cap-godori');
+    // 일반 열끗
+    if (s.animalRegular > 0) html += row('열끗', s.animalRegular, 0, 'cap-animal');
+    // 띠 단 세트
+    if (s.hongdan > 0) html += row('홍단', s.hongdan, 3, 'cap-hongdan');
+    if (s.cheongdan > 0) html += row('청단', s.cheongdan, 3, 'cap-cheongdan');
+    if (s.chodan > 0) html += row('초단', s.chodan, 3, 'cap-chodan');
+    // 일반 띠 (세트에 속하지 않는 — 비 띠)
+    const regularRibbon = s.ribbonAll - s.hongdan - s.cheongdan - s.chodan;
+    if (regularRibbon > 0) html += row('띠', regularRibbon, 0, 'cap-ribbon');
+    // 피
+    if (s.junk > 0) html += row('피', s.junk, 0, 'cap-junk');
+    return html;
   }
 
   // 획득 카드 피크 — 그룹별로 가장 최근 몇 장을 작은 카드 스택으로 보여줌

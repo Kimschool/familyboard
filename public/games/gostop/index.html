@@ -4,7 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover" />
 <title>고스톱 (테스트)</title>
-<link rel="stylesheet" href="./gostop.css?v=24" />
+<link rel="stylesheet" href="./gostop.css?v=25" />
 </head>
 <body>
 <div id="lobby" class="screen">
@@ -110,6 +110,7 @@
 </div>
 
 <div id="game" class="screen game-table hidden">
+  <div class="g-portrait-hint" style="display:none">📱 가로로 회전하면 더 편해요</div>
   <header class="g-head g-table-head">
     <button id="btnQuit" class="g-back">← 나가기</button>
     <div id="gameStatus" class="g-status g-status-compact"></div>
@@ -181,10 +182,10 @@
 </div>
 
 <script src="/gostop/socket/socket.io.js"></script>
-<script src="./engine.js?v=24"></script>
-<script src="./cards-svg.js?v=24"></script>
-<script src="./sfx.js?v=24"></script>
-<script src="./lobby.js?v=24"></script>
-<script src="./game.js?v=24"></script>
+<script src="./engine.js?v=25"></script>
+<script src="./cards-svg.js?v=25"></script>
+<script src="./sfx.js?v=25"></script>
+<script src="./lobby.js?v=25"></script>
+<script src="./game.js?v=25"></script>
 </body>
 </html>
