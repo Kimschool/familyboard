@@ -1705,6 +1705,60 @@ async function fetchGooglePollen(lat, lon) {
   }
 }
 
+// ---------- 고스톱 개인 상세 통계 ----------
+app.get('/api/gostop/stats/:userId', requireAuth, async (req, res) => {
+  try {
+    const uid = Number(req.params.userId);
+    if (!Number.isInteger(uid)) return res.status(400).json({ error: 'bad-id' });
+    // 같은 가족 확인
+    const [u] = await getPool().query(
+      'SELECT id, display_name, icon, photo_url FROM users WHERE id = ? AND family_id = ? LIMIT 1',
+      [uid, req.user.family_id]
+    );
+    if (!u.length) return res.status(404).json({ error: 'not-found' });
+    const [games] = await getPool().query(
+      `SELECT r.score, r.is_winner, g.player_count, g.ended_at
+         FROM gostop_results r
+         JOIN gostop_games g ON g.id = r.game_id
+        WHERE r.user_id = ? AND g.family_id = ?
+        ORDER BY g.ended_at DESC
+        LIMIT 30`,
+      [uid, req.user.family_id]
+    );
+    // 연승 계산: 최신부터 is_winner=1 연속
+    let curStreak = 0;
+    for (const g of games) {
+      if (g.is_winner) curStreak++;
+      else break;
+    }
+    // 최대 연승
+    let maxStreak = 0, cur = 0;
+    // 전체 조회 (모든 판)
+    const [all] = await getPool().query(
+      `SELECT r.is_winner FROM gostop_results r
+         JOIN gostop_games g ON g.id = r.game_id
+        WHERE r.user_id = ? AND g.family_id = ?
+        ORDER BY g.ended_at ASC`,
+      [uid, req.user.family_id]
+    );
+    for (const g of all) {
+      if (g.is_winner) { cur++; if (cur > maxStreak) maxStreak = cur; }
+      else cur = 0;
+    }
+    res.json({
+      user: { id: u[0].id, name: u[0].display_name, icon: u[0].icon, photoUrl: u[0].photo_url },
+      currentStreak: curStreak,
+      maxStreak: maxStreak,
+      recentGames: games.map((g) => ({
+        score: Number(g.score) || 0,
+        isWinner: !!g.is_winner,
+        playerCount: g.player_count,
+        endedAt: g.ended_at,
+      })),
+    });
+  } catch (e) { res.status(500).json({ error: 'internal', message: e.message }); }
+});
+
 // ---------- 고스톱 가족 통계 ----------
 app.get('/api/gostop/stats', requireAuth, async (req, res) => {
   try {

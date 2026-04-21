@@ -187,6 +187,59 @@
     loadRanking();
   });
 
+  function showStatsDetail(player) {
+    let dlg = $('statsDetailDlg');
+    if (!dlg) {
+      dlg = document.createElement('div');
+      dlg.id = 'statsDetailDlg';
+      dlg.className = 'g-stats-backdrop';
+      dlg.addEventListener('click', function (e) { if (e.target === dlg) dlg.remove(); });
+      document.body.appendChild(dlg);
+    }
+    dlg.innerHTML = '<div class="g-stats-card"><p class="g-stats-loading">불러오는 중…</p></div>';
+    fetch('/api/gostop/stats/' + player.userId, { credentials: 'same-origin' })
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (!d || !d.user) throw new Error('bad');
+        const recent = d.recentGames || [];
+        const recentHtml = recent.length
+          ? recent.slice(0, 10).map(function (g) {
+              const when = new Date(g.endedAt);
+              const d2 = when.getMonth() + 1 + '/' + when.getDate();
+              return '<li class="g-stat-game' + (g.isWinner ? ' is-win' : '') + '">' +
+                '<span>' + d2 + '</span>' +
+                '<span>' + g.playerCount + '인</span>' +
+                '<span>' + (g.isWinner ? '승' : '·') + '</span>' +
+                '<span>' + g.score + '점</span>' +
+                '</li>';
+            }).join('')
+          : '<li class="g-empty">기록 없음</li>';
+        const avatarHtml = d.user.photoUrl
+          ? '<img src="' + d.user.photoUrl.replace(/"/g, '') + '" alt="" />'
+          : iconEmoji(d.user.icon);
+        dlg.innerHTML =
+          '<div class="g-stats-card">' +
+            '<div class="g-stats-head">' +
+              '<span class="g-rank-avatar">' + avatarHtml + '</span>' +
+              '<div class="g-stats-name">' + escapeHtml(d.user.name) + ' 의 기록</div>' +
+              '<button class="g-stats-close" aria-label="닫기">✕</button>' +
+            '</div>' +
+            '<div class="g-stats-grid">' +
+              '<div class="g-stats-cell"><b>' + player.wins + '</b><span>총 승수</span></div>' +
+              '<div class="g-stats-cell"><b>' + player.winRate + '%</b><span>승률</span></div>' +
+              '<div class="g-stats-cell"><b>' + player.bestScore + '</b><span>최고 점수</span></div>' +
+              '<div class="g-stats-cell"><b>' + (d.currentStreak || 0) + '연승</b><span>현재 연승</span></div>' +
+              '<div class="g-stats-cell"><b>' + (d.maxStreak || 0) + '연승</b><span>역대 최고</span></div>' +
+              '<div class="g-stats-cell"><b>' + player.games + '</b><span>총 판수</span></div>' +
+            '</div>' +
+            '<h4 class="g-stats-sub">최근 10판</h4>' +
+            '<ul class="g-stat-list">' + recentHtml + '</ul>' +
+          '</div>';
+        dlg.querySelector('.g-stats-close').onclick = function () { dlg.remove(); };
+      })
+      .catch(function () { dlg.remove(); alert('기록 불러오기 실패'); });
+  }
+
   function loadRanking() {
     fetch('/api/gostop/stats', { credentials: 'same-origin' })
       .then(function (r) { return r.json(); })
@@ -214,6 +267,8 @@
               '<div class="g-rank-stats">' + p.wins + '승 · ' + p.games + '판 · 승률 ' + p.winRate + '%</div>' +
             '</div>' +
             '<div class="g-rank-score"><b>' + p.totalScore + '</b><span>총 점수</span></div>';
+          li.onclick = function () { showStatsDetail(p); };
+          li.style.cursor = 'pointer';
           ul.appendChild(li);
         });
       })

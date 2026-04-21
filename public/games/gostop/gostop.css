@@ -478,6 +478,71 @@ body { min-height: 100vh; padding-bottom: 40px; }
 .g-rank-score span { font-size: 10px; color: var(--sub); font-weight: 600; }
 .g-rank-row.is-top .g-rank-score b { color: #C67200; }
 
+/* 상세 통계 모달 */
+.g-stats-backdrop {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,.5);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 10001;
+  padding: 20px;
+  animation: gDlgFade .2s ease-out;
+}
+.g-stats-card {
+  background: var(--card);
+  border-radius: 18px;
+  padding: 16px 18px 18px;
+  max-width: 420px;
+  width: 100%;
+  max-height: 82vh;
+  overflow-y: auto;
+  box-shadow: 0 12px 36px rgba(0,0,0,.3);
+  animation: gDlgPop .25s cubic-bezier(.22,1.4,.36,1);
+}
+.g-stats-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 12px;
+}
+.g-stats-name { font-size: 16px; font-weight: 800; flex: 1; }
+.g-stats-close {
+  background: none; border: none;
+  font-size: 18px; color: var(--sub);
+  cursor: pointer; padding: 4px 8px;
+}
+.g-stats-loading { text-align: center; padding: 30px 0; color: var(--sub); }
+.g-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-bottom: 14px;
+}
+.g-stats-cell {
+  background: var(--bg);
+  border-radius: 10px;
+  padding: 12px 8px;
+  text-align: center;
+}
+.g-stats-cell b { display: block; font-size: 18px; font-weight: 900; color: var(--primary); margin-bottom: 2px; }
+.g-stats-cell span { font-size: 10.5px; color: var(--sub); font-weight: 600; letter-spacing: 0.3px; }
+.g-stats-sub { margin: 12px 0 6px; font-size: 12px; color: var(--sub); font-weight: 800; letter-spacing: 0.5px; }
+.g-stat-list { list-style: none; padding: 0; margin: 0; }
+.g-stat-game {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr 1fr;
+  gap: 4px;
+  padding: 6px 8px;
+  border-bottom: 1px dashed var(--line);
+  font-size: 13px;
+  text-align: center;
+}
+.g-stat-game.is-win { background: rgba(255,216,77,.14); font-weight: 700; }
+.g-stat-game.is-win span:nth-child(3) { color: #C67200; font-weight: 900; }
+.g-stat-game span:nth-child(1) { text-align: left; color: var(--sub); }
+.g-stat-game span:nth-child(4) { text-align: right; color: var(--primary); font-weight: 700; }
+
 /* ========== 한게임 스타일 테이블 게임 화면 ========== */
 .game-table {
   max-width: 480px;
