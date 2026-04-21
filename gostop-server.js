@@ -39,6 +39,7 @@ function serializeRoom(room) {
     familyId: room.familyId,
     hostId: room.hostId,
     playerCount: room.playerCount,
+    rules: room.rules || {},
     players: room.players.map((p) => ({
       userId: p.userId, name: p.name, icon: p.icon, photoUrl: p.photoUrl,
     })),
@@ -104,12 +105,14 @@ function attachGostopServer(httpServer) {
 
     socket.on('room:create', (payload, ack) => {
       const pc = [2, 3, 4].includes(Number(payload?.playerCount)) ? Number(payload.playerCount) : 2;
+      const winScoreMin = [3, 5, 7].includes(Number(payload?.winScoreMin)) ? Number(payload.winScoreMin) : 3;
       const id = newRoomId();
       const room = {
         id,
         familyId: me.familyId,
         hostId: me.id,
         playerCount: pc,
+        rules: { winScoreMin: winScoreMin },
         players: [{
           userId: me.id, socketId: socket.id,
           name: me.name, icon: me.icon, photoUrl: me.photoUrl,
@@ -165,6 +168,7 @@ function attachGostopServer(httpServer) {
           players: room.players.map((p) => ({ userId: p.userId, name: p.name, icon: p.icon, photoUrl: p.photoUrl })),
           playerCount: room.playerCount,
           seed: Date.now(),
+          rules: room.rules || {},
         });
         room.cumScores = room.cumScores || {};
         room.gameHistory = room.gameHistory || [];
@@ -241,11 +245,12 @@ function attachGostopServer(httpServer) {
         const room = ROOMS.get(roomId);
         if (!room) throw new Error('not-in-room');
         if (!room.game || !room.game.finished) throw new Error('game-not-finished');
-        // 새 게임 생성 — 누적점수/히스토리 유지, gameResultRecorded 만 리셋
+        // 새 게임 생성 — 누적점수/히스토리/rules 유지, gameResultRecorded 만 리셋
         room.game = engine.createGame({
           players: room.players.map((p) => ({ userId: p.userId, name: p.name, icon: p.icon, photoUrl: p.photoUrl })),
           playerCount: room.playerCount,
           seed: Date.now(),
+          rules: room.rules || {},
         });
         room.gameResultRecorded = false;
         io.to(`room:${room.id}`).emit('game:started', { room: serializeRoom(room) });

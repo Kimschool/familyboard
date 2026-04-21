@@ -7,6 +7,7 @@
   window.GostopSocket = socket;
 
   let SELECTED_PC = 2;
+  let SELECTED_WS = 3;
   let CURRENT_ROOM = null;
 
   document.querySelectorAll('.g-pc-btn').forEach(function (b) {
@@ -16,9 +17,16 @@
       SELECTED_PC = Number(b.dataset.pc);
     });
   });
+  document.querySelectorAll('.g-ws-btn').forEach(function (b) {
+    b.addEventListener('click', function () {
+      document.querySelectorAll('.g-ws-btn').forEach(function (x) { x.classList.remove('is-selected'); });
+      b.classList.add('is-selected');
+      SELECTED_WS = Number(b.dataset.ws);
+    });
+  });
 
   $('btnCreate').addEventListener('click', function () {
-    socket.emit('room:create', { playerCount: SELECTED_PC }, function (res) {
+    socket.emit('room:create', { playerCount: SELECTED_PC, winScoreMin: SELECTED_WS }, function (res) {
       if (!res || !res.ok) return alert('방 생성 실패');
       enterRoom(res.room);
     });
@@ -102,7 +110,8 @@
   function renderRoom(room) {
     CURRENT_ROOM = room;
     window.GostopCurrentRoom = room;
-    $('roomTitle').textContent = room.playerCount + '인 방';
+    const ws = (room.rules && room.rules.winScoreMin) || 3;
+    $('roomTitle').textContent = room.playerCount + '인 방 · ' + ws + '점 승리';
     $('roomCode').textContent = room.id;
     $('bigCode').textContent = room.id;
     $('roomCount').textContent = '(' + room.players.length + '/' + room.playerCount + ')';

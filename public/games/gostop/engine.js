@@ -93,6 +93,8 @@
     const players = opts.players;
     const playerCount = opts.playerCount;
     const seed = opts.seed || Date.now();
+    const rules = opts.rules || {};
+    const winScoreMin = [3, 5, 7].indexOf(Number(rules.winScoreMin)) >= 0 ? Number(rules.winScoreMin) : 3;
     if ([2, 3, 4].indexOf(playerCount) < 0) throw new Error('playerCount must be 2, 3, or 4');
     if (players.length < playerCount) throw new Error('not enough players');
 
@@ -129,7 +131,8 @@
       pending: null,
       log: [{ ts: Date.now(), msg: '게임 시작' }],
       scores: new Array(playerCount).fill(0),
-      goCounts: new Array(playerCount).fill(0),  // 플레이어별 '고' 누적 횟수
+      goCounts: new Array(playerCount).fill(0),
+      winScoreMin: winScoreMin,
       finished: false,
       winner: null,
     };
@@ -364,7 +367,8 @@
   function afterFlip(s) {
     const score = calculateScore(s.captured[s.turn]);
     s.scores[s.turn] = score;
-    if (score >= 3) {
+    const threshold = s.winScoreMin || 3;
+    if (score >= threshold) {
       s.phase = 'choose-go-stop';
       appendLog(s, s.players[s.turn].name + '님: ' + score + '점 — 고? 스톱?');
       return { state: s, needsGoStop: true };
@@ -457,6 +461,7 @@
       bbukGroups: state.bbukGroups || [],
       goCounts: state.goCounts || new Array(state.playerCount).fill(0),
       bakFlags: state.bakFlags || [],
+      winScoreMin: state.winScoreMin || 3,
     };
   }
 
