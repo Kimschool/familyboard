@@ -104,7 +104,17 @@ function api(path, opts = {}) {
     headers: { 'Content-Type': 'application/json' },
     ...opts,
   }).then(async (r) => {
-    if (!r.ok) throw Object.assign(new Error('http'), { status: r.status });
+    if (!r.ok) {
+      // 응답 JSON 본문에서 에러 정보를 가능한 한 추출 — "http" 만 던지면 디버깅 어려움
+      let body = null;
+      try { body = await r.json(); } catch {}
+      const msg = body?.message || body?.error || `요청 실패 (${r.status})`;
+      const err = new Error(msg);
+      err.status = r.status;
+      err.body = body;
+      if (body && typeof body === 'object') Object.assign(err, body);
+      throw err;
+    }
     if (r.status === 204) return null;
     return r.json();
   });
@@ -315,6 +325,9 @@ function enterApp() {
   loadMyStreak();
   loadMeds();
   loadWeeklyReport();
+  loadFamilyJourney();
+  loadNudge();
+  loadMoodWeek();
   loadAnniversaries();
   renderDailyQuote();
   setupTtsAuto();
@@ -322,7 +335,6 @@ function enterApp() {
   loadPoll();
   loadEvents();
   loadGallery();
-  loadChatPeek();
   refreshChatUnread();
 
   // 관리자 UI — 설정 화면으로 이동 (계정 카드의 '가족 관리' 버튼으로 열림)
@@ -343,6 +355,9 @@ function enterApp() {
   // 카드 순서 적용 이후에 계정 카드를 최상단으로 이동하고 아코디언 마운트
   // (applyCardOrder 가 account 카드를 default 순서 맨 뒤로 옮겨버리는 걸 방지)
   mountAccountAsAccordion();
+
+  // 탭 시스템 마운트 (계정 아코디언 뒤에 탭 바 삽입)
+  initTabs();
 }
 
 // 관리자 DOM을 설정 화면 body 로 한 번만 이동
@@ -1323,10 +1338,51 @@ async function loadMoodCard() {
     if (!alias) return;
     const r = await fetch(`/api/family/${encodeURIComponent(alias)}`).then((r) => r.json());
     FAMILY_CACHE = r.members; // 타임라인용 최신 반영
-    renderMoodPicker(r.members.find((m) => m.id === ME.id)?.mood);
+    const me = r.members.find((m) => m.id === ME.id);
+    renderMoodPicker(me?.mood);
+    renderMoodComment(me?.mood, me?.moodComment);
     renderMoodFamily(r.members);
     renderTimeline();
   } catch {}
+}
+
+// 기분 코멘트 입력/저장 (개선안 §3.3 기능1)
+function renderMoodComment(currentMood, currentComment) {
+  const wrap = $('moodCommentWrap');
+  const input = $('moodComment');
+  const ok = $('moodCommentOk');
+  if (!wrap || !input) return;
+  if (currentMood) {
+    wrap.classList.remove('hidden');
+    if (document.activeElement !== input) input.value = currentComment || '';
+  } else {
+    wrap.classList.add('hidden');
+    input.value = '';
+  }
+  ok.classList.add('hidden');
+}
+
+async function saveMoodComment() {
+  const input = $('moodComment');
+  const ok = $('moodCommentOk');
+  if (!input) return;
+  const comment = (input.value || '').trim();
+  // FAMILY_CACHE 의 본인 데이터에서 현재 mood 가져옴 (불필요한 fetch 제거 — 무음 실패 방지)
+  const meCache = (FAMILY_CACHE || []).find((m) => m.id === ME?.id);
+  const currentMood = meCache?.mood;
+  if (!currentMood) {
+    alert('먼저 위에서 오늘의 기분 이모지를 선택해 주세요');
+    return;
+  }
+  try {
+    await api('/api/me/mood', { method: 'POST', body: JSON.stringify({ mood: currentMood, comment }) });
+    ok.classList.remove('hidden');
+    setTimeout(() => ok.classList.add('hidden'), 1600);
+    loadMoodCard();
+    loadFamilyJourney && loadFamilyJourney();
+  } catch (e) {
+    alert(e?.message || '코멘트 저장에 실패했어요');
+  }
 }
 function renderMoodPicker(currentMood) {
   const pick = $('moodPicker');
@@ -1358,17 +1414,356 @@ function renderMoodFamily(members) {
   }
   for (const m of withMood) {
     const d = document.createElement('div');
-    d.className = 'mood-chip';
+    d.className = 'mood-chip' + (m.moodComment ? ' has-comment' : '');
+    const nameSafe = escapeHtml ? escapeHtml(m.displayName) : m.displayName;
+    const commentSafe = m.moodComment ? (escapeHtml ? escapeHtml(m.moodComment) : m.moodComment) : '';
     d.innerHTML = `
-      <span class="mood-chip-emoji">${inlineAvatarHtml({ id: m.id, icon: m.icon, photoUrl: m.photoUrl }, 24)}</span>
-      <span class="mood-chip-mood">${m.mood}</span>
-      <span class="mood-chip-name"></span>`;
+      <div class="mood-chip-top">
+        <span class="mood-chip-emoji">${inlineAvatarHtml({ id: m.id, icon: m.icon, photoUrl: m.photoUrl }, 24)}</span>
+        <span class="mood-chip-mood">${m.mood}</span>
+        <span class="mood-chip-name"></span>
+      </div>
+      ${m.moodComment ? `<p class="mood-chip-comment"></p>` : ''}`;
     d.querySelector('.mood-chip-name').textContent = m.displayName;
+    if (m.moodComment) d.querySelector('.mood-chip-comment').textContent = m.moodComment;
     row.appendChild(d);
   }
 }
 
+// 기분 코멘트 저장 버튼 바인딩 (엔터키로도 저장)
+(function bindMoodComment() {
+  const btn = document.getElementById('moodCommentSave');
+  const input = document.getElementById('moodComment');
+  if (!btn || !input) return;
+  btn.addEventListener('click', saveMoodComment);
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); saveMoodComment(); }
+  });
+})();
+
 // ---------- 주간 가족 요약 ----------
+// 이번 주 가족 무드 그리드 — 7일 × 가족 전원
+async function loadMoodWeek() {
+  const card = $('moodweekCard');
+  const wrap = $('moodweekWrap');
+  const empty = $('moodweekEmpty');
+  if (!card || !wrap) return;
+  try {
+    const r = await api('/api/family/mood-week');
+    if (!r.members?.length) { card.classList.add('hidden'); return; }
+
+    // 기분 기록이 하나도 없으면 빈 상태
+    const totalMoods = r.members.reduce((s, m) => s + m.days.filter((d) => d.mood).length, 0);
+    if (totalMoods === 0) {
+      wrap.innerHTML = '';
+      empty.classList.remove('hidden');
+      card.classList.remove('hidden');
+      return;
+    }
+    empty.classList.add('hidden');
+
+    const DOW = ['일','월','화','수','목','금','토'];
+    // 헤더(날짜) + 각 멤버별 행
+    let html = '<div class="mw-grid" style="--cols:' + r.days.length + '">';
+    // corner + day headers
+    html += '<div class="mw-corner"></div>';
+    for (const d of r.days) {
+      html += `<div class="mw-head${d.isToday ? ' is-today' : ''}">
+        <span class="mw-dow">${DOW[d.dow]}</span>
+        <span class="mw-day">${d.day}</span>
+      </div>`;
+    }
+    for (const m of r.members) {
+      const av = m.photoUrl
+        ? `<img class="mw-avatar-photo" src="${m.photoUrl.replace(/"/g, '')}" alt="" />`
+        : `<span class="mw-avatar-emoji">${iconEmoji(m.icon)}</span>`;
+      html += `<div class="mw-name">${av}<span class="mw-name-t"></span></div>`;
+      for (const d of m.days) {
+        const cls = 'mw-cell' + (d.mood ? ' has' : ' empty') + (d.date === r.today ? ' today' : '');
+        const title = d.comment
+          ? `${d.date} — ${d.comment.replace(/"/g, '&quot;')}`
+          : d.date + (d.mood ? ` — ${d.mood}` : '');
+        html += `<div class="${cls}" title="${title}">${d.mood || ''}</div>`;
+      }
+    }
+    html += '</div>';
+    wrap.innerHTML = html;
+    // 이름 안전 textContent
+    const nameSpans = wrap.querySelectorAll('.mw-name-t');
+    r.members.forEach((m, i) => { if (nameSpans[i]) nameSpans[i].textContent = m.displayName; });
+
+    card.classList.remove('hidden');
+  } catch (e) {
+    console.warn('[mood-week]', e);
+    card.classList.add('hidden');
+  }
+}
+
+// 응원 넛지: 오늘 조용한 가족 한 명을 추천 → 탭/클릭하면 프로필 시트(응원 선택) 열기
+async function loadNudge() {
+  const card = $('nudgeCard');
+  if (!card) return;
+  try {
+    const r = await api('/api/family/nudge');
+    if (!r?.target) { card.classList.add('hidden'); card.onclick = null; return; }
+    const t = r.target;
+    $('nudgeTitle').textContent = r.hint || `${t.displayName}님에게 응원 보내기`;
+    $('nudgeSub').textContent = '눌러서 한 마디 남기기 💌';
+    card.onclick = () => {
+      // 프로필 시트는 member 객체 형태가 필요 — 최소 필드로 구성
+      openProfileSheet({
+        id: t.id,
+        displayName: t.displayName,
+        icon: t.icon,
+        photoUrl: t.photoUrl,
+        role: 'member',
+        birthYear: null, birthMonth: null, birthDay: null,
+        phone: null, mood: null, moodComment: null, isPet: false,
+      });
+    };
+    card.onkeydown = (e) => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); card.click(); }
+    };
+    card.classList.remove('hidden');
+  } catch (e) {
+    console.warn('[nudge]', e);
+    card.classList.add('hidden');
+  }
+}
+
+// 가족 여정 (개선안 §2.3·§8.1) — 시간·참여·누적 감정 요약
+// 마일스톤 데이 목록 — 감정적으로 의미 있는 수치만 (journey API와 동일 세트)
+const JOURNEY_MILESTONES = [7, 30, 100, 180, 365, 730, 1000, 1825, 3650];
+
+async function loadFamilyJourney() {
+  const card = $('journeyCard');
+  if (!card) return;
+  try {
+    const r = await api('/api/family/journey');
+
+    // 함께한 일수 애니메이션
+    const daysEl = $('jDays');
+    const target = Math.max(1, Number(r.daysTogether || 1));
+    const start = Number(daysEl.textContent) || 0;
+    const anim = Math.min(target, 220); // 오래된 가족은 마지막 값으로 뛰기
+    const step = Math.max(1, Math.ceil((target - start) / 30));
+    let cur = start;
+    if (target - start > 0) {
+      const tick = () => {
+        cur += step;
+        if (cur >= target) { cur = target; daysEl.textContent = cur.toLocaleString(); return; }
+        daysEl.textContent = cur.toLocaleString();
+        requestAnimationFrame(tick);
+      };
+      tick();
+    } else {
+      daysEl.textContent = target.toLocaleString();
+    }
+
+    // 서브 메시지 (마일스톤 근접 여부)
+    const sub = $('jSub');
+    const ms = r.nextMilestone;
+    if (ms && ms !== target) {
+      const left = ms - target;
+      sub.textContent = left <= 14
+        ? `${left}일 뒤 함께한 지 ${ms}일!`
+        : `${r.familyName || '우리 가족'}, 함께 기록하고 있어요`;
+      // 진행 바
+      const prog = $('jProg');
+      const bar = $('jProgBar');
+      const label = $('jProgLabel');
+      const prevMs = [0, 7, 30, 100, 180, 365, 730, 1000, 1825].filter((n) => n < ms).pop() || 0;
+      const pct = Math.min(100, ((target - prevMs) / (ms - prevMs)) * 100);
+      bar.style.width = pct.toFixed(1) + '%';
+      label.textContent = `다음 기록: ${ms}일 (${left}일 남음)`;
+      prog.classList.remove('hidden');
+    } else {
+      sub.textContent = `${r.familyName || '우리 가족'}, 함께 기록하고 있어요`;
+      $('jProg').classList.add('hidden');
+    }
+
+    // 누적 통계 타일
+    const statsWrap = $('jStats');
+    const tiles = [
+      { emoji: '💬', label: '답변',  v: r.totals?.answers },
+      { emoji: '😊', label: '기분',  v: r.totals?.moods },
+      { emoji: '📸', label: '사진',  v: r.totals?.photos },
+      { emoji: '💌', label: '응원',  v: r.totals?.stickers },
+    ].filter((t) => Number(t.v) > 0);
+    statsWrap.innerHTML = '';
+    if (tiles.length) {
+      for (const t of tiles) {
+        const div = document.createElement('div');
+        div.className = 'journey-stat';
+        div.innerHTML = `<span class="journey-stat-emoji">${t.emoji}</span>
+                         <span class="journey-stat-val">${Number(t.v).toLocaleString()}</span>
+                         <span class="journey-stat-lbl"></span>`;
+        div.querySelector('.journey-stat-lbl').textContent = t.label;
+        statsWrap.appendChild(div);
+      }
+    }
+
+    // 이번 주 활동 가족
+    const act = $('jActive');
+    if (r.memberCount > 0 && r.weeklyActive >= 0) {
+      const pct = Math.round((r.weeklyActive / r.memberCount) * 100);
+      act.innerHTML = '';
+      const pill = document.createElement('div');
+      pill.className = 'journey-active-pill';
+      pill.innerHTML = `<span class="journey-active-emoji">🌿</span>
+                        <span class="journey-active-text"></span>
+                        <span class="journey-active-pct">${pct}%</span>`;
+      pill.querySelector('.journey-active-text').textContent =
+        `이번 주 ${r.weeklyActive}/${r.memberCount}명이 함께`;
+      act.appendChild(pill);
+      act.classList.remove('hidden');
+    } else {
+      act.classList.add('hidden');
+    }
+
+    // 최근 30일 기분 Top
+    const moodEl = $('jMood');
+    if (r.topMood30d && r.topMood30d.count > 0) {
+      moodEl.innerHTML = '';
+      const el = document.createElement('div');
+      el.className = 'journey-top-mood';
+      el.innerHTML = `<span class="journey-top-mood-e">${r.topMood30d.mood}</span>
+                      <span class="journey-top-mood-t"></span>`;
+      el.querySelector('.journey-top-mood-t').textContent =
+        `최근 30일 우리 가족의 기분 — ${r.topMood30d.count}번`;
+      moodEl.appendChild(el);
+      moodEl.classList.remove('hidden');
+    } else {
+      moodEl.classList.add('hidden');
+    }
+
+    // 한 달 전 / 1년 전 오늘 회상
+    const mem = $('jMemory');
+    const memLabel = $('jMemLabel');
+    const memQ = $('jMemQ');
+    const memMeta = $('jMemMeta');
+    const recall = r.yearAgo || r.monthAgo;
+    if (recall && recall.question) {
+      memLabel.textContent = r.yearAgo ? '✨ 1년 전 오늘' : '✨ 한 달 전 오늘';
+      memQ.textContent = `"${recall.question}"`;
+      memMeta.textContent = recall.answered > 0
+        ? `가족 ${recall.answered}명이 답했어요`
+        : '그 날의 기록을 다시 돌아보세요';
+      mem.classList.remove('hidden');
+    } else {
+      mem.classList.add('hidden');
+    }
+
+    // 첫 순간들 — 가족 이야기 시작 포인트
+    const firsts = r.firsts || {};
+    const firstsEl = $('jFirsts');
+    const firstsList = $('jFirstsList');
+    if (firstsEl && firstsList) {
+      const items = [];
+      const fmtDate = (s) => { try { const d = new Date(s); return `${d.getMonth()+1}/${d.getDate()}`; } catch { return s; } };
+      if (firsts.firstMood)    items.push({ emoji: '😊', label: '첫 기분 기록', who: firsts.firstMood.name,    date: firsts.firstMood.date,    extra: firsts.firstMood.mood });
+      if (firsts.firstAnswer)  items.push({ emoji: '💬', label: '첫 질문 답변', who: firsts.firstAnswer.name,  date: firsts.firstAnswer.date,  extra: null });
+      if (firsts.firstPhoto)   items.push({ emoji: '📸', label: '첫 가족 사진', who: firsts.firstPhoto.name,   date: firsts.firstPhoto.date,   extra: null });
+      if (firsts.firstSticker) items.push({ emoji: '💌', label: '첫 응원',       who: firsts.firstSticker.name, date: firsts.firstSticker.date, extra: firsts.firstSticker.emoji });
+      if (items.length) {
+        firstsList.innerHTML = '';
+        for (const it of items) {
+          const li = document.createElement('li');
+          li.className = 'journey-first-item';
+          li.innerHTML = `
+            <span class="jfi-emoji">${it.emoji}</span>
+            <span class="jfi-body">
+              <span class="jfi-label"></span>
+              <span class="jfi-meta"></span>
+            </span>
+            <span class="jfi-date">${fmtDate(it.date)}</span>
+          `;
+          li.querySelector('.jfi-label').textContent = it.label + (it.extra ? ` ${it.extra}` : '');
+          li.querySelector('.jfi-meta').textContent  = it.who ? `by ${it.who}` : '';
+          firstsList.appendChild(li);
+        }
+        firstsEl.classList.remove('hidden');
+      } else {
+        firstsEl.classList.add('hidden');
+      }
+    }
+
+    card.classList.remove('hidden');
+
+    // 마일스톤 축하: 오늘이 정확히 마일스톤 데이면 딱 1회 연출
+    if (JOURNEY_MILESTONES.includes(target)) {
+      const key = `fb_ms_seen_${target}`;
+      if (!localStorage.getItem(key)) {
+        localStorage.setItem(key, String(Date.now()));
+        setTimeout(() => celebrateMilestone(target, r.familyName || '우리 가족'), 400);
+      }
+    }
+
+    // 마일스톤 근접(3일 이내) → 진행 바 펄스
+    const nearMs = r.nextMilestone;
+    if (nearMs && nearMs !== target && nearMs - target <= 3) {
+      $('jProg')?.classList.add('milestone-near');
+    } else {
+      $('jProg')?.classList.remove('milestone-near');
+    }
+  } catch (e) {
+    console.warn('[journey]', e);
+    card.classList.add('hidden');
+  }
+}
+
+// 마일스톤 컨페티 오버레이 — 감성적 축하 연출 (1회성)
+function celebrateMilestone(days, familyName) {
+  if (document.getElementById('celebrateOverlay')) return;
+  const overlay = document.createElement('div');
+  overlay.id = 'celebrateOverlay';
+  overlay.className = 'celebrate-overlay';
+  overlay.setAttribute('role', 'dialog');
+  overlay.innerHTML = `
+    <div class="celebrate-confetti"></div>
+    <div class="celebrate-card">
+      <div class="celebrate-emoji">🎉</div>
+      <h2 class="celebrate-title"></h2>
+      <p class="celebrate-sub"></p>
+      <p class="celebrate-count"><span></span>일째 함께</p>
+      <button type="button" class="celebrate-close">계속하기</button>
+    </div>`;
+  const phrase = days >= 365
+    ? `${familyName}, 함께한 지 ${(days/365).toFixed(days%365===0 ? 0 : 1)}년!`
+    : `${familyName}, ${days}일의 기록을 모았어요`;
+  overlay.querySelector('.celebrate-title').textContent = phrase;
+  overlay.querySelector('.celebrate-sub').textContent =
+    days >= 1000 ? '천 일의 마음이 우리 가족을 더 깊게 만들었어요' :
+    days >= 365  ? '1년의 기억이 평생의 자산이 됩니다' :
+    days >= 100  ? '매일 한 줄의 마음이 쌓였어요' :
+    days >= 30   ? '한 달간 꾸준히 기록한 가족' :
+                   '함께 시작한 첫 일주일';
+  overlay.querySelector('.celebrate-count span').textContent = days.toLocaleString();
+
+  // 컨페티 이모지 파티클 30개
+  const confetti = overlay.querySelector('.celebrate-confetti');
+  const EMOJI = ['🎉','✨','💚','🌿','💌','🎊','⭐','🌸'];
+  for (let i = 0; i < 30; i++) {
+    const s = document.createElement('span');
+    s.className = 'celebrate-particle';
+    s.textContent = EMOJI[Math.floor(Math.random() * EMOJI.length)];
+    s.style.left = (Math.random() * 100) + '%';
+    s.style.animationDelay = (Math.random() * 0.8) + 's';
+    s.style.animationDuration = (2.4 + Math.random() * 1.6) + 's';
+    s.style.fontSize = (16 + Math.random() * 16) + 'px';
+    confetti.appendChild(s);
+  }
+
+  document.body.appendChild(overlay);
+  const close = () => {
+    overlay.classList.add('closing');
+    setTimeout(() => overlay.remove(), 400);
+  };
+  overlay.querySelector('.celebrate-close').addEventListener('click', close);
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+  setTimeout(close, 8000); // 8초 자동 닫기
+}
+
 async function loadWeeklyReport() {
   try {
     const r = await api('/api/activity/week');
@@ -1677,14 +2072,15 @@ function closeProfilePhotoCropSheet() {
 }
 
 $('myPhotoPickBtn').addEventListener('click', () => $('myPhotoFile').click());
-$('myPhotoFile').addEventListener('change', (e) => {
+$('myPhotoFile').addEventListener('change', async (e) => {
   const f = e.target.files?.[0];
+  if (!f) { e.target.value = ''; return; }
+  if (!f.type.startsWith('image/')) { e.target.value = ''; alert('이미지 파일을 선택해 주세요'); return; }
+  let stable;
+  try { stable = await stabilizePickedFile(f); }
+  catch { e.target.value = ''; alert('사진을 읽지 못했어요. 다시 선택해 주세요.'); return; }
   e.target.value = '';
-  if (!f || !f.type.startsWith('image/')) {
-    if (f) alert('이미지 파일을 선택해 주세요');
-    return;
-  }
-  openProfilePhotoCrop(URL.createObjectURL(f));
+  openProfilePhotoCrop(URL.createObjectURL(stable));
 });
 $('myPhotoClearBtn').addEventListener('click', async () => {
   if (!confirm('프로필 사진을 지울까요?')) return;
@@ -2160,6 +2556,7 @@ async function loadFamilySummary() {
       const badge = document.createElement('button');
       badge.type = 'button';
       badge.className = 'family-badge' + (m.id === ME.id ? ' me' : '') + (m.activated ? '' : ' dim');
+      badge.dataset.uid = m.id;
       badge.style.cssText += accentStyle(m.id, 'bg');
       const avatarHtml = m.photoUrl
         ? `<img class="family-badge-photo" src="${m.photoUrl.replace(/"/g, '')}" alt="" />`
@@ -2168,11 +2565,15 @@ async function loadFamilySummary() {
         ${avatarHtml}
         <span class="family-badge-name"></span>
         ${age ? `<span class="family-badge-age">${age}</span>` : ''}
+        <span class="family-badge-activity" aria-hidden="true"></span>
       `;
       badge.querySelector('.family-badge-name').textContent = m.displayName;
       badge.onclick = () => openProfileSheet(m);
       row.appendChild(badge);
     }
+
+    // 오늘 참여 인디케이터 — 비동기로 채움
+    loadTodayActivityIndicators();
     // FAMILY_CACHE 로드가 끝났으니 photoUrl 의존 카드들을 사진으로 새로 그림.
     // (초기 로드 순서상 이 카드들이 FAMILY_CACHE 가 빈 상태에서 이모지로 렌더됐을 수 있음)
     try { if (typeof MEMO_CACHE !== 'undefined' && MEMO_CACHE?.length) renderMemos(MEMO_CACHE); } catch {}
@@ -2180,6 +2581,76 @@ async function loadFamilySummary() {
     try { loadYesterdayReveal(); } catch {}
     try { loadTodayQuestion(); } catch {}
   } catch {}
+}
+
+// 가족 뱃지에 오늘 활동 인디케이터 표시 (기분·답변·메모·응원)
+async function loadTodayActivityIndicators() {
+  try {
+    const r = await api('/api/family/today-status');
+    const by = r.byUser || {};
+    let activeCount = 0;
+    let totalCount = 0;
+    let meActive = false;
+    document.querySelectorAll('#familyRow .family-badge').forEach((b) => {
+      const uid = Number(b.dataset.uid);
+      if (!uid) return;
+      totalCount++;
+      const a = by[uid] || {};
+      const slot = b.querySelector('.family-badge-activity');
+      if (!slot) return;
+      const dots = [];
+      if (a.mood)     dots.push(['mood','😊','오늘 기분 남김']);
+      if (a.answered) dots.push(['answer','💬','오늘 질문 답함']);
+      if (a.memo)     dots.push(['memo','📝','오늘 메모 남김']);
+      if (a.sticker)  dots.push(['sticker','💌','오늘 응원 보냄']);
+      // 활동량 기반 링 클래스
+      b.classList.remove('ring-0','ring-1','ring-2','ring-3','ring-4');
+      b.classList.add('ring-' + dots.length);
+      if (!dots.length) {
+        slot.innerHTML = '<span class="fba-dot quiet" title="오늘 아직 조용"></span>';
+        b.classList.add('today-quiet');
+      } else {
+        activeCount++;
+        if (uid === ME?.id) meActive = true;
+        b.classList.remove('today-quiet');
+        slot.innerHTML = dots.map(([k, e, t]) =>
+          `<span class="fba-dot" data-k="${k}" title="${t}">${e}</span>`
+        ).join('');
+      }
+    });
+
+    // 오늘 가족 활동 동적 요약 문장
+    const allIn = $('familyAllIn');
+    if (allIn && totalCount >= 1) {
+      const emojiEl = allIn.querySelector('.fai-emoji');
+      const textEl = allIn.querySelector('.fai-text');
+      allIn.classList.remove('all-in','some-in','none-in','me-only');
+      let emoji = '🌿', text = '';
+      if (activeCount === 0) {
+        emoji = '🌱'; text = '오늘 아직 조용해요. 가족에게 첫 한 마디를 남겨볼까요?';
+        allIn.classList.add('none-in');
+      } else if (totalCount === 1) {
+        // 1인 가족은 표시 안 함
+        allIn.classList.add('hidden');
+        return;
+      } else if (activeCount === totalCount) {
+        emoji = '🎊'; text = '오늘 가족 전원이 기록을 남겼어요!';
+        allIn.classList.add('all-in');
+      } else if (activeCount === 1 && meActive) {
+        emoji = '🌿'; text = '오늘은 내가 가족의 시작을 열었어요';
+        allIn.classList.add('me-only');
+      } else {
+        emoji = '✨';
+        text = `오늘 ${activeCount}/${totalCount}명이 함께 기록 중이에요`;
+        allIn.classList.add('some-in');
+      }
+      if (emojiEl) emojiEl.textContent = emoji;
+      if (textEl) textEl.textContent = text;
+      allIn.classList.remove('hidden');
+    } else if (allIn) {
+      allIn.classList.add('hidden');
+    }
+  } catch (e) { console.warn('[today-status]', e); }
 }
 
 let CURRENT_PROFILE_USER = null;
@@ -3441,21 +3912,214 @@ async function loadZodiac() {
 $('openSettingsBtn').addEventListener('click', () => { showOnly('settings'); window.scrollTo(0, 0); });
 $('settingsBack').addEventListener('click', () => { showOnly('app'); });
 
-// ---------- 카드 순서 편집 ----------
-const DEFAULT_CARD_ORDER = [
-  // 1) 긴급·실시간: 가족 공지
-  'notice',
-  // 2) 오늘의 핵심 CTA: 질문/답변
-  'question',
-  // 3) 매일 새로움: 어제 답변 공개
-  'reveal',
-  // 4) 소통·일정 묶음 + 빠른 연락처(긴급 상황 빠른 접근)
-  'upcoming','family','mood','sos','chat','birthday',
-  // 5) 보조 정보
-  'weather','tips','gallery',
-  // 6) 엔터·유틸·메모 (아래로)
-  'games','zodiac','fx','calc','memo','account'
+// ==========================================================
+// 2026-04 탭 시스템 (개선안 Phase 1)
+// 카테고리별 3탭 + 모바일 스와이프 전환
+// ==========================================================
+const TABS = [
+  { id: 'family', emoji: '👨‍👩‍👧', label: '가족',
+    cards: ['journey','nudge','moodweek','family','upcoming','events','calendar','gallery','timeline','stickers','weekly','zodiac','poll'] },
+  { id: 'today',  emoji: '🏠', label: '오늘',
+    cards: ['notice','mood','question','reveal','birthday','quote','weather','tips'] },
+  { id: 'chat',   emoji: '💬', label: '채팅',
+    cards: ['chat'] },
+  { id: 'tools',  emoji: '🧰', label: '도구',
+    cards: ['meds','sos','games','memo','fx','calc'] },
 ];
+const CARD_TO_TAB = (() => {
+  const m = new Map();
+  for (const t of TABS) for (const c of t.cards) m.set(c, t.id);
+  return m;
+})();
+const DEFAULT_TAB = 'family';
+
+function getActiveTab() {
+  const saved = localStorage.getItem('fb_active_tab');
+  if (saved && TABS.some((t) => t.id === saved)) return saved;
+  return DEFAULT_TAB;
+}
+
+function setActiveTab(id, opts = {}) {
+  const prev = document.body.getAttribute('data-active-tab');
+  if (!TABS.some((t) => t.id === id)) id = DEFAULT_TAB;
+  localStorage.setItem('fb_active_tab', id);
+  document.body.setAttribute('data-active-tab', id);
+  // 채팅 탭 진입/이탈 — 메시지 로드/폴링 토글
+  if (id === 'chat' && prev !== 'chat') { try { initChatTab(); } catch {} }
+  else if (prev === 'chat' && id !== 'chat') { try { teardownChatTab(); } catch {} }
+  document.querySelectorAll('.tab-btn').forEach((btn) => {
+    const active = btn.dataset.tab === id;
+    btn.classList.toggle('active', active);
+    btn.setAttribute('aria-selected', active ? 'true' : 'false');
+  });
+  // 전환 시 사용자를 탭 맨 위로 이동 (스와이프/탭 전환 후 맨 위 카드가 보이게)
+  if (!opts.noScroll) {
+    const bar = document.getElementById('tabBar');
+    if (bar) {
+      const top = bar.getBoundingClientRect().bottom + window.scrollY - 8;
+      window.scrollTo({ top: Math.max(0, top - 56), behavior: 'smooth' });
+    } else {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  }
+  // 슬라이드 애니메이션 힌트
+  const app = document.getElementById('app');
+  if (app) {
+    app.classList.add('tab-switching');
+    setTimeout(() => app.classList.remove('tab-switching'), 220);
+  }
+}
+
+function assignCardTabs() {
+  const cards = document.querySelectorAll('#app [data-card-id]');
+  cards.forEach((el) => {
+    const id = el.dataset.cardId;
+    if (id === 'account') { el.removeAttribute('data-in-tab'); return; }
+    const tab = CARD_TO_TAB.get(id);
+    if (tab) el.setAttribute('data-in-tab', tab);
+    else el.removeAttribute('data-in-tab');
+  });
+}
+
+function mountTabBar() {
+  if (document.getElementById('tabBar')) return;
+  const nav = document.createElement('nav');
+  nav.id = 'tabBar';
+  nav.className = 'tab-bar';
+  nav.setAttribute('role', 'tablist');
+  nav.innerHTML = TABS.map((t) => `
+    <button type="button" class="tab-btn" role="tab" data-tab="${t.id}">
+      <span class="tab-emoji">${t.emoji}</span>
+      <span class="tab-label">${t.label}</span>
+      ${t.id === 'chat' ? '<span id="chatTabBadge" class="tab-badge hidden">0</span>' : ''}
+    </button>`).join('');
+  // 계정 아코디언 바로 아래, 첫 카드 위에 삽입
+  const account = document.querySelector('#app .account-card');
+  const hero = document.getElementById('heroEl');
+  const anchor = account || hero;
+  if (anchor && anchor.parentElement) anchor.after(nav);
+  nav.addEventListener('click', (e) => {
+    const btn = e.target.closest('.tab-btn');
+    if (!btn) return;
+    setActiveTab(btn.dataset.tab);
+  });
+}
+
+// 모바일 스와이프 — 좌우로 탭 전환
+function initTabSwipe() {
+  const main = document.getElementById('app');
+  if (!main || main.dataset.swipeMounted === '1') return;
+  main.dataset.swipeMounted = '1';
+
+  let sx = 0, sy = 0, st = 0, tracking = false;
+  const NO_SWIPE_SEL = 'input, textarea, select, .no-swipe, .cal-grid, .mood-picker, .chip-row, .hourly, .stickers-row, .sticker-row, .memo-list, .gallery-grid';
+
+  main.addEventListener('touchstart', (e) => {
+    if (e.touches.length !== 1) { tracking = false; return; }
+    if (document.body.classList.contains('reorder-mode')) { tracking = false; return; }
+    // 바텀시트/모달이 열려 있으면 탭 스와이프 비활성
+    if (document.querySelector('.sheet-backdrop:not(.hidden), .tour-overlay:not(.hidden)')) { tracking = false; return; }
+    const t = e.touches[0];
+    if (t.target && t.target.closest && t.target.closest(NO_SWIPE_SEL)) { tracking = false; return; }
+    sx = t.clientX; sy = t.clientY; st = Date.now(); tracking = true;
+  }, { passive: true });
+
+  main.addEventListener('touchend', (e) => {
+    if (!tracking) return;
+    tracking = false;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - sx, dy = t.clientY - sy;
+    const dt = Date.now() - st;
+    if (Math.abs(dx) < 70) return;
+    if (Math.abs(dx) < Math.abs(dy) * 1.8) return;
+    if (dt > 700) return;
+    const curIdx = TABS.findIndex((x) => x.id === getActiveTab());
+    const nextIdx = dx < 0 ? curIdx + 1 : curIdx - 1;
+    if (nextIdx < 0 || nextIdx >= TABS.length) return;
+    // 애니메이션 방향 힌트
+    const main2 = document.getElementById('app');
+    if (main2) {
+      main2.classList.add(dx < 0 ? 'slide-left' : 'slide-right');
+      setTimeout(() => main2.classList.remove('slide-left', 'slide-right'), 220);
+    }
+    setActiveTab(TABS[nextIdx].id);
+  }, { passive: true });
+}
+
+function initTabs() {
+  mountTabBar();
+  assignCardTabs();
+  setActiveTab(getActiveTab(), { noScroll: true });
+  initTabSwipe();
+}
+
+// ---------- 카드 순서 편집 ----------
+// 2026-04 재배치: 개선안 Phase 1 — 핵심(마음·질문·큐레이션) 상단, 부가 기능 하단
+const DEFAULT_CARD_ORDER = [
+  // 가족 여정 + 응원 넛지 + 주간 무드 (가족 탭 최상단)
+  'journey','nudge','moodweek',
+  // 0) 긴급·공지 (최우선)
+  'notice',
+  // 1) 🌟 오늘 우리 가족 마음 — 핵심 (최상단)
+  'mood',
+  // 2) 💬 오늘의 가족 질문 — 핵심
+  'question',
+  // 3) ✨ 오늘의 큐레이션 (어제 답변 공개 = 시간 큐레이션 씨앗)
+  'reveal',
+  // 4) 🎂 생일/가족 이벤트 배너
+  'birthday',
+  // 5) 👨‍👩‍👧‍👦 우리 가족
+  'family',
+  // 6) 📅 다가오는 일정·기념일 (보조)
+  'upcoming','events','calendar',
+  // 7) 📸 오늘의 추억 — 가족 사진·활동 (보조)
+  'gallery','timeline',
+  // 8) 💌 오늘의 응원
+  'stickers',
+  // 9) 📊 주간 가족 요약
+  'weekly','quote',
+  // 10) 💊 건강·약 복용
+  'meds',
+  // 11) 🗳️ 투표·상호작용
+  'poll',
+  // 12) 일상 정보 (날씨·팁·운세)
+  'weather','tips','zodiac',
+  // 13) 📞 빠른 연락처
+  'sos',
+  // 14) 부가 기능 — 개선안 "더보기/숨김" 권장 영역
+  //     (사용자는 🧩 편집에서 숨길 수 있음)
+  'chat','games','memo','fx','calc',
+  // 15) 계정 (항상 마지막)
+  'account'
+];
+
+// 2026-04 재배치 마이그레이션
+// 이전 기본값과 일치하거나 유사한 저장(= 사용자가 직접 순서 바꾼 적 없음)은 새 기본값으로 교체.
+// 실제로 ↑↓ 버튼으로 재배치한 사용자는 그대로 유지.
+const CARD_ORDER_VERSION = 2;
+const PREV_DEFAULT_CARD_ORDER = [
+  'notice','question','reveal','upcoming','family','mood','sos','chat','birthday',
+  'weather','tips','gallery','games','zodiac','fx','calc','memo','account'
+];
+(function migrateCardOrder(){
+  try {
+    const v = Number(localStorage.getItem('fb_card_order_v') || '1');
+    if (v >= CARD_ORDER_VERSION) return;
+    const rawSaved = localStorage.getItem('fb_card_order');
+    if (rawSaved) {
+      const saved = JSON.parse(rawSaved);
+      if (Array.isArray(saved)) {
+        // saved 가 이전 기본 순서의 부분집합/동일이면 (= 직접 재배치 안 함) 초기화
+        const savedCore = saved.filter((k) => PREV_DEFAULT_CARD_ORDER.includes(k));
+        const sameAsPrev = savedCore.length === PREV_DEFAULT_CARD_ORDER.length
+          && savedCore.every((k, i) => k === PREV_DEFAULT_CARD_ORDER[i]);
+        if (sameAsPrev) localStorage.removeItem('fb_card_order');
+      }
+    }
+    localStorage.setItem('fb_card_order_v', String(CARD_ORDER_VERSION));
+  } catch {}
+})();
+
 function loadCardOrder() {
   try {
     const saved = JSON.parse(localStorage.getItem('fb_card_order') || 'null');
@@ -3512,6 +4176,13 @@ let REORDER_MODE = false;
 function setReorderMode(on) {
   REORDER_MODE = on;
   document.body.classList.toggle('reorder-mode', on);
+  // 편집 모드에선 탭 필터링 해제하여 모든 카드를 정렬 가능하게.
+  // 종료 시 마지막 활성 탭을 복원.
+  if (on) {
+    document.body.removeAttribute('data-active-tab');
+  } else if (typeof getActiveTab === 'function') {
+    document.body.setAttribute('data-active-tab', getActiveTab());
+  }
   $('reorderToggleBtn').textContent = on ? '✅ 저장하고 끝내기' : '🧩 카드 순서·표시 편집';
 
   // 편집 모드: 숨긴 카드를 다시 보여서 선택할 수 있게
@@ -3743,6 +4414,13 @@ function renderFamPhotoPreview(photoUrl) {
     box.innerHTML = '<span class="fam-photo-empty">사진 없음</span>';
     clearBtn?.classList.add('hidden');
   }
+}
+
+// Android(Galaxy)에서 picker로 받은 File 은 content:// URI 의 lazy reference 라
+// 캡션 입력 등으로 시간이 지나면 NotReadableError 가 난다. change 즉시 메모리로 복사해 안정화.
+async function stabilizePickedFile(file) {
+  const buf = await file.arrayBuffer();
+  return new Blob([buf], { type: file.type || 'image/jpeg' });
 }
 
 /** 가족 사진: 원본 이미지를 긴 변 기준 maxSide 로 축소 + JPEG 품질 조절해서 targetBytes 이하로. */
@@ -4015,12 +4693,15 @@ function closeFamPhotoCrop() {
 }
 
 $('famPhotoPickBtn')?.addEventListener('click', () => $('famPhotoFile')?.click());
-$('famPhotoFile')?.addEventListener('change', (e) => {
+$('famPhotoFile')?.addEventListener('change', async (e) => {
   const f = e.target.files?.[0];
+  if (!f) { e.target.value = ''; return; }
+  if (!f.type.startsWith('image/')) { e.target.value = ''; alert('이미지 파일을 선택해 주세요'); return; }
+  let stable;
+  try { stable = await stabilizePickedFile(f); }
+  catch { e.target.value = ''; alert('사진을 읽지 못했어요. 다시 선택해 주세요.'); return; }
   e.target.value = '';
-  if (!f) return;
-  if (!f.type.startsWith('image/')) { alert('이미지 파일을 선택해 주세요'); return; }
-  openFamPhotoCrop(URL.createObjectURL(f));
+  openFamPhotoCrop(URL.createObjectURL(stable));
 });
 $('famPhotoClearBtn')?.addEventListener('click', async () => {
   if (!confirm('가족 사진을 제거할까요?')) return;
@@ -4960,14 +5641,17 @@ function renderEdPhotoPreview(url) {
 $('edPhotoPickBtn')?.addEventListener('click', () => $('edPhotoFile')?.click());
 $('edPhotoFile')?.addEventListener('change', async (e) => {
   const f = e.target.files?.[0];
+  if (!f || !EDITING_USER) { e.target.value = ''; return; }
+  if (!f.type.startsWith('image/')) { e.target.value = ''; alert('이미지 파일을 선택해 주세요'); return; }
+  let stable;
+  try { stable = await stabilizePickedFile(f); }
+  catch { e.target.value = ''; alert('사진을 읽지 못했어요. 다시 선택해 주세요.'); return; }
   e.target.value = '';
-  if (!f || !EDITING_USER) return;
-  if (!f.type.startsWith('image/')) { alert('이미지 파일을 선택해 주세요'); return; }
   const btn = $('edPhotoPickBtn');
   if (btn) { btn.disabled = true; btn.textContent = '올리는 중...'; }
   try {
     // 갤러리 업로드처럼 압축 후 전송 (2MB 이하)
-    const blob = await resizeImageToJpegBlob(f, { maxSide: 800, targetBytes: 2 * 1024 * 1024 - 1 });
+    const blob = await resizeImageToJpegBlob(stable, { maxSide: 800, targetBytes: 2 * 1024 * 1024 - 1 });
     const fd = new FormData();
     fd.append('photo', blob, 'photo.jpg');
     const r = await fetch(`/api/users/${EDITING_USER.id}/photo`, {
@@ -5397,9 +6081,23 @@ if (toTop) {
 }
 
 // ---------- 이미지 라이트박스 ----------
-function openLightbox(src) {
+function openLightbox(src, opts = {}) {
   const lb = $('lightbox');
   $('lightboxImg').src = src;
+  const saveBtn = $('lightboxSaveBtn');
+  if (saveBtn) {
+    if (opts.chatMid && Number.isInteger(opts.chatMid)) {
+      saveBtn.classList.remove('hidden');
+      saveBtn.classList.remove('saved');
+      saveBtn.disabled = false;
+      saveBtn.textContent = '💾 가족 갤러리에 저장';
+      saveBtn.dataset.mid = String(opts.chatMid);
+    } else {
+      saveBtn.classList.add('hidden');
+      saveBtn.classList.remove('saved');
+      delete saveBtn.dataset.mid;
+    }
+  }
   lb.classList.remove('hidden');
 }
 $('lightboxClose').addEventListener('click', () => $('lightbox').classList.add('hidden'));
@@ -5408,6 +6106,128 @@ $('lightbox').addEventListener('click', (e) => {
     $('lightbox').classList.add('hidden');
   }
 });
+$('lightboxSaveBtn')?.addEventListener('click', async (e) => {
+  e.stopPropagation();
+  const btn = e.currentTarget;
+  const mid = Number(btn.dataset.mid);
+  if (!mid) return;
+  btn.disabled = true;
+  btn.textContent = '저장 중...';
+  try {
+    await api(`/api/chat/${mid}/save-to-gallery`, { method: 'POST' });
+    btn.classList.add('saved');
+    btn.textContent = '✓ 갤러리에 저장됨';
+    try { await loadGallery(); } catch {}
+  } catch (err) {
+    btn.disabled = false;
+    btn.textContent = '💾 가족 갤러리에 저장';
+    alert(err.message || '저장 실패');
+  }
+});
+
+// 라이트박스 핀치/휠/더블탭 줌 + 드래그 팬 (사이트 viewport 가 maximum-scale=1 이라
+// 브라우저 기본 핀치는 막혀 있으므로 직접 구현)
+(function setupLightboxZoom() {
+  const lb = document.getElementById('lightbox');
+  const img = document.getElementById('lightboxImg');
+  if (!lb || !img || img._zoomBound) return;
+  img._zoomBound = true;
+
+  let scale = 1, tx = 0, ty = 0;
+  const pts = new Map();
+  let pinch = null; // { d0, s0 }
+  let pan = null;   // { x0, y0, tx0, ty0 }
+  let suppressClick = false;
+  let lastTapAt = 0;
+
+  img.style.touchAction = 'none';
+  img.style.willChange = 'transform';
+  img.style.userSelect = 'none';
+  img.draggable = false;
+
+  const apply = () => { img.style.transform = `translate(${tx}px, ${ty}px) scale(${scale})`; };
+  const animateTo = (s, x, y) => {
+    img.style.transition = 'transform .22s ease';
+    scale = s; tx = x; ty = y; apply();
+    setTimeout(() => { img.style.transition = ''; }, 240);
+  };
+  const reset = () => { scale = 1; tx = 0; ty = 0; img.style.transition = 'none'; apply(); };
+
+  img.addEventListener('pointerdown', (e) => {
+    try { img.setPointerCapture(e.pointerId); } catch {}
+    pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pts.size === 2) {
+      const [a, b] = [...pts.values()];
+      pinch = { d0: Math.hypot(a.x - b.x, a.y - b.y) || 1, s0: scale };
+      pan = null;
+      suppressClick = true;
+    } else if (pts.size === 1 && scale > 1.01) {
+      pan = { x0: e.clientX, y0: e.clientY, tx0: tx, ty0: ty };
+    }
+  });
+
+  img.addEventListener('pointermove', (e) => {
+    if (!pts.has(e.pointerId)) return;
+    pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pinch && pts.size >= 2) {
+      e.preventDefault();
+      const [a, b] = [...pts.values()];
+      const d = Math.hypot(a.x - b.x, a.y - b.y) || 1;
+      scale = Math.max(1, Math.min(5, pinch.s0 * (d / pinch.d0)));
+      suppressClick = true;
+      apply();
+    } else if (pan) {
+      e.preventDefault();
+      tx = pan.tx0 + (e.clientX - pan.x0);
+      ty = pan.ty0 + (e.clientY - pan.y0);
+      if (Math.abs(e.clientX - pan.x0) + Math.abs(e.clientY - pan.y0) > 6) suppressClick = true;
+      apply();
+    }
+  });
+
+  const endPointer = (e) => {
+    pts.delete(e.pointerId);
+    if (pts.size < 2) pinch = null;
+    if (pts.size === 0) {
+      pan = null;
+      if (scale < 1.05) animateTo(1, 0, 0);
+      if (suppressClick) setTimeout(() => { suppressClick = false; }, 50);
+    }
+  };
+  img.addEventListener('pointerup', endPointer);
+  img.addEventListener('pointercancel', endPointer);
+
+  // 마우스 휠 줌 (데스크톱)
+  img.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    const delta = e.deltaY > 0 ? -0.15 : 0.15;
+    const newScale = Math.max(1, Math.min(5, scale + delta));
+    if (newScale === 1) { tx = 0; ty = 0; }
+    scale = newScale;
+    apply();
+  }, { passive: false });
+
+  // 더블탭/더블클릭 — 1x ↔ 2.5x 토글, 단일 탭은 기존 close 흐름 유지
+  img.addEventListener('click', (e) => {
+    if (suppressClick) { e.stopPropagation(); return; }
+    const now = Date.now();
+    if (now - lastTapAt < 300) {
+      e.stopPropagation();
+      lastTapAt = 0;
+      if (scale > 1.05) animateTo(1, 0, 0);
+      else animateTo(2.5, 0, 0);
+      return;
+    }
+    lastTapAt = now;
+    // 줌 된 상태에서 단일 탭으로 닫히지 않게
+    if (scale > 1.05) e.stopPropagation();
+  });
+
+  // 라이트박스 닫힐 때 줌 리셋
+  new MutationObserver(() => {
+    if (lb.classList.contains('hidden')) reset();
+  }).observe(lb, { attributes: true, attributeFilter: ['class'] });
+})();
 // 답변 이미지 / hero photo 클릭 시 라이트박스
 document.addEventListener('click', (e) => {
   const img = e.target;
@@ -5831,12 +6651,15 @@ async function confirmGalleryUpload() {
 }
 
 $('galleryAddBtn')?.addEventListener('click', () => $('galleryFile')?.click());
-$('galleryFile')?.addEventListener('change', (e) => {
+$('galleryFile')?.addEventListener('change', async (e) => {
   const f = e.target.files?.[0];
+  if (!f) { e.target.value = ''; return; }
+  if (!f.type.startsWith('image/')) { e.target.value = ''; alert('이미지 파일을 선택해 주세요'); return; }
+  let stable;
+  try { stable = await stabilizePickedFile(f); }
+  catch { e.target.value = ''; alert('사진을 읽지 못했어요. 다시 선택해 주세요.'); return; }
   e.target.value = '';
-  if (!f) return;
-  if (!f.type.startsWith('image/')) { alert('이미지 파일을 선택해 주세요'); return; }
-  openGalleryUploadSheet(f);
+  openGalleryUploadSheet(stable);
 });
 $('galleryUploadConfirm')?.addEventListener('click', confirmGalleryUpload);
 $('galleryUploadCancel')?.addEventListener('click', closeGalleryUploadSheet);
@@ -6004,7 +6827,7 @@ async function loadChatPeek() {
         </span>
         <span class="cp-time">${timeStr}</span>`;
       li.querySelector('.cp-name').textContent = m.userName || '가족';
-      li.querySelector('.cp-text').textContent = m.text;
+      li.querySelector('.cp-text').textContent = m.text || (m.imageUrl ? '📷 사진' : '');
       peek.appendChild(li);
     }
   } catch {}
@@ -6013,13 +6836,17 @@ async function loadChatPeek() {
 async function refreshChatUnread() {
   try {
     const r = await api('/api/chat/unread');
-    const badge = $('chatUnreadBadge');
-    if (!badge) return;
-    if (r.unread > 0) {
-      badge.textContent = r.unread > 99 ? '99+' : String(r.unread);
-      badge.classList.remove('hidden');
-    } else {
-      badge.classList.add('hidden');
+    const n = Number(r.unread) || 0;
+    const text = n > 99 ? '99+' : String(n);
+    for (const id of ['chatUnreadBadge', 'chatTabBadge']) {
+      const badge = document.getElementById(id);
+      if (!badge) continue;
+      if (n > 0) {
+        badge.textContent = text;
+        badge.classList.remove('hidden');
+      } else {
+        badge.classList.add('hidden');
+      }
     }
   } catch {}
 }
@@ -6089,25 +6916,66 @@ function renderChatMessages() {
     const h12 = hour === 0 ? 12 : (hour > 12 ? hour - 12 : hour);
     const timeStr = `${ampm} ${h12}:${mm}`;
 
+    const hasImage = !!m.imageUrl;
+    const hasText = !!(m.text && m.text.trim());
+    const ladderMatch = hasText ? m.text.match(/^\/ladder-game\/(\d+)$/) : null;
+    const gostopMatch = hasText ? m.text.match(/^\/gostop-game\/([A-Z0-9]+)$/) : null;
+    const isLadderCard = !!ladderMatch;
+    const isGostopCard = !!gostopMatch;
     li.innerHTML = `
       <div class="chat-msg-avatar">${avatarInner}</div>
       <div class="chat-msg-body">
         <div class="chat-msg-name"></div>
-        <div class="chat-bubble"></div>
+        ${hasImage ? `<div class="chat-msg-image-wrap"><img class="chat-msg-image" alt="" /></div>` : ''}
+        ${isLadderCard ? `<div class="chat-bubble" data-game-card="${ladderMatch[1]}"></div>` :
+          isGostopCard ? `<div class="chat-bubble" data-gostop-card="${gostopMatch[1]}"></div>` :
+          (hasText ? `<div class="chat-bubble"></div>` : '')}
         <div class="chat-msg-time">${timeStr}</div>
       </div>
       <button class="chat-msg-del hidden" aria-label="삭제" title="삭제">✕</button>`;
     li.querySelector('.chat-msg-name').textContent = m.userName || '';
-    li.querySelector('.chat-bubble').textContent = m.text;
+    if (isLadderCard) {
+      const gameId = Number(ladderMatch[1]);
+      const bubble = li.querySelector('.chat-bubble');
+      bubble.style.padding = '0';
+      bubble.style.background = 'transparent';
+      bubble.appendChild(renderLadderChatCard(gameId));
+    } else if (isGostopCard) {
+      const code = gostopMatch[1];
+      const bubble = li.querySelector('.chat-bubble');
+      bubble.style.padding = '0';
+      bubble.style.background = 'transparent';
+      bubble.appendChild(renderGostopChatCard(code));
+    } else if (hasText) li.querySelector('.chat-bubble').textContent = m.text;
+    if (hasImage) {
+      const imgEl = li.querySelector('.chat-msg-image');
+      imgEl.src = m.imageUrl;
+      // 이미지 로드 후 사용자가 바닥 근처에 있었으면 다시 바닥으로 (레이아웃 점프 방지)
+      imgEl.addEventListener('load', () => {
+        if (_chatNearBottom) scrollChatToBottom(false);
+      });
+      const wrap = li.querySelector('.chat-msg-image-wrap');
+      wrap.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (m.pending || m.failed) return;
+        // 서버 저장된 메시지(숫자 id)일 때만 "갤러리에 저장" 액션 노출
+        const savableMid = (typeof m.id === 'number' && Number.isFinite(m.id)) ? m.id : null;
+        openLightbox(m.imageUrl, { chatMid: savableMid });
+      });
+    }
 
     // 실패한 메시지는 탭해서 재시도
     if (m.failed && m.tempKey) {
       li.onclick = () => retryChatMessage(m.tempKey);
       li.style.cursor = 'pointer';
-    } else if ((m.userId === ME.id || ME.role === 'admin') && !m.pending) {
-      const del = li.querySelector('.chat-msg-del');
-      del.classList.remove('hidden');
-      del.onclick = (e) => { e.stopPropagation(); deleteChatMessage(m.id); };
+    } else if (m.userId === ME.id && !m.pending) {
+      // 본인 메시지 + 5분 이내만 삭제 가능
+      const ageMs = m.createdAt ? (Date.now() - new Date(m.createdAt).getTime()) : 0;
+      if (ageMs < 5 * 60 * 1000) {
+        const del = li.querySelector('.chat-msg-del');
+        del.classList.remove('hidden');
+        del.onclick = (e) => { e.stopPropagation(); deleteChatMessage(m.id); };
+      }
     }
     items.push(li);
     ul.appendChild(li);
@@ -6118,17 +6986,23 @@ function renderChatMessages() {
 function scrollChatToBottom(smooth = false) {
   const ul = $('chatMessages');
   if (!ul) return;
-  ul.scrollTo({ top: ul.scrollHeight, behavior: smooth ? 'smooth' : 'auto' });
+  // 1) 직접 scrollTop 할당
+  ul.scrollTop = ul.scrollHeight;
+  // 2) 마지막 자식을 강제로 보이게 — 일부 환경에서 ul 의 layout 이 늦게 잡히면 위가 더 안전
+  const last = ul.lastElementChild;
+  if (last && typeof last.scrollIntoView === 'function') {
+    try { last.scrollIntoView({ block: 'end', inline: 'nearest', behavior: smooth ? 'smooth' : 'auto' }); } catch {}
+  }
+  // 3) 한 번 더 scrollTop 보정 (scrollIntoView 가 부모 컨테이너 위치도 살짝 흔들 수 있어 마지막에 고정)
+  ul.scrollTop = ul.scrollHeight;
 }
 
-async function openChatSheet() {
+// 채팅 탭이 활성화되면 호출 — 메시지 로드, 폴링 시작, 읽음 처리
+async function initChatTab() {
   CHAT_SHEET_OPEN = true;
-  $('chatSheet').classList.remove('hidden');
-  // 활성 가족 수 subtitle
-  const activeCount = (FAMILY_CACHE || []).filter((m) => m.activated).length;
+  const activeCount = (FAMILY_CACHE || []).filter((m) => m.activated && !m.isPet).length;
   const sub = $('chatSubtitle');
   if (sub) sub.textContent = activeCount ? `${activeCount}명 참여 중` : '실시간으로 가족과 대화해요';
-  // 초기 로드
   try {
     const list = await api('/api/chat?limit=50');
     CHAT_MESSAGES = list || [];
@@ -6137,17 +7011,31 @@ async function openChatSheet() {
       CHAT_LAST_ID = CHAT_MESSAGES[CHAT_MESSAGES.length - 1].id;
     }
     renderChatMessages();
-    $('chatLoadOlderBtn').classList.toggle('hidden', CHAT_MESSAGES.length < 50);
-    setTimeout(() => scrollChatToBottom(false), 50);
+    $('chatLoadOlderBtn')?.classList.toggle('hidden', CHAT_MESSAGES.length < 50);
+    _chatNearBottom = true;
+    // 사용자 스크롤을 막 시작했는지 추적 — 시작했으면 이후 자동 스크롤은 모두 양보
+    const safeScroll = () => { if (_chatNearBottom) scrollChatToBottom(false); };
+    // 처음 두 번은 무조건 — 초기 진입에서 layout 안정화 직후 잡아야 함
+    requestAnimationFrame(() => scrollChatToBottom(false));
+    setTimeout(() => scrollChatToBottom(false), 80);
+    // 이후 보정은 사용자가 위로 스크롤하지 않은 경우에만
+    setTimeout(safeScroll, 300);
+    setTimeout(safeScroll, 800);
+    setTimeout(safeScroll, 1500);
+    // ResizeObserver — ul 크기 변동 시 추격 (단, 사용자가 위로 스크롤했으면 양보)
+    const ul = $('chatMessages');
+    if (ul && !ul._initialAutoScroll && 'ResizeObserver' in window) {
+      ul._initialAutoScroll = true;
+      const ro = new ResizeObserver(() => {
+        if (_chatNearBottom) scrollChatToBottom(false);
+      });
+      ro.observe(ul);
+      // 1.5초 후엔 자동 추격 종료
+      setTimeout(() => ro.disconnect(), 1500);
+    }
     markChatRead();
   } catch {}
   startChatPolling(4000);
-  // 입력창 자동 포커스 (모바일 키보드는 사용자 탭 때문에 열려야 자연스러움 — focus 만 예약)
-  setTimeout(() => {
-    const input = $('chatInput');
-    if (input && !/Mobi|Android/i.test(navigator.userAgent)) input.focus();
-  }, 200);
-  // 스크롤 감지 → 새 메시지 pill 관리
   setupChatScrollListener();
 }
 
@@ -6164,12 +7052,11 @@ function setupChatScrollListener() {
   }, { passive: true });
 }
 
-function closeChatSheet() {
+function teardownChatTab() {
   CHAT_SHEET_OPEN = false;
-  $('chatSheet').classList.add('hidden');
   stopChatPolling();
-  loadChatPeek();       // 홈 미리보기 갱신
   refreshChatUnread();
+  $('chatTyping')?.classList.add('hidden');
 }
 
 function startChatPolling(intervalMs) {
@@ -6180,8 +7067,43 @@ function stopChatPolling() {
   if (CHAT_POLL_TIMER) { clearInterval(CHAT_POLL_TIMER); CHAT_POLL_TIMER = null; }
 }
 
+function renderChatTyping(userIds) {
+  const el = $('chatTyping');
+  if (!el) return;
+  if (!userIds || !userIds.length) { el.classList.add('hidden'); return; }
+  const names = userIds
+    .map((uid) => (FAMILY_CACHE || []).find((m) => m.id === uid)?.displayName || '')
+    .filter(Boolean);
+  if (!names.length) { el.classList.add('hidden'); return; }
+  const text = names.length === 1
+    ? `${names[0]} 님이 입력 중`
+    : `${names[0]} 외 ${names.length - 1}명이 입력 중`;
+  el.querySelector('.chat-typing-text').textContent = text;
+  el.classList.remove('hidden');
+}
+
+async function pollChatTyping() {
+  if (!CHAT_SHEET_OPEN) return;
+  try {
+    const r = await api('/api/chat/typing');
+    renderChatTyping(r?.userIds || []);
+  } catch {}
+}
+
+let _chatTypingPingTimer = 0;
+function pingChatTyping() {
+  // 1.5초 throttle — 사용자가 빠르게 입력해도 부담 X
+  const now = Date.now();
+  if (now - _chatTypingPingTimer < 1500) return;
+  _chatTypingPingTimer = now;
+  // fire-and-forget
+  api('/api/chat/typing', { method: 'POST', body: '{}' }).catch(() => {});
+}
+
 async function pollChatNew() {
   if (!CHAT_SHEET_OPEN) return;
+  // typing 도 같이 갱신
+  pollChatTyping();
   try {
     const after = CHAT_LAST_ID || 0;
     const list = await api(`/api/chat?after=${after}&limit=50`);
@@ -6195,8 +7117,16 @@ async function pollChatNew() {
         // 내 pending 메시지 중 텍스트가 일치하면 서버 응답으로 교체
         for (const sm of newMsgs) {
           if (sm.userId === ME.id) {
-            const pendingIdx = CHAT_MESSAGES.findIndex((x) => x.pending && !x.failed && x.text === sm.text);
+            const pendingIdx = CHAT_MESSAGES.findIndex((x) =>
+              x.pending && !x.failed &&
+              x.text === sm.text &&
+              (!!x.imageUrl === !!sm.imageUrl)
+            );
             if (pendingIdx >= 0) {
+              const old = CHAT_MESSAGES[pendingIdx];
+              if (old.imageUrl && old.imageUrl.startsWith('blob:')) {
+                try { URL.revokeObjectURL(old.imageUrl); } catch {}
+              }
               CHAT_MESSAGES[pendingIdx] = sm;
               continue;
             }
@@ -6246,6 +7176,15 @@ async function sendChatMessage() {
   const input = $('chatInput');
   const text = input.value.trim();
   if (!text) return;
+  // 슬래시 명령 — /사다리 → 사다리 게임 셋업 시트 열기
+  if (text === '/사다리') {
+    input.value = '';
+    input.style.height = '';
+    const sb = $('chatSendBtn'); if (sb) sb.disabled = true;
+    closeChatCommandMenu();
+    openLadderSetupSheet();
+    return;
+  }
   const sendBtn = $('chatSendBtn');
   // 낙관적 표시 — 서버 응답 기다리지 않고 즉시 말풍선 띄움
   const tempKey = 'tmp-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8);
@@ -6291,6 +7230,57 @@ async function sendChatMessage() {
       CHAT_MESSAGES[idx] = { ...CHAT_MESSAGES[idx], pending: false, failed: true };
       renderChatMessages();
     }
+  }
+}
+
+async function sendChatPhoto(blob) {
+  const tempKey = 'tmpimg-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8);
+  const localUrl = URL.createObjectURL(blob);
+  const myPhotoUrl = (FAMILY_CACHE || []).find((m) => m.id === ME.id)?.photoUrl || null;
+  const optimistic = {
+    id: tempKey,
+    tempKey,
+    userId: ME.id,
+    userName: ME.displayName,
+    userIcon: ME.icon,
+    userPhoto: myPhotoUrl,
+    text: '',
+    imageUrl: localUrl,
+    createdAt: new Date().toISOString(),
+    pending: true,
+  };
+  CHAT_MESSAGES.push(optimistic);
+  renderChatMessages();
+  setTimeout(() => scrollChatToBottom(true), 10);
+  try {
+    const fd = new FormData();
+    fd.append('photo', blob, 'photo.jpg');
+    const r = await fetch('/api/chat/photo', { method: 'POST', body: fd, credentials: 'same-origin' });
+    if (!r.ok) {
+      let msg = '사진 업로드 실패';
+      try { const j = await r.json(); if (j.message) msg = j.message; } catch {}
+      throw new Error(msg);
+    }
+    const j = await r.json();
+    const idx = CHAT_MESSAGES.findIndex((x) => x.tempKey === tempKey);
+    if (idx >= 0) {
+      CHAT_MESSAGES[idx] = {
+        ...CHAT_MESSAGES[idx],
+        id: j.id,
+        imageUrl: j.imageUrl,
+        text: j.text || '',
+        pending: false,
+      };
+      renderChatMessages();
+    }
+    URL.revokeObjectURL(localUrl);
+    if (j.id && j.id > CHAT_LAST_ID) CHAT_LAST_ID = j.id;
+    pollChatNew();
+  } catch (e) {
+    URL.revokeObjectURL(localUrl);
+    CHAT_MESSAGES = CHAT_MESSAGES.filter((x) => x.tempKey !== tempKey);
+    renderChatMessages();
+    alert(e.message || '사진 업로드 실패');
   }
 }
 
@@ -6343,17 +7333,27 @@ async function markChatRead() {
   } catch {}
 }
 
-$('chatOpenBtn')?.addEventListener('click', openChatSheet);
-$('chatCard')?.addEventListener('click', (e) => {
-  // 카드 본문 클릭도 열림 (헤더 버튼 제외)
-  if (e.target.closest('.ufi-btn')) return;
-  if (e.target === $('chatCard') || e.target.closest('.chat-peek')) openChatSheet();
-});
-$('chatSheetClose')?.addEventListener('click', closeChatSheet);
-$('chatSheet')?.addEventListener('click', (e) => {
-  if (e.target.id === 'chatSheet') closeChatSheet();
-});
 $('chatLoadOlderBtn')?.addEventListener('click', loadOlderChat);
+$('chatPhotoBtn')?.addEventListener('click', () => $('chatPhotoFile')?.click());
+$('chatPhotoFile')?.addEventListener('change', async (e) => {
+  const f = e.target.files?.[0];
+  if (!f) { e.target.value = ''; return; }
+  if (!f.type.startsWith('image/')) { e.target.value = ''; alert('이미지 파일을 선택해 주세요'); return; }
+  let stable;
+  try { stable = await stabilizePickedFile(f); }
+  catch { e.target.value = ''; alert('사진을 읽지 못했어요. 다시 선택해 주세요.'); return; }
+  e.target.value = '';
+  const photoBtn = $('chatPhotoBtn');
+  if (photoBtn) photoBtn.disabled = true;
+  try {
+    const blob = await resizeImageToJpegBlob(stable, { maxSide: 1600, targetBytes: 3 * 1024 * 1024 - 1 });
+    await sendChatPhoto(blob);
+  } catch (err) {
+    alert(err.message || '사진 업로드 실패');
+  } finally {
+    if (photoBtn) photoBtn.disabled = false;
+  }
+});
 $('chatForm')?.addEventListener('submit', (e) => { e.preventDefault(); sendChatMessage(); });
 $('chatInput')?.addEventListener('input', (e) => {
   // 자동 높이
@@ -6362,6 +7362,14 @@ $('chatInput')?.addEventListener('input', (e) => {
   // 전송 버튼 enable/disable (내용 있을 때만)
   const sendBtn = $('chatSendBtn');
   if (sendBtn) sendBtn.disabled = !e.target.value.trim();
+  // 타이핑 인디케이터 ping (입력 내용이 있을 때만)
+  if (e.target.value && e.target.value.trim()) pingChatTyping();
+  // 슬래시 명령 메뉴
+  updateChatCommandMenu(e.target.value);
+});
+$('chatInput')?.addEventListener('blur', () => {
+  // blur 직후엔 닫지 않고 약간 지연 — 메뉴 항목 클릭 잡으려고
+  setTimeout(closeChatCommandMenu, 150);
 });
 // 새 메시지 pill 탭 → 바닥으로 스크롤
 $('chatNewMsgPill')?.addEventListener('click', () => {
@@ -6376,12 +7384,11 @@ $('chatInput')?.addEventListener('keydown', (e) => {
   }
 });
 
-// 홈 화면용 백그라운드 폴링 (30초)
+// 다른 탭에 있는 동안 채팅 unread 만 백그라운드 갱신 (30초)
 setInterval(() => {
   if (!ME) return;
-  if (CHAT_SHEET_OPEN) return;  // 시트 열렸을 땐 전용 폴링이 이미 빠르게 돌고 있음
+  if (CHAT_SHEET_OPEN) return;  // 채팅 탭에 있으면 전용 폴링이 이미 빠르게 돌고 있음
   refreshChatUnread();
-  loadChatPeek();
 }, 30000);
 
 // ---------- 바텀 시트 아래로 스와이프 닫기 ----------
@@ -6444,5 +7451,1700 @@ setInterval(() => {
     sheet.addEventListener('touchcancel', end);
   }
 })();
+
+// ---------- 사다리타기 ----------
+const LADDER_STATE = {
+  mode: null,          // 'family' | 'guest' — null 이면 모드 선택 화면
+  count: 4,
+  players: ['1번', '2번', '3번', '4번'],
+  results: ['💣 당첨', '꽝', '꽝', '꽝'],
+  rungs: null,         // [row][gap] = bool
+  traces: null,        // [{ start, finalCol, path: [{col,row}] }]
+  rows: 0,
+  revealed: new Set(), // 이미 결과 공개한 시작 컬럼
+};
+
+const LADDER_RESULT_PRESETS = [
+  { key: 'lottery', label: '💣 당첨/꽝',
+    gen: (n) => ['💣 당첨', ...Array(Math.max(0, n - 1)).fill('꽝')] },
+  { key: 'rank',    label: '🥇 등수',
+    gen: (n) => Array.from({ length: n }, (_, i) => `${i + 1}등`) },
+];
+
+function ladderActiveFamilyNames() {
+  return (FAMILY_CACHE || [])
+    .filter((m) => m.activated && !m.isPet)
+    .map((m) => (m.displayName || '').trim())
+    .filter(Boolean);
+}
+function ladderDefaultPlayer(idx, fams) {
+  if (fams[idx]) return fams[idx];
+  return `${idx + 1}번`;
+}
+
+function ladderEnsureSize(n) {
+  const fams = ladderActiveFamilyNames();
+  while (LADDER_STATE.players.length < n) {
+    const idx = LADDER_STATE.players.length;
+    // 사용자가 손대지 않은 슬롯이면 가족 이름으로 자동 채움
+    LADDER_STATE.players.push(ladderDefaultPlayer(idx, fams));
+  }
+  while (LADDER_STATE.results.length < n) {
+    const idx = LADDER_STATE.results.length;
+    LADDER_STATE.results.push(idx === 0 ? '💣 당첨' : '꽝');
+  }
+  LADDER_STATE.players.length = n;
+  LADDER_STATE.results.length = n;
+}
+
+// ---------- 사다리 효과음 (Web Audio) + 음소거 ----------
+let _ladderAudio = null;
+let _ladderMuted = (() => {
+  try { return localStorage.getItem('fb_ladder_muted') === '1'; } catch { return false; }
+})();
+function ladderAudio() {
+  if (_ladderMuted) return null;
+  if (_ladderAudio === null) {
+    try { _ladderAudio = new (window.AudioContext || window.webkitAudioContext)(); }
+    catch { _ladderAudio = false; }
+  }
+  return _ladderAudio || null;
+}
+function ladderToggleMute() {
+  _ladderMuted = !_ladderMuted;
+  try { localStorage.setItem('fb_ladder_muted', _ladderMuted ? '1' : '0'); } catch {}
+  const btn = $('ladderMuteBtn');
+  if (btn) {
+    btn.textContent = _ladderMuted ? '🔇' : '🔊';
+    btn.setAttribute('aria-label', _ladderMuted ? '효과음 켜기' : '효과음 끄기');
+  }
+}
+function ladderApplyMuteUi() {
+  const btn = $('ladderMuteBtn');
+  if (btn) btn.textContent = _ladderMuted ? '🔇' : '🔊';
+}
+function ladderTick() {
+  const ctx = ladderAudio();
+  if (!ctx) return;
+  try {
+    if (ctx.state === 'suspended') ctx.resume();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.value = 720 + (Math.random() * 240 - 120);
+    const t0 = ctx.currentTime;
+    gain.gain.setValueAtTime(0, t0);
+    gain.gain.linearRampToValueAtTime(0.06, t0 + 0.005);
+    gain.gain.exponentialRampToValueAtTime(0.001, t0 + 0.07);
+    osc.connect(gain).connect(ctx.destination);
+    osc.start(t0);
+    osc.stop(t0 + 0.08);
+  } catch {}
+}
+function ladderWinChime() {
+  const ctx = ladderAudio();
+  if (!ctx) return;
+  try {
+    if (ctx.state === 'suspended') ctx.resume();
+    [523.25, 659.25, 783.99, 1046.5].forEach((freq, i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.value = freq;
+      const t0 = ctx.currentTime + i * 0.09;
+      gain.gain.setValueAtTime(0, t0);
+      gain.gain.linearRampToValueAtTime(0.13, t0 + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.001, t0 + 0.42);
+      osc.connect(gain).connect(ctx.destination);
+      osc.start(t0); osc.stop(t0 + 0.45);
+    });
+  } catch {}
+}
+function ladderLoseTrombone() {
+  const ctx = ladderAudio();
+  if (!ctx) return;
+  try {
+    if (ctx.state === 'suspended') ctx.resume();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sawtooth';
+    osc.frequency.value = 360;
+    const t0 = ctx.currentTime;
+    gain.gain.setValueAtTime(0, t0);
+    gain.gain.linearRampToValueAtTime(0.10, t0 + 0.05);
+    gain.gain.linearRampToValueAtTime(0, t0 + 0.7);
+    osc.frequency.setValueAtTime(360, t0);
+    osc.frequency.exponentialRampToValueAtTime(140, t0 + 0.65);
+    osc.connect(gain).connect(ctx.destination);
+    osc.start(t0); osc.stop(t0 + 0.75);
+  } catch {}
+}
+
+function setLadderCount(n) {
+  n = Math.max(2, Math.min(8, n));
+  LADDER_STATE.count = n;
+  ladderEnsureSize(n);
+  LADDER_STATE.rungs = null;
+  LADDER_STATE.traces = null;
+  LADDER_STATE.revealed.clear();
+  renderLadderControls();
+  renderLadderStage();
+  $('ladderRevealAllBtn')?.classList.add('hidden');
+}
+
+function renderLadderControls() {
+  const row = $('ladderCountRow');
+  if (row) {
+    row.innerHTML = '';
+    for (let n = 2; n <= 8; n++) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'ladder-count-btn' + (n === LADDER_STATE.count ? ' active' : '');
+      btn.textContent = String(n);
+      btn.onclick = () => setLadderCount(n);
+      row.appendChild(btn);
+    }
+  }
+  // 참여자는 드래그 가능한 카드로 렌더
+  renderLadderPlayerCards();
+  // 결과는 기존 2열 그리드 input
+  const rc = $('ladderResultInputs');
+  if (rc) {
+    rc.innerHTML = '';
+    for (let i = 0; i < LADDER_STATE.count; i++) {
+      const inp = document.createElement('input');
+      inp.type = 'text';
+      inp.className = 'ladder-input';
+      inp.value = LADDER_STATE.results[i];
+      inp.maxLength = 14;
+      inp.placeholder = `결과 ${i + 1}`;
+      inp.oninput = () => {
+        LADDER_STATE.results[i] = inp.value || `결과 ${i + 1}`;
+        renderLadderStage();
+      };
+      rc.appendChild(inp);
+    }
+  }
+  // 결과 프리셋 버튼들
+  const presetRow = $('ladderResultPresets');
+  if (presetRow) {
+    presetRow.innerHTML = '';
+    for (const preset of LADDER_RESULT_PRESETS) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'ladder-preset-btn';
+      b.textContent = preset.label;
+      b.onclick = () => {
+        const arr = preset.gen(LADDER_STATE.count);
+        for (let i = 0; i < LADDER_STATE.count; i++) {
+          LADDER_STATE.results[i] = arr[i] || `결과 ${i + 1}`;
+        }
+        renderLadderControls();
+        renderLadderStage();
+      };
+      presetRow.appendChild(b);
+    }
+  }
+}
+
+function buildLadder() {
+  const cols = LADDER_STATE.count;
+  const ROWS = Math.max(15, Math.round(cols * 4.5));
+  const rungs = [];
+  for (let r = 0; r < ROWS; r++) {
+    rungs[r] = [];
+    for (let g = 0; g < cols - 1; g++) {
+      // 인접 갭에 줄이 있으면 안 그림 (모호한 경로 방지)
+      if (g > 0 && rungs[r][g - 1]) { rungs[r][g] = false; continue; }
+      rungs[r][g] = Math.random() < 0.55;
+    }
+  }
+  LADDER_STATE.rungs = rungs;
+  LADDER_STATE.rows = ROWS;
+  // 각 시작 컬럼별 경로 계산
+  const traces = [];
+  for (let start = 0; start < cols; start++) {
+    let col = start;
+    const path = [{ col, row: 0 }];
+    for (let r = 0; r < ROWS; r++) {
+      if (col > 0 && rungs[r][col - 1]) col -= 1;
+      else if (col < cols - 1 && rungs[r][col]) col += 1;
+      path.push({ col, row: r + 1 });
+    }
+    traces.push({ start, finalCol: col, path });
+  }
+  LADDER_STATE.traces = traces;
+  LADDER_STATE.revealed.clear();
+}
+
+function ladderColor(idx) {
+  const palette = ['#FF8B6B', '#5AC8FA', '#34C759', '#AF52DE', '#FFCC00', '#FF2D55', '#5856D6', '#FF9500'];
+  return palette[idx % palette.length];
+}
+
+// ----- 결과 발표 문구 — 당첨 = 걸림 (드라마틱), 꽝 = 안전 (놀림 + 위로) -----
+const LADDER_WIN_PHRASES = [
+  (n, r) => ({ emoji: '💣', text: `${n}, 걸렸다!\n${r}` }),
+  (n, r) => ({ emoji: '🚨', text: `빠밤!\n${n} → ${r}` }),
+  (n, r) => ({ emoji: '💥', text: `${n} 명중!\n${r}` }),
+  (n, r) => ({ emoji: '🎯', text: `${n}!\n운명을 받아들이세요\n→ ${r}` }),
+  (n, r) => ({ emoji: '🔥', text: `${n} 등장!\n${r} 도망 불가` }),
+  (n, r) => ({ emoji: '😱', text: `${n}이(가) 걸렸어요!\n${r}` }),
+];
+const LADDER_LOSE_PHRASES = [
+  (n, r) => ({ emoji: '🤣', text: `${n} 님!\n${r} 당첨이에요\n다 같이 박수~ 짝짝짝` }),
+  (n, r) => ({ emoji: '🤡', text: `광대상 수상!\n${n} → ${r}` }),
+  (n, r) => ({ emoji: '🥲', text: `${n} 님...\n오늘은 ${r}` }),
+  (n, r) => ({ emoji: '😆', text: `두구두구두구...\n${n} → ${r}!` }),
+  (n, r) => ({ emoji: '🙃', text: `${r}은(는)\n${n} 그대의 이름!` }),
+  (n, r) => ({ emoji: '😂', text: `운칠기삼이라더니\n${n}은 운삼이네요\n→ ${r}` }),
+  (n, r) => ({ emoji: '🥹', text: `${n} 님 ${r}!\n다음에는 꼭 좋은 결과가...` }),
+  (n, r) => ({ emoji: '🤧', text: `${n}이 ${r} 받았어요\n모두 위로해 주세요` }),
+  (n, r) => ({ emoji: '😅', text: `짠~ ${n} 님께\n${r}을(를) 선물!` }),
+  (n, r) => ({ emoji: '🫠', text: `${n} → ${r}\n그래도 가족이 있잖아요` }),
+];
+function ladderRandomPhrase(name, result, isWin) {
+  const arr = isWin ? LADDER_WIN_PHRASES : LADDER_LOSE_PHRASES;
+  return arr[Math.floor(Math.random() * arr.length)](name, result);
+}
+function showLadderToast(playerName, result, isWin) {
+  const phrase = ladderRandomPhrase(playerName, result, isWin);
+  // 기존 토스트 모두 제거 (stage 안 + body 직속)
+  document.querySelectorAll('.ladder-toast').forEach((el) => el.remove());
+  const toast = document.createElement('div');
+  toast.className = 'ladder-toast ' + (isWin ? 'win' : 'lose');
+  const em = document.createElement('span');
+  em.className = 'toast-emoji';
+  em.textContent = phrase.emoji;
+  const tx = document.createElement('span');
+  tx.className = 'toast-text';
+  tx.style.whiteSpace = 'pre-line';
+  tx.textContent = phrase.text;
+  toast.appendChild(em);
+  toast.appendChild(tx);
+  // 걸림(win) 은 화면 중앙 풀스크린 오버레이로, 꽝(lose) 은 사다리 무대 안에
+  if (isWin) {
+    document.body.appendChild(toast);
+    setTimeout(() => {
+      toast.classList.add('out');
+      setTimeout(() => toast.remove(), 600);
+    }, 3300);
+  } else {
+    const stage = $('ladderStage');
+    if (!stage) return;
+    stage.appendChild(toast);
+    setTimeout(() => {
+      toast.classList.add('out');
+      setTimeout(() => toast.remove(), 600);
+    }, 2600);
+  }
+}
+
+function renderLadderStage() {
+  const stage = $('ladderStage');
+  const hint = $('ladderHint');
+  if (!stage) return;
+  stage.innerHTML = '';
+  stage._busy = new Set();
+  if (!LADDER_STATE.rungs) {
+    if (hint) hint.style.display = '';
+    return;
+  }
+  if (hint) hint.style.display = 'none';
+
+  const cols = LADDER_STATE.count;
+  const ROWS = LADDER_STATE.rows;
+  const ROW_H = 22;
+  const TOP_LABEL_H = 56;
+  const BOTTOM_LABEL_H = 78; // 결과 + "← 이름" 두 줄 들어갈 공간
+  const PAD_X = 16;
+  const VIEW_W = 360;                           // SVG 좌표계 폭 (실제 표시는 100% 너비로 스케일)
+  const colSpacing = (VIEW_W - PAD_X * 2) / (cols - 1);
+  const ladderTop = TOP_LABEL_H;
+  const ladderBottom = TOP_LABEL_H + ROWS * ROW_H;
+  const VIEW_H = ladderBottom + BOTTOM_LABEL_H;
+  const xOf = (c) => PAD_X + c * colSpacing;
+  const yOfRow = (r) => ladderTop + r * ROW_H;
+
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('viewBox', `0 0 ${VIEW_W} ${VIEW_H}`);
+  svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+
+  // 세로줄
+  for (let c = 0; c < cols; c++) {
+    const ln = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    ln.setAttribute('x1', xOf(c)); ln.setAttribute('x2', xOf(c));
+    ln.setAttribute('y1', ladderTop); ln.setAttribute('y2', ladderBottom);
+    ln.setAttribute('class', 'ladder-pole');
+    svg.appendChild(ln);
+  }
+  // 가로 가지
+  for (let r = 0; r < ROWS; r++) {
+    for (let g = 0; g < cols - 1; g++) {
+      if (!LADDER_STATE.rungs[r][g]) continue;
+      const ln = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+      ln.setAttribute('x1', xOf(g)); ln.setAttribute('x2', xOf(g + 1));
+      const y = yOfRow(r) + ROW_H / 2;
+      ln.setAttribute('y1', y); ln.setAttribute('y2', y);
+      ln.setAttribute('class', 'ladder-rung');
+      svg.appendChild(ln);
+    }
+  }
+  // 참여자 라벨 (상단) — 아직 안 본 참여자는 펄스로 안내
+  for (let c = 0; c < cols; c++) {
+    const t = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    t.setAttribute('x', xOf(c));
+    t.setAttribute('y', TOP_LABEL_H - 16);
+    t.setAttribute('text-anchor', 'middle');
+    let cls = 'ladder-player-btn';
+    if (!LADDER_STATE.revealed.has(c)) cls += ' pending';
+    t.setAttribute('class', cls);
+    t.setAttribute('font-size', '13');
+    t.setAttribute('fill', ladderColor(c));
+    t.textContent = (LADDER_STATE.players[c] || `${c + 1}번`).slice(0, 14);
+    t.dataset.start = String(c);
+    t.addEventListener('click', () => animateLadderPath(c));
+    svg.appendChild(t);
+  }
+  // 결과 라벨 (하단) — 공개 전엔 ❓
+  for (let c = 0; c < cols; c++) {
+    const t = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    t.setAttribute('x', xOf(c));
+    t.setAttribute('y', ladderBottom + 28);
+    t.setAttribute('text-anchor', 'middle');
+    t.setAttribute('class', 'ladder-result-label');
+    t.setAttribute('font-size', '14');
+    t.setAttribute('fill', 'currentColor');
+    t.dataset.resultCol = String(c);
+    const winnerStart = [...LADDER_STATE.revealed].find((s) => LADDER_STATE.traces[s].finalCol === c);
+    const finalRevealed = winnerStart !== undefined;
+    const txt = (LADDER_STATE.results[c] || `결과 ${c + 1}`).slice(0, 14);
+    if (finalRevealed) {
+      t.textContent = txt;
+      t.classList.add('revealed');
+      if (/당첨|win|🍀|✨|🎉|1등|축하/i.test(txt)) t.classList.add('win');
+    } else {
+      t.textContent = '❓';
+    }
+    svg.appendChild(t);
+    // 누가 이 결과에 도착했는지 — 작은 텍스트로 결과 아래에
+    if (finalRevealed) {
+      const playerName = (LADDER_STATE.players[winnerStart] || `${winnerStart + 1}번`).slice(0, 14);
+      const wn = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      wn.setAttribute('x', xOf(c));
+      wn.setAttribute('y', ladderBottom + 48);
+      wn.setAttribute('text-anchor', 'middle');
+      wn.setAttribute('class', 'ladder-winner-name');
+      wn.setAttribute('font-size', '11');
+      wn.setAttribute('fill', ladderColor(winnerStart));
+      wn.dataset.winnerCol = String(c);
+      wn.textContent = `← ${playerName}`;
+      svg.appendChild(wn);
+    }
+  }
+
+  stage.appendChild(svg);
+  stage._svg = svg;
+  stage._dims = { xOf, yOfRow, ROW_H, ladderTop, ladderBottom };
+}
+
+function ladderPathPoints(trace, dims) {
+  const { xOf, yOfRow, ROW_H, ladderTop } = dims;
+  const points = [];
+  points.push([xOf(trace.path[0].col), ladderTop]);
+  for (let r = 0; r < trace.path.length - 1; r++) {
+    const curCol = trace.path[r].col;
+    const nextCol = trace.path[r + 1].col;
+    const yMid = yOfRow(r) + ROW_H / 2;
+    if (curCol !== nextCol) {
+      points.push([xOf(curCol), yMid]);
+      points.push([xOf(nextCol), yMid]);
+    }
+    points.push([xOf(nextCol), yOfRow(r) + ROW_H]);
+  }
+  return points;
+}
+function ladderEaseInOutCubic(t) {
+  return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+}
+function animateLadderPath(start, opts = {}) {
+  if (!LADDER_STATE.traces) return;
+  const stage = $('ladderStage');
+  if (!stage || !stage._svg) return;
+  if (LADDER_STATE.revealed.has(start)) return;
+  if (stage._busy && stage._busy.has(start)) return;
+  stage._busy = stage._busy || new Set();
+  stage._busy.add(start);
+  const duration = opts.duration || 3700; // 70% 속도 = 1.43x 길게
+  const quick = !!opts.quick;
+
+  const SVG_NS = 'http://www.w3.org/2000/svg';
+  const trace = LADDER_STATE.traces[start];
+  const points = ladderPathPoints(trace, stage._dims);
+  const d = points.map((p, i) => (i === 0 ? `M${p[0]},${p[1]}` : `L${p[0]},${p[1]}`)).join(' ');
+
+  // 기존 trace 제거 (재시도 방지)
+  stage._svg.querySelectorAll(`[data-trace="${start}"]`).forEach((el) => el.remove());
+
+  // trace path
+  const path = document.createElementNS(SVG_NS, 'path');
+  path.setAttribute('d', d);
+  path.setAttribute('class', 'ladder-trace');
+  path.setAttribute('stroke', ladderColor(start));
+  path.dataset.trace = String(start);
+  stage._svg.appendChild(path);
+  const length = path.getTotalLength();
+  path.style.strokeDasharray = String(length);
+  path.style.strokeDashoffset = String(length);
+
+  // 마블 (경로를 따라 움직이는 원)
+  const marble = document.createElementNS(SVG_NS, 'circle');
+  marble.setAttribute('r', '8');
+  marble.setAttribute('fill', ladderColor(start));
+  marble.setAttribute('stroke', '#fff');
+  marble.setAttribute('stroke-width', '2.5');
+  marble.setAttribute('class', 'ladder-marble');
+  marble.style.color = ladderColor(start); // drop-shadow uses currentColor
+  marble.dataset.trace = String(start);
+  const p0 = path.getPointAtLength(0);
+  marble.setAttribute('cx', p0.x);
+  marble.setAttribute('cy', p0.y);
+  stage._svg.appendChild(marble);
+
+  // 두근두근 텍스트 (참여자 라벨 위) — 빠른 모드(전체 공개)에선 생략
+  let drum = null;
+  if (!quick) {
+    drum = document.createElementNS(SVG_NS, 'text');
+    drum.setAttribute('x', stage._dims.xOf(trace.path[0].col));
+    drum.setAttribute('y', 18);
+    drum.setAttribute('text-anchor', 'middle');
+    drum.setAttribute('class', 'ladder-drumroll');
+    drum.setAttribute('fill', ladderColor(start));
+    drum.dataset.trace = String(start);
+    drum.textContent = '두근두근…';
+    stage._svg.appendChild(drum);
+  }
+
+  const startT = performance.now();
+  let lastTrail = 0;
+  let lastTick = 0;
+  let lastJumpCol = trace.path[0].col;
+  function emitTrail(x, y) {
+    const SVG_NS2 = 'http://www.w3.org/2000/svg';
+    const tr = document.createElementNS(SVG_NS2, 'circle');
+    tr.setAttribute('cx', x); tr.setAttribute('cy', y);
+    tr.setAttribute('r', '4');
+    tr.setAttribute('fill', ladderColor(start));
+    tr.setAttribute('class', 'ladder-trail');
+    tr.style.opacity = '0.7';
+    stage._svg.insertBefore(tr, marble); // 마블 뒤에
+    requestAnimationFrame(() => {
+      tr.style.transition = 'transform 0.7s ease-out, opacity 0.7s ease-out';
+      tr.style.transform = 'scale(0.15)';
+      tr.style.opacity = '0';
+    });
+    setTimeout(() => tr.remove(), 800);
+  }
+  function step(now) {
+    const t = Math.min(1, (now - startT) / duration);
+    const eased = ladderEaseInOutCubic(t);
+    const dist = eased * length;
+    const pt = path.getPointAtLength(dist);
+    marble.setAttribute('cx', pt.x);
+    marble.setAttribute('cy', pt.y);
+    // 마블 살짝 펄스 (스릴 연출)
+    const pulse = 8 + Math.sin(t * Math.PI * 7) * 1.6;
+    marble.setAttribute('r', String(pulse));
+    path.style.strokeDashoffset = String(length - dist);
+    // 트레일 입자
+    if (now - lastTrail > 55) {
+      emitTrail(pt.x, pt.y);
+      lastTrail = now;
+    }
+    // 똑똑똑 — 점점 빨라지다가 마지막에 느려짐 (서스펜스)
+    const tickGap = 200 - 100 * Math.sin(t * Math.PI);  // 100~200ms
+    if (now - lastTick > tickGap) {
+      ladderTick();
+      lastTick = now;
+    }
+    // 가지 통과 시 깜빡 (현재 위치가 이전과 컬럼이 다르면 transition)
+    if (t < 1) requestAnimationFrame(step);
+    else finish();
+  }
+  function finish() {
+    if (drum) drum.remove();
+    LADDER_STATE.revealed.add(start);
+    stage._busy.delete(start);
+    revealResultLabel(trace.finalCol, start, marble, { quick });
+    if (LADDER_STATE.revealed.size >= LADDER_STATE.count) {
+      $('ladderRevealAllBtn')?.classList.add('hidden');
+    }
+    updateLadderProgress();
+  }
+  requestAnimationFrame(step);
+}
+
+function updateLadderProgress() {
+  const el = $('ladderProgress');
+  if (!el) return;
+  if (!LADDER_STATE.traces) { el.classList.add('hidden'); return; }
+  el.classList.remove('hidden');
+  const n = LADDER_STATE.revealed.size;
+  const total = LADDER_STATE.count;
+  if (n >= total) {
+    el.textContent = `🏁 모두 공개됨 (${n}/${total})`;
+    el.classList.add('complete');
+  } else {
+    el.textContent = `${n}/${total} 공개됨`;
+    el.classList.remove('complete');
+  }
+}
+
+function revealResultLabel(col, start, marble, opts = {}) {
+  const stage = $('ladderStage');
+  if (!stage || !stage._svg) return;
+  const quick = !!opts.quick;
+  const label = stage._svg.querySelector(`[data-result-col="${col}"]`);
+  const txt = (LADDER_STATE.results[col] || `결과 ${col + 1}`).slice(0, 14);
+  const isWin = /당첨|win|💣|🍀|✨|🎉|1등|축하|당선/i.test(txt);
+  const playerName = (LADDER_STATE.players[start] || `${start + 1}번`).slice(0, 10);
+
+  if (label) {
+    label.style.transition = 'opacity 0.15s ease';
+    label.style.opacity = '0';
+    setTimeout(() => {
+      label.textContent = txt;
+      label.classList.add('revealed');
+      if (isWin) label.classList.add('win');
+      label.style.opacity = '1';
+      label.setAttribute('font-size', '16');
+      setTimeout(() => label.setAttribute('font-size', '14'), 400);
+    }, 160);
+  }
+
+  // 시작 라벨에서 pending 펄스 제거
+  const startLabel = stage._svg.querySelector(`.ladder-player-btn[data-start="${start}"]`);
+  if (startLabel) startLabel.classList.remove('pending');
+
+  // 결과 라벨 아래 "← 누구" 표시 — 이미 있으면 갱신
+  const SVG_NS = 'http://www.w3.org/2000/svg';
+  if (label) {
+    let wn = stage._svg.querySelector(`[data-winner-col="${col}"]`);
+    if (!wn) {
+      wn = document.createElementNS(SVG_NS, 'text');
+      wn.setAttribute('x', label.getAttribute('x'));
+      wn.setAttribute('y', String(parseFloat(label.getAttribute('y')) + 20));
+      wn.setAttribute('text-anchor', 'middle');
+      wn.setAttribute('class', 'ladder-winner-name');
+      wn.setAttribute('font-size', '11');
+      wn.dataset.winnerCol = String(col);
+      stage._svg.appendChild(wn);
+    }
+    wn.setAttribute('fill', ladderColor(start));
+    wn.textContent = `← ${playerName}`;
+    // 등장 애니메이션
+    wn.style.opacity = '0';
+    wn.style.transition = 'opacity 0.25s ease 0.18s';
+    requestAnimationFrame(() => { wn.style.opacity = '1'; });
+  }
+
+  // 공유 버튼 노출 — 적어도 1개 공개됐을 때
+  $('ladderShareBtn')?.classList.remove('hidden');
+
+  // 마블 펑 → 사라짐
+  if (marble) {
+    setTimeout(() => marble.setAttribute('r', '18'), 80);
+    setTimeout(() => { marble.style.opacity = '0'; }, 480);
+    setTimeout(() => marble.remove(), 1000);
+  }
+  if (isWin) {
+    ladderSparkle(stage._svg, label);
+    if (!quick) ladderConfetti();
+  }
+
+  // 효과음 — 빠른 모드(전체 공개)에선 1번만 울리도록 호출자 쪽에서 제어
+  if (!quick) {
+    setTimeout(() => { isWin ? ladderWinChime() : ladderLoseTrombone(); }, 200);
+    // 결과 발표 토스트
+    setTimeout(() => showLadderToast(playerName, txt, isWin), 280);
+  }
+}
+
+function ladderSparkle(svg, label) {
+  const SVG_NS = 'http://www.w3.org/2000/svg';
+  const cx = parseFloat(label.getAttribute('x')) || 0;
+  const cy = parseFloat(label.getAttribute('y')) || 0;
+  const colors = ['#FFCC00', '#FF8B6B', '#5AC8FA', '#34C759', '#FF2D55'];
+  const N = 12;
+  for (let i = 0; i < N; i++) {
+    const angle = (Math.PI * 2 / N) * i + Math.random() * 0.4;
+    const dist = 28 + Math.random() * 26;
+    const dx = Math.cos(angle) * dist;
+    const dy = Math.sin(angle) * dist - 6;
+    const star = document.createElementNS(SVG_NS, 'circle');
+    star.setAttribute('cx', cx);
+    star.setAttribute('cy', cy - 4);
+    star.setAttribute('r', String(2.5 + Math.random() * 2));
+    star.setAttribute('fill', colors[i % colors.length]);
+    star.setAttribute('class', 'ladder-spark');
+    svg.appendChild(star);
+    requestAnimationFrame(() => {
+      star.style.transition = 'transform 0.9s cubic-bezier(.2,.7,.3,1), opacity 0.9s ease-out';
+      star.style.transform = `translate(${dx}px, ${dy}px) scale(0.4)`;
+      star.style.opacity = '0';
+    });
+    setTimeout(() => star.remove(), 1100);
+  }
+}
+
+function animateLadderPathInstant(start) {
+  // 즉시 표시 (재렌더 후 기존 공개 경로 복원용)
+  if (!LADDER_STATE.traces) return;
+  const stage = $('ladderStage');
+  if (!stage || !stage._svg) return;
+  const { xOf, yOfRow, ROW_H, ladderTop } = stage._dims;
+  const trace = LADDER_STATE.traces[start];
+  const points = [];
+  points.push([xOf(trace.path[0].col), ladderTop]);
+  for (let r = 0; r < trace.path.length - 1; r++) {
+    const curCol = trace.path[r].col;
+    const nextCol = trace.path[r + 1].col;
+    const yMid = yOfRow(r) + ROW_H / 2;
+    if (curCol !== nextCol) {
+      points.push([xOf(curCol), yMid]);
+      points.push([xOf(nextCol), yMid]);
+    }
+    points.push([xOf(nextCol), yOfRow(r) + ROW_H]);
+  }
+  const d = points.map((p, i) => (i === 0 ? `M${p[0]},${p[1]}` : `L${p[0]},${p[1]}`)).join(' ');
+  const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+  path.setAttribute('d', d);
+  path.setAttribute('class', 'ladder-trace');
+  path.setAttribute('stroke', ladderColor(start));
+  path.dataset.trace = String(start);
+  stage._svg.appendChild(path);
+}
+
+function ladderConfetti() {
+  const stage = $('ladderStage');
+  if (!stage) return;
+  const colors = ['#FF8B6B', '#5AC8FA', '#34C759', '#AF52DE', '#FFCC00', '#FF2D55', '#5856D6', '#FF9500'];
+  const N = 36;
+  const stageH = stage.clientHeight || 380;
+  for (let i = 0; i < N; i++) {
+    const piece = document.createElement('div');
+    piece.className = 'ladder-confetti';
+    piece.style.left = `${Math.random() * 100}%`;
+    piece.style.background = colors[i % colors.length];
+    piece.style.width = `${5 + Math.random() * 4}px`;
+    piece.style.height = `${7 + Math.random() * 6}px`;
+    const dur = 1.7 + Math.random() * 1.3;
+    const delay = Math.random() * 0.4;
+    piece.style.animationDuration = `${dur}s`;
+    piece.style.animationDelay = `${delay}s`;
+    piece.style.setProperty('--cx', `${(Math.random() - 0.5) * 100}px`);
+    piece.style.setProperty('--cy', `${stageH + 30}px`);
+    piece.style.setProperty('--cr', `${(Math.random() - 0.5) * 1080}deg`);
+    piece.style.transform = `rotate(${Math.random() * 360}deg)`;
+    stage.appendChild(piece);
+    setTimeout(() => piece.remove(), (dur + delay) * 1000 + 50);
+  }
+}
+
+async function ladderShareToChat() {
+  if (!LADDER_STATE.traces) return;
+  const lines = ['🎲 사다리 결과'];
+  // 공개된 것만 / 정렬: 시작 컬럼 순
+  const sorted = [...LADDER_STATE.revealed].sort((a, b) => a - b);
+  for (const start of sorted) {
+    const trace = LADDER_STATE.traces[start];
+    const playerName = (LADDER_STATE.players[start] || `${start + 1}번`).slice(0, 14);
+    const result = (LADDER_STATE.results[trace.finalCol] || `결과 ${trace.finalCol + 1}`).slice(0, 14);
+    lines.push(`• ${playerName} → ${result}`);
+  }
+  if (sorted.length === 0) return;
+  const text = lines.join('\n');
+  const btn = $('ladderShareBtn');
+  if (btn) { btn.disabled = true; btn.textContent = '전송 중...'; }
+  try {
+    await api('/api/chat', { method: 'POST', body: JSON.stringify({ text }) });
+    if (btn) {
+      btn.textContent = '✓ 채팅에 공유됨';
+      btn.classList.add('shared');
+    }
+  } catch (e) {
+    if (btn) { btn.disabled = false; btn.textContent = '💬 채팅으로 공유'; }
+    alert('공유 실패: ' + (e?.message || ''));
+  }
+}
+
+function ladderRevealAll() {
+  if (!LADDER_STATE.traces) return;
+  const remaining = [];
+  for (let c = 0; c < LADDER_STATE.count; c++) {
+    if (!LADDER_STATE.revealed.has(c)) remaining.push(c);
+  }
+  if (!remaining.length) return;
+  // 순차 stagger — 한 명씩 빠르게(700ms) 공개. 중간에 한 번만 잔잔한 효과음.
+  remaining.forEach((c, i) => {
+    setTimeout(() => animateLadderPath(c, { duration: 700, quick: true }), i * 360);
+  });
+  // 전체 끝난 시점에 종합 효과음 + 색종이 (당첨자 1명이라도 있으면)
+  const totalDelay = remaining.length * 360 + 750;
+  setTimeout(() => {
+    let anyWin = false;
+    for (let c = 0; c < LADDER_STATE.count; c++) {
+      const trace = LADDER_STATE.traces[c];
+      const txt = LADDER_STATE.results[trace.finalCol] || '';
+      if (/당첨|win|💣|🍀|✨|🎉|1등|축하|당선/i.test(txt)) { anyWin = true; break; }
+    }
+    if (anyWin) { ladderConfetti(); ladderWinChime(); }
+  }, totalDelay);
+  $('ladderRevealAllBtn')?.classList.add('hidden');
+}
+
+function setLadderMode(mode) {
+  LADDER_STATE.mode = mode;
+  LADDER_STATE.rungs = null;
+  LADDER_STATE.traces = null;
+  LADDER_STATE.revealed.clear();
+  if (mode === 'family') {
+    const fams = ladderActiveFamilyNames();
+    if (fams.length >= 2) {
+      LADDER_STATE.count = Math.min(8, Math.max(2, fams.length));
+      LADDER_STATE.players = fams.slice(0, LADDER_STATE.count);
+    } else {
+      LADDER_STATE.count = 4;
+      LADDER_STATE.players = ['1번', '2번', '3번', '4번'];
+    }
+    LADDER_STATE.results = LADDER_RESULT_PRESETS[0].gen(LADDER_STATE.count);
+  } else if (mode === 'guest') {
+    LADDER_STATE.count = 4;
+    LADDER_STATE.players = ['1번', '2번', '3번', '4번'];
+    LADDER_STATE.results = LADDER_RESULT_PRESETS[0].gen(4);
+  }
+  ladderEnsureSize(LADDER_STATE.count);
+  renderLadderModeBar();
+  renderLadderControls();
+  renderLadderStage();
+  updateLadderProgress();
+}
+
+function clearLadderMode() {
+  LADDER_STATE.mode = null;
+  LADDER_STATE.rungs = null;
+  LADDER_STATE.traces = null;
+  LADDER_STATE.revealed.clear();
+  renderLadderModeBar();
+  renderLadderStage();
+  updateLadderProgress();
+}
+
+function renderLadderModeBar() {
+  const bar = $('ladderModeBar');
+  const setup = $('ladderSetup');
+  if (!bar) return;
+  bar.innerHTML = '';
+  if (!LADDER_STATE.mode) {
+    setup?.classList.add('hidden');
+    const wrap = document.createElement('div');
+    wrap.className = 'ladder-mode-tiles';
+    const fams = ladderActiveFamilyNames();
+    const tiles = [
+      { mode: 'family', emoji: '🏠', name: '가족 모드',
+        desc: fams.length >= 2 ? `우리 가족 ${fams.length}명 자동 입력` : '우리 가족과 함께' },
+      { mode: 'guest',  emoji: '🎭', name: '손님 모드',
+        desc: '인원·이름 자유 설정' },
+    ];
+    for (const t of tiles) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'ladder-mode-tile';
+      b.innerHTML = `
+        <span class="ladder-mode-emoji">${t.emoji}</span>
+        <span class="ladder-mode-name">${t.name}</span>
+        <span class="ladder-mode-desc">${t.desc}</span>`;
+      b.onclick = () => setLadderMode(t.mode);
+      wrap.appendChild(b);
+    }
+    bar.appendChild(wrap);
+  } else {
+    setup?.classList.remove('hidden');
+    const cur = document.createElement('div');
+    cur.className = 'ladder-mode-current';
+    const label = LADDER_STATE.mode === 'family' ? '🏠 가족 모드' : '🎭 손님 모드';
+    cur.innerHTML = `<span>${label}</span>`;
+    const sw = document.createElement('button');
+    sw.type = 'button';
+    sw.className = 'ladder-mode-switch';
+    sw.textContent = '바꾸기';
+    sw.onclick = clearLadderMode;
+    cur.appendChild(sw);
+    bar.appendChild(cur);
+  }
+}
+
+// 참여자 카드 — 드래그로 순서 변경 가능
+function renderLadderPlayerCards() {
+  const c = $('ladderPlayerInputs');
+  if (!c) return;
+  c.innerHTML = '';
+  for (let i = 0; i < LADDER_STATE.count; i++) {
+    const card = document.createElement('div');
+    card.className = 'ladder-player-card';
+    card.dataset.idx = String(i);
+
+    const handle = document.createElement('div');
+    handle.className = 'ladder-drag-handle';
+    handle.setAttribute('aria-label', '드래그해서 순서 바꾸기');
+    handle.innerHTML = '⋮⋮';
+
+    const num = document.createElement('span');
+    num.className = 'ladder-player-num';
+    num.textContent = `${i + 1}`;
+
+    const inp = document.createElement('input');
+    inp.type = 'text';
+    inp.className = 'ladder-input';
+    inp.value = LADDER_STATE.players[i];
+    inp.maxLength = 14;
+    inp.placeholder = `${i + 1}번`;
+    inp.oninput = () => {
+      LADDER_STATE.players[i] = inp.value || `${i + 1}번`;
+      renderLadderStage();
+    };
+
+    card.appendChild(handle);
+    card.appendChild(num);
+    card.appendChild(inp);
+    c.appendChild(card);
+
+    bindLadderDrag(card, handle);
+  }
+}
+
+let _ladderDrag = null;
+function bindLadderDrag(card, handle) {
+  handle.addEventListener('pointerdown', (e) => {
+    if (_ladderDrag) return;
+    e.preventDefault();
+    try { handle.setPointerCapture(e.pointerId); } catch {}
+    _ladderDrag = {
+      pointerId: e.pointerId,
+      card,
+      handle,
+      startY: e.clientY,
+    };
+    card.classList.add('dragging');
+  });
+  const move = (e) => {
+    if (!_ladderDrag || _ladderDrag.pointerId !== e.pointerId) return;
+    e.preventDefault();
+    const dy = e.clientY - _ladderDrag.startY;
+    _ladderDrag.card.style.transform = `translateY(${dy}px)`;
+  };
+  const end = (e) => {
+    if (!_ladderDrag || _ladderDrag.pointerId !== e.pointerId) return;
+    const drag = _ladderDrag;
+    _ladderDrag = null;
+    drag.card.style.transform = '';
+    drag.card.classList.remove('dragging');
+    // 드래그된 카드의 시각 중심으로 타깃 인덱스 계산
+    const list = $('ladderPlayerInputs');
+    if (!list) return;
+    const cards = [...list.children];
+    const draggedIdx = cards.indexOf(drag.card);
+    if (draggedIdx < 0) return;
+    const draggedRect = drag.card.getBoundingClientRect();
+    const draggedCenter = draggedRect.top + draggedRect.height / 2;
+    let targetIdx = draggedIdx;
+    for (let i = 0; i < cards.length; i++) {
+      if (i === draggedIdx) continue;
+      const r = cards[i].getBoundingClientRect();
+      const cy = r.top + r.height / 2;
+      if (draggedCenter > cy && i > targetIdx) targetIdx = i;
+      if (draggedCenter < cy && i < targetIdx) targetIdx = i;
+    }
+    if (targetIdx !== draggedIdx) {
+      const players = LADDER_STATE.players;
+      const moved = players.splice(draggedIdx, 1)[0];
+      players.splice(targetIdx, 0, moved);
+      // 순서 바뀌면 사다리 다시 그리기 (배열 그대로 결과·rungs 는 컬럼 기준이라 유지)
+      renderLadderPlayerCards();
+      renderLadderStage();
+    }
+  };
+  handle.addEventListener('pointermove', move);
+  handle.addEventListener('pointerup', end);
+  handle.addEventListener('pointercancel', end);
+}
+
+function openLadder() {
+  // 모드 선택 화면부터 시작
+  renderLadderModeBar();
+  if (LADDER_STATE.mode) {
+    renderLadderControls();
+    renderLadderStage();
+  } else {
+    $('ladderSetup')?.classList.add('hidden');
+  }
+  ladderApplyMuteUi();
+  updateLadderProgress();
+  $('ladderSheet')?.classList.remove('hidden');
+  // 사용자 제스처 직후 — Web Audio 컨텍스트 깨우기
+  try { const c = ladderAudio(); if (c && c.state === 'suspended') c.resume(); } catch {}
+}
+function closeLadder() {
+  $('ladderSheet')?.classList.add('hidden');
+}
+
+$('ladderGameTile')?.addEventListener('click', openLadder);
+
+// ============================================================
+// 채팅 슬래시 명령 메뉴 (/ 입력 시 자동 완성)
+// ============================================================
+const CHAT_COMMANDS = [
+  { keyword: '사다리', emoji: '🎲', name: '/사다리', desc: '가족 사다리 게임 방 만들기',
+    run: () => { closeChatCommandMenu(); openLadderSetupSheet(); } },
+  { keyword: '고스톱', emoji: '🎴', name: '/고스톱', desc: '가족 고스톱 게임 방 만들기',
+    run: () => { closeChatCommandMenu(); openGostopSetupSheet(); } },
+];
+
+// /고스톱 명령 처리 — 셋업 시트
+let GOSTOP_SETUP_PC = 2;
+function openGostopSetupSheet() {
+  GOSTOP_SETUP_PC = 2;
+  renderGostopSetupControls();
+  $('gostopSetupSheet')?.classList.remove('hidden');
+}
+function closeGostopSetupSheet() {
+  $('gostopSetupSheet')?.classList.add('hidden');
+}
+function renderGostopSetupControls() {
+  const row = $('gostopSetupPcRow');
+  if (!row) return;
+  row.innerHTML = '';
+  const opts = [
+    { n: 2, label: '2인', sub: '맞고' },
+    { n: 3, label: '3인', sub: '고스톱' },
+  ];
+  for (const o of opts) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'ladder-count-btn' + (o.n === GOSTOP_SETUP_PC ? ' active' : '');
+    b.style.minWidth = '64px';
+    b.style.height = 'auto';
+    b.style.padding = '10px 8px';
+    b.innerHTML = `${o.label}<br><span style="font-size:10px;font-weight:600;opacity:.7">${o.sub}</span>`;
+    b.onclick = () => { GOSTOP_SETUP_PC = o.n; renderGostopSetupControls(); };
+    row.appendChild(b);
+  }
+}
+function createGostopRoomFromChat() {
+  // /games/gostop/?autoCreate=1&pc=N — 고스톱 로비가 자동 생성하고 채팅에 카드 게시
+  const url = `/games/gostop/?autoCreate=1&pc=${GOSTOP_SETUP_PC}`;
+  closeGostopSetupSheet();
+  window.location.href = url;
+}
+function updateChatCommandMenu(value) {
+  const menu = $('chatCommandMenu');
+  if (!menu) return;
+  if (!value || value[0] !== '/') {
+    closeChatCommandMenu();
+    return;
+  }
+  const query = value.slice(1).trim().toLowerCase();
+  const items = CHAT_COMMANDS.filter((c) =>
+    !query || c.keyword.toLowerCase().includes(query) || c.name.toLowerCase().includes(query)
+  );
+  menu.innerHTML = '';
+  if (!items.length) {
+    menu.innerHTML = '<div class="chat-cmd-empty">사용 가능한 기능이 없어요</div>';
+  } else {
+    for (const cmd of items) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'chat-cmd-item';
+      b.innerHTML = `
+        <span class="chat-cmd-emoji">${cmd.emoji}</span>
+        <span class="chat-cmd-body">
+          <span class="chat-cmd-name">${cmd.name}</span>
+          <span class="chat-cmd-desc">${cmd.desc}</span>
+        </span>`;
+      b.addEventListener('mousedown', (e) => { e.preventDefault(); }); // blur 방지
+      b.addEventListener('click', (e) => {
+        e.preventDefault();
+        const input = $('chatInput');
+        if (input) {
+          input.value = '';
+          input.style.height = '';
+          const sb = $('chatSendBtn'); if (sb) sb.disabled = true;
+        }
+        cmd.run();
+      });
+      menu.appendChild(b);
+    }
+  }
+  menu.classList.remove('hidden');
+}
+function closeChatCommandMenu() {
+  $('chatCommandMenu')?.classList.add('hidden');
+}
+
+// ============================================================
+// 실시간 사다리 게임 (채팅 /사다리 명령 → 가족 멀티플레이)
+// ============================================================
+let LADDER_SETUP_STATE = { count: 4, results: ['💣 당첨', '꽝', '꽝', '꽝'] };
+let LADDER_LOBBY_GAME_ID = null;
+let LADDER_LOBBY_TIMER = null;
+let LADDER_LOBBY_GAME = null;
+let _ladderCountdownTimer = null;
+
+function startLadderCountdownUi() {
+  const cd = $('ladderLobbyCountdown');
+  if (!cd) return;
+  cd.classList.remove('hidden');
+  let n = 5; // 5 → 4 → 3 → 2 → 1 → 시작!
+  const tick = () => {
+    if (!cd) return;
+    cd.innerHTML = `<span class="cd-num">${n}</span><span class="cd-sub">잠시 후 시작</span>`;
+    n -= 1;
+    if (n >= 1) {
+      _ladderCountdownTimer = setTimeout(tick, 1000);
+    } else {
+      _ladderCountdownTimer = setTimeout(() => {
+        if (cd) cd.innerHTML = `<span class="cd-num">시작!</span>`;
+        _ladderCountdownTimer = setTimeout(() => {
+          cd?.classList.add('hidden');
+          _ladderCountdownTimer = null;
+        }, 600);
+      }, 1000);
+    }
+  };
+  tick();
+}
+function stopLadderCountdownUi() {
+  if (_ladderCountdownTimer) { clearTimeout(_ladderCountdownTimer); _ladderCountdownTimer = null; }
+  $('ladderLobbyCountdown')?.classList.add('hidden');
+}
+
+function renderGostopChatCard(roomCode) {
+  const card = document.createElement('button');
+  card.type = 'button';
+  card.className = 'chat-game-card';
+  card.dataset.gostopCardCode = roomCode;
+  card.innerHTML = `
+    <span class="cgc-emoji">🎴</span>
+    <span class="cgc-body">
+      <span class="cgc-title">고스톱 방</span>
+      <span class="cgc-sub">코드 ${roomCode}</span>
+    </span>
+    <span class="cgc-cta">입장</span>`;
+  card.addEventListener('click', (e) => {
+    e.stopPropagation();
+    window.location.href = `/games/gostop/?join=${encodeURIComponent(roomCode)}`;
+  });
+  return card;
+}
+
+function renderLadderChatCard(gameId) {
+  const card = document.createElement('button');
+  card.type = 'button';
+  card.className = 'chat-game-card';
+  card.dataset.gameCardId = String(gameId);
+  card.innerHTML = `
+    <span class="cgc-emoji">🎲</span>
+    <span class="cgc-body">
+      <span class="cgc-title">사다리 게임</span>
+      <span class="cgc-sub">게임 방이 열렸어요</span>
+    </span>
+    <span class="cgc-cta">참여하기</span>`;
+  card.addEventListener('click', (e) => {
+    e.stopPropagation();
+    openLadderLobby(gameId);
+  });
+  // 비동기로 현재 상태 가져와서 카드 갱신
+  refreshLadderChatCard(card, gameId);
+  return card;
+}
+
+async function refreshLadderChatCard(card, gameId) {
+  try {
+    const g = await api(`/api/ladder/games/${gameId}`);
+    if (!g) return;
+    const sub = card.querySelector('.cgc-sub');
+    const cta = card.querySelector('.cgc-cta');
+    if (g.status === 'lobby') {
+      const ready = g.participants.filter(p => p.ready).length;
+      sub.textContent = `참여 ${g.participants.length}/${g.count}명 · 준비 ${ready}명`;
+      cta.textContent = '참여하기';
+      card.classList.remove('done');
+    } else if (g.status === 'countdown') {
+      sub.textContent = '곧 시작!';
+      cta.textContent = '관전';
+    } else if (g.status === 'running') {
+      sub.textContent = '게임 진행 중';
+      cta.textContent = '관전';
+    } else if (g.status === 'done') {
+      sub.textContent = '결과 발표 완료';
+      cta.textContent = '결과 보기';
+      card.classList.add('done');
+    }
+  } catch {
+    const sub = card.querySelector('.cgc-sub');
+    const cta = card.querySelector('.cgc-cta');
+    if (sub) sub.textContent = '게임 종료';
+    if (cta) cta.textContent = '결과 보기';
+    card.classList.add('done');
+  }
+}
+
+// ----- 셋업 시트 -----
+async function openLadderSetupSheet() {
+  // 이미 진행 중인 사다리 게임이 있으면 셋업 스킵하고 곧바로 그 방으로 입장
+  try {
+    const r = await api('/api/ladder/games/active');
+    if (r?.active && r?.game?.id) {
+      openLadderLobby(r.game.id);
+      return;
+    }
+  } catch {}
+  $('ladderSetupSheet')?.classList.remove('hidden');
+  renderLadderSetupControls();
+}
+function closeLadderSetupSheet() {
+  $('ladderSetupSheet')?.classList.add('hidden');
+}
+function renderLadderSetupControls() {
+  // count buttons
+  const row = $('ladderSetupCountRow');
+  if (row) {
+    row.innerHTML = '';
+    for (let n = 2; n <= 8; n++) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'ladder-count-btn' + (n === LADDER_SETUP_STATE.count ? ' active' : '');
+      b.textContent = String(n);
+      b.onclick = () => {
+        LADDER_SETUP_STATE.count = n;
+        const arr = LADDER_SETUP_STATE.results;
+        while (arr.length < n) arr.push(arr.length === 0 ? '💣 당첨' : '꽝');
+        arr.length = n;
+        renderLadderSetupControls();
+      };
+      row.appendChild(b);
+    }
+  }
+  // 프리셋
+  const presets = $('ladderSetupPresets');
+  if (presets) {
+    presets.innerHTML = '';
+    for (const preset of LADDER_RESULT_PRESETS) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'ladder-preset-btn';
+      b.textContent = preset.label;
+      b.onclick = () => {
+        LADDER_SETUP_STATE.results = preset.gen(LADDER_SETUP_STATE.count);
+        renderLadderSetupControls();
+      };
+      presets.appendChild(b);
+    }
+  }
+  // 결과 input
+  const rc = $('ladderSetupResults');
+  if (rc) {
+    rc.innerHTML = '';
+    for (let i = 0; i < LADDER_SETUP_STATE.count; i++) {
+      const inp = document.createElement('input');
+      inp.type = 'text';
+      inp.className = 'ladder-input';
+      inp.value = LADDER_SETUP_STATE.results[i] || '';
+      inp.maxLength = 14;
+      inp.placeholder = `결과 ${i + 1}`;
+      inp.oninput = () => { LADDER_SETUP_STATE.results[i] = inp.value || `결과 ${i + 1}`; };
+      rc.appendChild(inp);
+    }
+  }
+}
+async function createLadderGameRoom() {
+  const btn = $('ladderSetupCreate');
+  if (btn) { btn.disabled = true; btn.textContent = '만드는 중...'; }
+  try {
+    const r = await api('/api/ladder/games', {
+      method: 'POST',
+      body: JSON.stringify({ count: LADDER_SETUP_STATE.count, results: LADDER_SETUP_STATE.results }),
+    });
+    closeLadderSetupSheet();
+    // 즉시 채팅 폴링해서 새 메시지 잡기
+    pollChatNew();
+    // 자기 자신은 로비도 자동으로 열어줌
+    if (r?.game?.id) openLadderLobby(r.game.id);
+  } catch (e) {
+    if (e?.status === 409 && e?.gameId) {
+      alert('이미 진행 중인 사다리 게임이 있어요. 그 방으로 이동합니다.');
+      closeLadderSetupSheet();
+      openLadderLobby(e.gameId);
+    } else {
+      alert(e?.message || '방 만들기 실패');
+    }
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '방 만들기'; }
+  }
+}
+
+// ----- 로비/실행 시트 -----
+async function openLadderLobby(gameId) {
+  LADDER_LOBBY_GAME_ID = gameId;
+  $('ladderLobbySheet')?.classList.remove('hidden');
+  await refreshLadderLobby();
+  startLadderLobbyPolling();
+}
+function closeLadderLobby() {
+  stopLadderLobbyPolling();
+  LADDER_LOBBY_GAME_ID = null;
+  LADDER_LOBBY_GAME = null;
+  const stage = $('ladderLobbyStage');
+  if (stage) { stage._animStarted = false; stage.innerHTML = ''; stage.classList.add('hidden'); }
+  $('ladderLobbySheet')?.classList.add('hidden');
+  $('ladderLobbyCountdown')?.classList.add('hidden');
+}
+function startLadderLobbyPolling() {
+  stopLadderLobbyPolling();
+  LADDER_LOBBY_TIMER = setInterval(refreshLadderLobby, 1000);
+}
+function stopLadderLobbyPolling() {
+  if (LADDER_LOBBY_TIMER) { clearInterval(LADDER_LOBBY_TIMER); LADDER_LOBBY_TIMER = null; }
+}
+async function refreshLadderLobby() {
+  if (!LADDER_LOBBY_GAME_ID) return;
+  try {
+    const g = await api(`/api/ladder/games/${LADDER_LOBBY_GAME_ID}`);
+    LADDER_LOBBY_GAME = g;
+    renderLadderLobby();
+  } catch (e) {
+    if (e?.status === 404) {
+      stopLadderLobbyPolling();
+      const status = $('ladderLobbyStatus');
+      if (status) status.textContent = '게임이 종료되어 정리되었어요.';
+    }
+  }
+}
+function renderLadderLobbyStage(g) {
+  const stage = $('ladderLobbyStage');
+  if (!stage) return;
+  stage.innerHTML = '';
+  if (!g.rungs || !g.traces) return;
+  const cols = g.count;
+  const ROWS = g.rows || g.rungs.length;
+  const ROW_H = 22;
+  const TOP_LABEL_H = 48;
+  const BOTTOM_LABEL_H = 56;
+  const PAD_X = 16;
+  const VIEW_W = 360;
+  const colSpacing = (VIEW_W - PAD_X * 2) / (cols - 1);
+  const ladderTop = TOP_LABEL_H;
+  const ladderBottom = TOP_LABEL_H + ROWS * ROW_H;
+  const VIEW_H = ladderBottom + BOTTOM_LABEL_H;
+  const xOf = (c) => PAD_X + c * colSpacing;
+  const yOfRow = (r) => ladderTop + r * ROW_H;
+
+  const SVG_NS = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(SVG_NS, 'svg');
+  svg.setAttribute('viewBox', `0 0 ${VIEW_W} ${VIEW_H}`);
+  svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+
+  // 세로줄
+  for (let c = 0; c < cols; c++) {
+    const ln = document.createElementNS(SVG_NS, 'line');
+    ln.setAttribute('x1', xOf(c)); ln.setAttribute('x2', xOf(c));
+    ln.setAttribute('y1', ladderTop); ln.setAttribute('y2', ladderBottom);
+    ln.setAttribute('class', 'ladder-pole');
+    svg.appendChild(ln);
+  }
+  // 가지
+  for (let r = 0; r < ROWS; r++) {
+    for (let gx = 0; gx < cols - 1; gx++) {
+      if (!g.rungs[r][gx]) continue;
+      const ln = document.createElementNS(SVG_NS, 'line');
+      ln.setAttribute('x1', xOf(gx)); ln.setAttribute('x2', xOf(gx + 1));
+      const y = yOfRow(r) + ROW_H / 2;
+      ln.setAttribute('y1', y); ln.setAttribute('y2', y);
+      ln.setAttribute('class', 'ladder-rung');
+      svg.appendChild(ln);
+    }
+  }
+  // 참여자 라벨 (상단)
+  for (let c = 0; c < cols; c++) {
+    const occupant = g.participants.find(p => p.slot === c);
+    const t = document.createElementNS(SVG_NS, 'text');
+    t.setAttribute('x', xOf(c));
+    t.setAttribute('y', TOP_LABEL_H - 14);
+    t.setAttribute('text-anchor', 'middle');
+    t.setAttribute('class', 'ladder-player-btn');
+    t.setAttribute('font-size', '13');
+    t.setAttribute('font-weight', '700');
+    t.setAttribute('fill', ladderColor(c));
+    t.textContent = occupant ? (occupant.name || '').slice(0, 14) : `${c + 1}번`;
+    svg.appendChild(t);
+  }
+  // 결과 라벨 (하단) — 처음엔 ❓
+  for (let c = 0; c < cols; c++) {
+    const t = document.createElementNS(SVG_NS, 'text');
+    t.setAttribute('x', xOf(c));
+    t.setAttribute('y', ladderBottom + 28);
+    t.setAttribute('text-anchor', 'middle');
+    t.setAttribute('class', 'ladder-result-label');
+    t.setAttribute('font-size', '14');
+    t.setAttribute('fill', 'currentColor');
+    t.dataset.resultCol = String(c);
+    t.textContent = '❓';
+    svg.appendChild(t);
+  }
+  stage.appendChild(svg);
+  stage._svg = svg;
+  stage._dims = { xOf, yOfRow, ROW_H, ladderTop, ladderBottom };
+}
+
+function animateLobbyPath(start, game, stage, opts = {}) {
+  if (!stage || !stage._svg) return;
+  const { xOf, yOfRow, ROW_H, ladderTop } = stage._dims;
+  const SVG_NS = 'http://www.w3.org/2000/svg';
+  const trace = game.traces[start];
+  const points = [];
+  points.push([xOf(trace.path[0].col), ladderTop]);
+  for (let r = 0; r < trace.path.length - 1; r++) {
+    const curCol = trace.path[r].col;
+    const nextCol = trace.path[r + 1].col;
+    const yMid = yOfRow(r) + ROW_H / 2;
+    if (curCol !== nextCol) {
+      points.push([xOf(curCol), yMid]);
+      points.push([xOf(nextCol), yMid]);
+    }
+    points.push([xOf(nextCol), yOfRow(r) + ROW_H]);
+  }
+  const d = points.map((p, i) => (i === 0 ? `M${p[0]},${p[1]}` : `L${p[0]},${p[1]}`)).join(' ');
+  const path = document.createElementNS(SVG_NS, 'path');
+  path.setAttribute('d', d);
+  path.setAttribute('class', 'ladder-trace');
+  path.setAttribute('stroke', ladderColor(start));
+  stage._svg.appendChild(path);
+  const length = path.getTotalLength();
+  path.style.strokeDasharray = String(length);
+  path.style.strokeDashoffset = String(length);
+
+  const marble = document.createElementNS(SVG_NS, 'circle');
+  marble.setAttribute('r', '8');
+  marble.setAttribute('fill', ladderColor(start));
+  marble.setAttribute('stroke', '#fff');
+  marble.setAttribute('stroke-width', '2.5');
+  marble.setAttribute('class', 'ladder-marble');
+  marble.style.color = ladderColor(start);
+  const p0 = path.getPointAtLength(0);
+  marble.setAttribute('cx', p0.x);
+  marble.setAttribute('cy', p0.y);
+  stage._svg.appendChild(marble);
+
+  const duration = opts.duration || 4800; // 50% 더 느리게 = 1.5x 길게 (멀티플레이 진행 천천히)
+  const startT = performance.now();
+  function step(now) {
+    const t = Math.min(1, (now - startT) / duration);
+    const eased = ladderEaseInOutCubic(t);
+    const dist = eased * length;
+    const pt = path.getPointAtLength(dist);
+    marble.setAttribute('cx', pt.x);
+    marble.setAttribute('cy', pt.y);
+    path.style.strokeDashoffset = String(length - dist);
+    if (t < 1) requestAnimationFrame(step);
+    else finish();
+  }
+  function finish() {
+    // 결과 라벨 reveal
+    const finalCol = trace.finalCol;
+    const label = stage._svg.querySelector(`[data-result-col="${finalCol}"]`);
+    let txt = '', isWin = false;
+    if (label) {
+      txt = (game.results[finalCol] || `결과 ${finalCol + 1}`).slice(0, 14);
+      isWin = /당첨|win|💣|🍀|✨|🎉|1등|축하|당선/i.test(txt);
+      label.style.transition = 'opacity 0.15s ease';
+      label.style.opacity = '0';
+      setTimeout(() => {
+        label.textContent = txt;
+        label.classList.add('revealed');
+        if (isWin) label.classList.add('win');
+        label.style.opacity = '1';
+        label.setAttribute('font-size', '16');
+        setTimeout(() => label.setAttribute('font-size', '14'), 400);
+      }, 120);
+      if (isWin) {
+        ladderSparkle(stage._svg, label);
+        ladderConfetti();
+        // 걸린 사람 화면 중앙에 크게! (이름은 participant 에서 가져옴)
+        const participant = game.participants.find(p => p.slot === start);
+        const playerName = (participant?.name || `${start + 1}번`).slice(0, 14);
+        setTimeout(() => showLadderToast(playerName, txt, true), 280);
+        // 효과음
+        if (typeof ladderWinChime === 'function') setTimeout(ladderWinChime, 200);
+      } else {
+        if (typeof ladderLoseTrombone === 'function') setTimeout(ladderLoseTrombone, 200);
+      }
+    }
+    // 마블 펑 → 페이드아웃
+    setTimeout(() => marble.setAttribute('r', '14'), 80);
+    setTimeout(() => { marble.style.opacity = '0'; }, 480);
+    setTimeout(() => marble.remove(), 900);
+  }
+  requestAnimationFrame(step);
+}
+
+function startLadderLobbyAnimation(g) {
+  const stage = $('ladderLobbyStage');
+  if (!stage) return;
+  renderLadderLobbyStage(g);
+  // 참여자별로 stagger 200ms 간격으로 동시 애니메이션
+  const sorted = [...g.participants].sort((a, b) => a.slot - b.slot);
+  sorted.forEach((p, i) => {
+    setTimeout(() => animateLobbyPath(p.slot, g, stage), i * 200);
+  });
+}
+
+function showLadderLobbyDoneInstant(g) {
+  // 결과 상태에 진입했을 때(이미 애니 끝났거나 늦게 들어온 경우) 즉시 모두 그려줌
+  const stage = $('ladderLobbyStage');
+  if (!stage) return;
+  renderLadderLobbyStage(g);
+  for (const p of g.participants) {
+    animateLobbyPath(p.slot, g, stage, { duration: 600 });
+  }
+}
+
+function renderLadderLobby() {
+  const g = LADDER_LOBBY_GAME;
+  if (!g) return;
+  const me = g.participants.find(p => p.userId === ME?.id);
+  const slotsEl = $('ladderLobbySlots');
+  const status = $('ladderLobbyStatus');
+  const sub = $('ladderLobbySub');
+  const readyBtn = $('ladderLobbyReadyBtn');
+  const leaveBtn = $('ladderLobbyLeaveBtn');
+  const cd = $('ladderLobbyCountdown');
+  const stage = $('ladderLobbyStage');
+  const resultsEl = $('ladderLobbyResults');
+
+  // status 텍스트
+  if (status) {
+    status.classList.remove('allready');
+    if (g.status === 'lobby') {
+      const ready = g.participants.filter(p => p.ready).length;
+      const joined = g.participants.length;
+      const cap = g.count;
+      let text;
+      if (joined === 0) {
+        text = `자리를 선택해 주세요 (총 ${cap}자리)`;
+      } else if (joined < cap) {
+        text = `참여 ${joined}/${cap}명 · 준비 ${ready}명 — ${cap - joined}자리 더 필요`;
+      } else {
+        // 모든 슬롯 채워짐
+        if (ready === joined) {
+          text = `모두 준비! 곧 시작합니다 🎲`;
+          status.classList.add('allready');
+        } else {
+          text = `참여 ${joined}/${cap}명 · 준비 ${ready}/${joined} — 나머지 준비 대기 중`;
+        }
+      }
+      status.textContent = text;
+    } else if (g.status === 'countdown') {
+      status.textContent = '잠시 후 시작합니다...';
+    } else if (g.status === 'running') {
+      status.textContent = '🎲 게임 진행 중...';
+    } else {
+      status.textContent = '🏁 결과 발표!';
+      status.classList.add('allready');
+    }
+  }
+
+  // 뷰 전환 — 로비/카운트다운: 슬롯 노출, 진행/완료: 사다리 stage 노출
+  if (g.status === 'lobby' || g.status === 'countdown') {
+    slotsEl?.classList.remove('hidden');
+    stage?.classList.add('hidden');
+  } else if (g.status === 'running') {
+    slotsEl?.classList.add('hidden');
+    stage?.classList.remove('hidden');
+    // 한 번만 애니메이션 시작
+    if (!stage._animStarted) {
+      stage._animStarted = true;
+      startLadderLobbyAnimation(g);
+    }
+  } else if (g.status === 'done') {
+    slotsEl?.classList.add('hidden');
+    stage?.classList.remove('hidden');
+    // running 단계를 못 본 경우(늦게 합류)에만 즉시 모두 표시
+    if (!stage._animStarted) {
+      stage._animStarted = true;
+      showLadderLobbyDoneInstant(g);
+    }
+  }
+
+  // 슬롯 그리드 (lobby 상태일 때만 클릭 가능)
+  if (slotsEl) {
+    slotsEl.innerHTML = '';
+    for (let i = 0; i < g.count; i++) {
+      const occupant = g.participants.find(p => p.slot === i);
+      const isMine = occupant && occupant.userId === ME?.id;
+      const slot = document.createElement('div');
+      let cls = 'ladder-lobby-slot';
+      if (!occupant) cls += ' empty';
+      else cls += ' taken';
+      if (isMine) cls += ' mine';
+      if (occupant?.ready) cls += ' ready';
+      // 결과 표시 (게임 끝났을 때)
+      let resultHtml = '';
+      if ((g.status === 'running' || g.status === 'done') && g.traces) {
+        const trace = g.traces[i];
+        const r = g.results[trace.finalCol];
+        const isWin = /당첨|win|💣|🍀|✨|🎉|1등|축하|당선/i.test(r);
+        resultHtml = `<span class="slot-result">→ ${r}</span>`;
+        if (isWin) cls += ' win';
+      }
+      slot.className = cls;
+      slot.innerHTML = `
+        <span class="slot-num">${i + 1}번</span>
+        <span class="slot-name">${occupant ? escapeHtml(occupant.name) : '비어있음'}</span>
+        ${resultHtml}
+        ${occupant ? `<span class="slot-badge">${occupant.ready ? '✓ 준비' : (isMine ? '대기 중' : '대기')}</span>` : ''}`;
+      // 로비 상태에서만 슬롯 변경 가능
+      if (g.status === 'lobby') {
+        slot.addEventListener('click', () => {
+          if (!occupant || isMine) joinLadderSlot(i);
+        });
+      }
+      slotsEl.appendChild(slot);
+    }
+  }
+
+  // 본인 액션 버튼
+  if (g.status === 'lobby') {
+    if (me) {
+      readyBtn?.classList.remove('hidden');
+      leaveBtn?.classList.remove('hidden');
+      if (readyBtn) readyBtn.textContent = me.ready ? '준비 해제' : '✓ 준비';
+    } else {
+      readyBtn?.classList.add('hidden');
+      leaveBtn?.classList.add('hidden');
+    }
+  } else {
+    readyBtn?.classList.add('hidden');
+    leaveBtn?.classList.add('hidden');
+  }
+
+  // 카운트다운 — 클라이언트 자체 타이머로 정확히 3 → 2 → 1 → 시작!
+  if (g.status === 'countdown') {
+    if (!_ladderCountdownTimer) startLadderCountdownUi();
+  } else {
+    stopLadderCountdownUi();
+  }
+
+  // 결과 (running/done) — 슬롯에 이미 표시되었으니 추가 결과 영역은 done 일 때만
+  if (g.status === 'done' && g.traces) {
+    resultsEl?.classList.remove('hidden');
+    if (resultsEl) {
+      const sorted = [...g.participants].sort((a, b) => a.slot - b.slot);
+      let html = '<div class="ladder-lobby-results-title">🎲 사다리 결과</div>';
+      for (const p of sorted) {
+        const trace = g.traces[p.slot];
+        const r = g.results[trace.finalCol] || `결과 ${trace.finalCol + 1}`;
+        const isWin = /당첨|win|💣|🍀|✨|🎉|1등|축하|당선/i.test(r);
+        html += `<div class="ladder-lobby-result-row${isWin ? ' win' : ''}">
+          <span>${escapeHtml(p.name)}</span>
+          <span class="arrow">→</span>
+          <span>${escapeHtml(r)}</span>
+        </div>`;
+      }
+      resultsEl.innerHTML = html;
+    }
+  } else {
+    resultsEl?.classList.add('hidden');
+  }
+}
+
+async function joinLadderSlot(slot) {
+  if (!LADDER_LOBBY_GAME_ID) return;
+  try {
+    LADDER_LOBBY_GAME = await api(`/api/ladder/games/${LADDER_LOBBY_GAME_ID}/join`, {
+      method: 'POST', body: JSON.stringify({ slot }),
+    });
+    renderLadderLobby();
+  } catch (e) {
+    alert(e?.message || '자리 선택 실패');
+  }
+}
+async function toggleLadderReady() {
+  if (!LADDER_LOBBY_GAME_ID || !LADDER_LOBBY_GAME) return;
+  const me = LADDER_LOBBY_GAME.participants.find(p => p.userId === ME?.id);
+  if (!me) return;
+  try {
+    LADDER_LOBBY_GAME = await api(`/api/ladder/games/${LADDER_LOBBY_GAME_ID}/ready`, {
+      method: 'POST', body: JSON.stringify({ ready: !me.ready }),
+    });
+    renderLadderLobby();
+  } catch (e) {
+    alert(e?.message || '준비 상태 변경 실패');
+  }
+}
+async function leaveLadderLobby() {
+  if (!LADDER_LOBBY_GAME_ID) return;
+  try {
+    LADDER_LOBBY_GAME = await api(`/api/ladder/games/${LADDER_LOBBY_GAME_ID}/leave`, { method: 'POST' });
+    renderLadderLobby();
+  } catch (e) { alert(e?.message || '나가기 실패'); }
+}
+
+// 핸들러 바인딩
+$('ladderSetupCreate')?.addEventListener('click', createLadderGameRoom);
+$('ladderSetupCancel')?.addEventListener('click', closeLadderSetupSheet);
+$('gostopSetupCreate')?.addEventListener('click', createGostopRoomFromChat);
+$('gostopSetupCancel')?.addEventListener('click', closeGostopSetupSheet);
+$('gostopSetupSheet')?.addEventListener('click', (e) => {
+  if (e.target.id === 'gostopSetupSheet') closeGostopSetupSheet();
+});
+$('ladderSetupSheet')?.addEventListener('click', (e) => {
+  if (e.target.id === 'ladderSetupSheet') closeLadderSetupSheet();
+});
+$('ladderLobbyClose')?.addEventListener('click', closeLadderLobby);
+$('ladderLobbySheet')?.addEventListener('click', (e) => {
+  if (e.target.id === 'ladderLobbySheet') closeLadderLobby();
+});
+$('ladderLobbyReadyBtn')?.addEventListener('click', toggleLadderReady);
+$('ladderLobbyLeaveBtn')?.addEventListener('click', leaveLadderLobby);
+
+// 채팅에 표시된 게임 카드들을 주기적으로 갱신 — 다른 가족이 참여/준비할 때마다 카드 sub 갱신
+setInterval(() => {
+  if (!CHAT_SHEET_OPEN) return;
+  document.querySelectorAll('[data-game-card-id]').forEach((card) => {
+    const id = Number(card.dataset.gameCardId);
+    if (id) refreshLadderChatCard(card, id);
+  });
+}, 3000);
+$('ladderCloseBtn')?.addEventListener('click', closeLadder);
+$('ladderSheet')?.addEventListener('click', (e) => {
+  if (e.target.id === 'ladderSheet') closeLadder();
+});
+$('ladderShuffleBtn')?.addEventListener('click', () => {
+  buildLadder();
+  renderLadderStage();
+  $('ladderRevealAllBtn')?.classList.remove('hidden');
+  // 공유 버튼은 새 사다리 시작 시 다시 숨기고 상태 초기화
+  const sb = $('ladderShareBtn');
+  if (sb) {
+    sb.classList.add('hidden');
+    sb.classList.remove('shared');
+    sb.disabled = false;
+    sb.textContent = '💬 채팅으로 공유';
+  }
+  updateLadderProgress();
+});
+$('ladderMuteBtn')?.addEventListener('click', ladderToggleMute);
+$('ladderRevealAllBtn')?.addEventListener('click', ladderRevealAll);
+$('ladderShareBtn')?.addEventListener('click', ladderShareToChat);
 
 boot();

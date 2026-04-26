@@ -10,6 +10,7 @@ const jwt = require('jsonwebtoken');
 const path = require('path');
 const { getPool } = require('./db');
 const engine = require('./public/games/gostop/engine.js');
+const ai = require('./public/games/gostop/ai.js');
 
 // 간단한 쿠키 파서 — fb_token 만 뽑으면 충분
 function parseCookie(header) {
@@ -95,6 +96,40 @@ function attachGostopServer(httpServer) {
 
     // 가족 단위 로비 알림 수신용
     socket.join(`family:${me.familyId}`);
+
+    // ===== Reconnect 자동 복귀 =====
+    // 게임 진행 중인 방의 player 였으면 grace timer 취소 + socketId 갱신 + 재진입.
+    // 새로고침 / 모바일 백그라운드 / 잠깐 끊김에 대응.
+    (function tryResume() {
+      const activeRoom = [...ROOMS.values()].find(function (r) {
+        return r.familyId === me.familyId &&
+               r.game && !r.game.finished &&
+               r.players.some(function (p) { return p.userId === me.id; });
+      });
+      if (!activeRoom) return;
+      const player = activeRoom.players.find(function (p) { return p.userId === me.id; });
+      if (!player) return;
+      if (player._reconnectTimer) {
+        clearTimeout(player._reconnectTimer);
+        delete player._reconnectTimer;
+      }
+      player.socketId = socket.id;
+      socket.join(`room:${activeRoom.id}`);
+      socket.data.roomId = activeRoom.id;
+      // 클라가 game 화면으로 즉시 전환할 수 있게 별도 이벤트
+      socket.emit('game:resumed', { room: serializeRoom(activeRoom) });
+      // view 1회 푸시 — 본인 시점만
+      const playerIdx = activeRoom.game.players.findIndex(function (gp) { return gp.userId === me.id; });
+      if (playerIdx >= 0) {
+        const view = engine.viewFor(activeRoom.game, playerIdx);
+        const cumScoresArr = activeRoom.players.map(function (p) {
+          return { userId: p.userId, name: p.name, total: (activeRoom.cumScores && activeRoom.cumScores[p.userId]) || 0 };
+        });
+        view.cumScores = cumScoresArr;
+        view.gameRound = (activeRoom.gameHistory && activeRoom.gameHistory.length + 1) || 1;
+        socket.emit('game:view', view);
+      }
+    })();
 
     socket.on('room:list', (_payload, ack) => {
       const list = [...ROOMS.values()]
@@ -238,6 +273,28 @@ function attachGostopServer(httpServer) {
       });
     });
 
+    // 게임 액션: 흔들기 선언
+    socket.on('game:declareShake', (payload, ack) => {
+      withGame(socket, ack, (room, playerIdx) => {
+        const accept = !!(payload && payload.accept);
+        const result = engine.declareShake(room.game, playerIdx, accept);
+        room.game = result.state;
+        broadcastGameView(room);
+        return { ok: true };
+      });
+    });
+
+    // 게임 액션: 폭탄
+    socket.on('game:playBomb', (payload, ack) => {
+      withGame(socket, ack, (room, playerIdx) => {
+        const month = Number(payload && payload.month);
+        const result = engine.playBomb(room.game, playerIdx, month);
+        room.game = result.state;
+        broadcastGameView(room);
+        return { ok: true };
+      });
+    });
+
     // 이모티콘 빠른 채팅 — 같은 방의 모든 플레이어에게 릴레이
     socket.on('chat:emoji', (payload, ack) => {
       const roomId = socket.data.roomId;
@@ -283,12 +340,170 @@ function attachGostopServer(httpServer) {
       }
     });
 
+    // ===== 싱글모드: 1:1 vs AI 봇 시작 =====
+    socket.on('single:start', (payload, ack) => {
+      try {
+        const level = Math.max(1, Math.min(20, Number(payload?.level) || 1));
+        // 기존 방 정리
+        const prevId = socket.data.roomId;
+        if (prevId) {
+          const prev = ROOMS.get(prevId);
+          if (prev) leaveRoom(prev, me.id, socket);
+        }
+        const id = newRoomId();
+        const botUserId = -level - 1; // 음수로 봇 식별
+        const botName = ai.botNameFor(level);
+        const room = {
+          id,
+          familyId: me.familyId,
+          hostId: me.id,
+          playerCount: 2,
+          mode: 'single',
+          aiLevel: level,
+          rules: { winScoreMin: 3 },
+          players: [
+            { userId: me.id, socketId: socket.id, name: me.name, icon: me.icon, photoUrl: me.photoUrl },
+            { userId: botUserId, socketId: null, name: botName, icon: 'star', photoUrl: null, isBot: true, level: level },
+          ],
+          game: null,
+          createdAt: Date.now(),
+        };
+        ROOMS.set(id, room);
+        socket.join(`room:${id}`);
+        socket.data.roomId = id;
+        // 즉시 게임 시작
+        room.game = engine.createGame({
+          players: room.players.map((p) => ({ userId: p.userId, name: p.name, icon: p.icon, photoUrl: p.photoUrl })),
+          playerCount: 2,
+          seed: Date.now(),
+          rules: room.rules,
+        });
+        room.cumScores = {};
+        room.gameHistory = [];
+        room.gameResultRecorded = false;
+        if (typeof ack === 'function') ack({ ok: true, room: serializeRoom(room) });
+        io.to(`room:${room.id}`).emit('game:started', { room: serializeRoom(room) });
+        broadcastGameView(room);
+        scheduleBotIfNeeded(room);
+      } catch (e) {
+        if (typeof ack === 'function') ack({ ok: false, error: e.message });
+      }
+    });
+
     socket.on('disconnect', () => {
       const roomId = socket.data.roomId;
       const room = ROOMS.get(roomId);
-      if (room) leaveRoom(room, me.id, socket);
+      if (!room) return;
+      // 게임 진행 중이면 30초 grace — socketId 만 무효화하고 재접속 대기
+      if (room.game && !room.game.finished) {
+        const player = room.players.find(function (p) { return p.userId === me.id; });
+        if (player) {
+          player.socketId = null;
+          if (player._reconnectTimer) clearTimeout(player._reconnectTimer);
+          player._reconnectTimer = setTimeout(function () {
+            delete player._reconnectTimer;
+            // 같은 user 가 안 돌아왔으면 정식 leave (게임은 진행됨 — view 만 못 받음)
+            // 4인 모드라면 다른 사람들끼리 계속 가능하도록 player 만 제거.
+            const stillThere = ROOMS.get(roomId);
+            if (!stillThere) return;
+            const stillPlayer = stillThere.players.find(function (p) { return p.userId === me.id; });
+            if (stillPlayer && stillPlayer.socketId) return; // 이미 reconnect 됨
+            stillThere.players = stillThere.players.filter(function (p) { return p.userId !== me.id; });
+            if (!stillThere.players.length) {
+              ROOMS.delete(stillThere.id);
+            } else {
+              if (stillThere.hostId === me.id) stillThere.hostId = stillThere.players[0].userId;
+              io.to(`room:${stillThere.id}`).emit('room:update', serializeRoom(stillThere));
+            }
+            broadcastRooms(stillThere.familyId);
+          }, 30_000);
+        }
+        return;
+      }
+      // 게임 안 시작 / 끝남 → 즉시 leave
+      leaveRoom(room, me.id, socket);
     });
   });
+
+  // ===== 봇 자동 플레이 =====
+  function isBotPlayer(room, playerIdx) {
+    const player = room.players[playerIdx];
+    return !!(player && player.isBot);
+  }
+  function findBotInRoom(room) {
+    return room.players.find((p) => p.isBot);
+  }
+  function scheduleBotIfNeeded(room) {
+    if (!room || !room.game || room.game.finished) return;
+    const game = room.game;
+    const phase = game.phase;
+    // bot 이 행동해야 할 phase 들 (신규: declare-shake)
+    const turnPhases = ['play-hand', 'flip-stock', 'choose-hand-match', 'choose-flip-match', 'choose-go-stop', 'declare-shake'];
+    if (turnPhases.indexOf(phase) < 0) return;
+    // 현재 turn 의 플레이어가 봇인지 확인 (단, 매치 선택은 pending 의 player)
+    let actorIdx = game.turn;
+    if (game.pending && (phase === 'choose-hand-match' || phase === 'choose-flip-match' || phase === 'choose-go-stop')) {
+      actorIdx = game.pending.playerIdx != null ? game.pending.playerIdx : game.turn;
+    }
+    if (!isBotPlayer(room, actorIdx)) return;
+    const botPlayer = room.players[actorIdx];
+    const level = botPlayer.level || 1;
+    if (room._botTimer) clearTimeout(room._botTimer);
+    room._botTimer = setTimeout(() => doBotAction(room, actorIdx, level), ai.thinkDelay(level));
+  }
+  function doBotAction(room, playerIdx, level) {
+    if (!room || !room.game || room.game.finished) return;
+    const game = room.game;
+    try {
+      if (game.phase === 'declare-shake' && game.turn === playerIdx) {
+        const accept = ai.decideShake(game, playerIdx, level);
+        const result = engine.declareShake(game, playerIdx, accept);
+        room.game = result.state;
+      } else if (game.phase === 'play-hand' && game.turn === playerIdx) {
+        // 폭탄 옵션 우선 검사
+        const bombOpts = engine.computeBombOptions(game, playerIdx);
+        if (bombOpts.length) {
+          const stateWithOpts = Object.assign({}, game, { bombOptions: bombOpts });
+          const bombMonth = ai.decideBomb(stateWithOpts, playerIdx, level);
+          if (bombMonth != null) {
+            const result = engine.playBomb(game, playerIdx, bombMonth);
+            room.game = result.state;
+            broadcastGameView(room);
+            scheduleBotIfNeeded(room);
+            return;
+          }
+        }
+        const cardId = ai.decideHandPlay(game, playerIdx, level);
+        if (cardId == null) return;
+        const result = engine.playHandCard(game, playerIdx, cardId, null);
+        room.game = result.state;
+      } else if (game.phase === 'choose-hand-match') {
+        const candidates = (game.pending && game.pending.choices) ? game.pending.choices.slice() : [];
+        const pick = ai.decideMatchChoice(game, playerIdx, candidates, level);
+        if (pick == null) return;
+        const result = engine.resolveHandMatch(game, pick);
+        room.game = result.state;
+      } else if (game.phase === 'flip-stock') {
+        const result = engine.flipStock(game, null);
+        room.game = result.state;
+      } else if (game.phase === 'choose-flip-match') {
+        const candidates = (game.pending && game.pending.choices) ? game.pending.choices.slice() : [];
+        const pick = ai.decideMatchChoice(game, playerIdx, candidates, level);
+        if (pick == null) return;
+        const result = engine.resolveFlipMatch(game, pick);
+        room.game = result.state;
+      } else if (game.phase === 'choose-go-stop') {
+        const choice = ai.decideGoStop(game, playerIdx, level);
+        const result = engine.callGoStop(game, playerIdx, choice);
+        room.game = result.state;
+      }
+      broadcastGameView(room);
+      // 다음 행동도 봇이라면 또 스케줄
+      scheduleBotIfNeeded(room);
+    } catch (e) {
+      console.warn('[gostop] bot action failed:', e.message);
+    }
+  }
 
   // 헬퍼: 게임 액션 공통 에러 처리 + 턴 검증
   function withGame(socket, ack, fn) {
@@ -298,8 +513,12 @@ function attachGostopServer(httpServer) {
       if (!room || !room.game) throw new Error('not-in-game');
       const playerIdx = room.game.players.findIndex((p) => p.userId === socket.user.id);
       if (playerIdx < 0) throw new Error('not-a-player');
-      if (room.game.turn !== playerIdx && !['choose-hand-match', 'choose-flip-match', 'choose-go-stop'].includes(room.game.phase)) {
-        // 턴 검증은 phase 에 따라 엔진이 추가로 검증
+      // ★ 턴 권한 체크 — phase 에 따라 actor 가 다를 수 있음
+      const phase = room.game.phase;
+      const pendingPlayer = room.game.pending && room.game.pending.playerIdx;
+      const expectedActor = (pendingPlayer != null) ? pendingPlayer : room.game.turn;
+      if (playerIdx !== expectedActor) {
+        throw new Error('not-your-turn');
       }
       const res = fn(room, playerIdx);
       if (typeof ack === 'function') ack(res || { ok: true });
@@ -313,23 +532,35 @@ function attachGostopServer(httpServer) {
   function broadcastGameView(room) {
     const game = room.game;
     if (!game) return;
-    // 게임 종료 시 1회만 누적 점수 기록 + DB 기록
+    // 게임 종료 시 1회만 누적 점수 기록 + DB 기록 (무승부 포함)
     if (game.finished && !room.gameResultRecorded) {
       room.gameResultRecorded = true;
       room.cumScores = room.cumScores || {};
+      room.gameHistory = room.gameHistory || [];
       const w = game.winner;
       if (w != null) {
         const winnerUserId = game.players[w].userId;
         const winPts = game.scores[w] || 0;
         room.cumScores[winnerUserId] = (room.cumScores[winnerUserId] || 0) + winPts;
-        room.gameHistory = room.gameHistory || [];
         room.gameHistory.push({
           winnerUserId: winnerUserId,
           winnerName: game.players[w].name,
           score: winPts,
           endedAt: Date.now(),
         });
-        // DB 비동기 기록 — 실패해도 게임 흐름엔 영향 없음
+      } else {
+        // 무승부 — 누적은 갱신 X, history 만 기록
+        room.gameHistory.push({
+          winnerUserId: null,
+          winnerName: '무승부',
+          score: 0,
+          endedAt: Date.now(),
+        });
+      }
+      // DB 비동기 기록 — 봇이 낀 게임(싱글모드)은 가족 통계에 반영하지 않음.
+      // 무승부도 기록 (winner_user_id NULL).
+      const hasBot = room.players.some((p) => p.isBot);
+      if (!hasBot) {
         recordGameResult(room, game).catch(function (e) {
           console.warn('[gostop] recordGameResult failed:', e.message);
         });
@@ -341,6 +572,8 @@ function attachGostopServer(httpServer) {
       total: (room.cumScores && room.cumScores[p.userId]) || 0,
     }));
     room.players.forEach((p) => {
+      if (p.isBot) return; // 봇은 socketId 없음
+      if (!p.socketId) return; // disconnect grace 중 — 재접속 시 tryResume 가 한 번 푸시
       const playerIdx = game.players.findIndex((gp) => gp.userId === p.userId);
       if (playerIdx < 0) return;
       const view = engine.viewFor(game, playerIdx);
@@ -348,6 +581,8 @@ function attachGostopServer(httpServer) {
       view.gameRound = (room.gameHistory && room.gameHistory.length + (game.finished ? 0 : 1)) || 1;
       io.to(p.socketId).emit('game:view', view);
     });
+    // 봇이 다음 행동 주체라면 자동 스케줄
+    scheduleBotIfNeeded(room);
   }
 
   function leaveRoom(room, userId, socket) {

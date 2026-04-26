@@ -46,10 +46,19 @@ function ScpSend([string]$local, [string]$dst) {
 }
 
 function Save-DockerImageGz([string]$image, [string]$outPath) {
+  # PS 5.1 .NET API는 프로세스 CWD를 씀 → 상대경로를 PowerShell 현재 디렉토리 기준 절대경로로 강제 변환
+  if (-not [System.IO.Path]::IsPathRooted($outPath)) {
+    $outPath = Join-Path (Get-Location -PSProvider FileSystem).Path $outPath
+  }
+  $outPath = [System.IO.Path]::GetFullPath($outPath)
+  $outDir  = [System.IO.Path]::GetDirectoryName($outPath)
+  if ($outDir -and -not (Test-Path $outDir)) { New-Item -ItemType Directory -Path $outDir -Force | Out-Null }
+
   $tempTar = [System.IO.Path]::Combine([System.IO.Path]::GetTempPath(), "fb_img_" + [System.Guid]::NewGuid() + ".tar")
   try {
     & docker save -o $tempTar $image
     if ($LASTEXITCODE -ne 0) { Fail "docker save failed" }
+    if (-not (Test-Path $tempTar)) { Fail "docker save produced no output at $tempTar" }
 
     $inS  = [System.IO.File]::OpenRead($tempTar)
     $outS = [System.IO.File]::Create($outPath)
@@ -60,6 +69,8 @@ function Save-DockerImageGz([string]$image, [string]$outPath) {
       $outS.Dispose()
       $inS.Dispose()
     }
+  } catch {
+    Fail ("gzip wrap failed: " + $_.Exception.Message)
   } finally {
     if (Test-Path $tempTar) { Remove-Item $tempTar -Force }
   }

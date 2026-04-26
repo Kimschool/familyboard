@@ -4,10 +4,33 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover" />
 <title>고스톱 (테스트)</title>
-<link rel="stylesheet" href="./gostop.css?v=34" />
+<link rel="stylesheet" href="./gostop.css?v=92" />
 </head>
 <body>
-<div id="lobby" class="screen">
+<!-- 싱글모드 — AI 봇 1:1 도전 -->
+<div id="single" class="screen hidden">
+  <header class="g-head">
+    <button class="g-back" onclick="location.href='/'">← familyboard</button>
+    <h1>🎴 고스톱 · 싱글</h1>
+    <span class="g-badge" id="singleLvBadge">Lv.1</span>
+  </header>
+  <section class="g-card">
+    <h2>AI 도전</h2>
+    <p class="g-sub">1단계부터 20단계까지. 깰수록 봇은 더 무서워집니다.</p>
+    <div class="g-single-progress">
+      <div class="g-single-now">
+        <div class="g-single-now-label">지금 도전</div>
+        <div class="g-single-now-name" id="singleNowName">🐣 새내기 봇 Lv.1</div>
+      </div>
+      <div class="g-single-record" id="singleRecord">전적: 0승 0패</div>
+    </div>
+    <div class="g-single-grid" id="singleLevelGrid"></div>
+    <button id="btnSingleStart" class="g-primary">현재 단계 도전 시작</button>
+    <button id="btnSingleReset" class="g-primary g-secondary">진행 기록 초기화</button>
+  </section>
+</div>
+
+<div id="lobby" class="screen" style="visibility:hidden">
   <header class="g-head">
     <button class="g-back" onclick="location.href='/'">← familyboard</button>
     <h1>🎴 고스톱</h1>
@@ -76,7 +99,7 @@
       <h3>1. 목표</h3>
       <p>화투 48장 덱으로 <b>3점 이상</b> 모아서 "스톱"을 외치면 승리예요.</p>
       <h3>2. 턴 진행</h3>
-      <p>① 내 손패 한 장을 냅니다 (바닥에 같은 달 있으면 먹기)<br>
+      <p>① 내 손패에서 같은 패를 한 번 탭하면 살짝 뜨고, <b>다시 탭하면</b> 냅니다. (위로 드래그하면 한 번에 냄) 바닥에 같은 달이 있으면 먹기<br>
          ② 덱에서 한 장 자동으로 뒤집혀요 (같은 달이면 역시 먹기)<br>
          ③ 다음 사람 턴</p>
       <h3>3. 카드 종류와 점수</h3>
@@ -90,7 +113,17 @@
       <ul class="g-help-list">
         <li><b>뻑</b> — 같은 달 3장이 바닥에 쌓이면 빨간 뱃지 표시. 4번째가 나오면 싹쓸이!</li>
         <li><b>고</b> — 3점 달성 시 더 가면 다음 스톱 시 ×2배, 2고=×4, 3고=×8</li>
-        <li><b>박</b> — 광/피/열끗 많이 먹은 승자 + 반대로 못 먹은 패자 = ×2배 손해</li>
+        <li><b>박</b> — 광박/멍박/피박 = ×2배 손해 (각 패자별 합산)</li>
+      </ul>
+      <h3>5. 캐주얼 룰 안내</h3>
+      <p class="g-help-casual">
+        가족이 같이 즐기기 쉽도록 단순화했어요. 정통 고스톱과 다음이 다릅니다:
+      </p>
+      <ul class="g-help-list g-help-casual-list">
+        <li>흔들기 / 쪽 / 따닥 / 폭탄 — <b>미적용</b></li>
+        <li>고박 (고 외친 후 패배 시 ×2) — <b>미적용</b></li>
+        <li>비광 단독 광 3장 — 정통 룰은 2점이지만 여기는 그냥 3점</li>
+        <li>같은 달 3장 매치는 자동 "뻑" 처리 (선택 단계 없음)</li>
       </ul>
     </div>
     <button id="btnHelpClose" class="g-primary">닫기</button>
@@ -112,18 +145,32 @@
   <section class="g-card">
     <h2>방 공유</h2>
     <p class="g-sub">가족에게 이 코드를 알려주세요.</p>
-    <div class="g-code-big" id="bigCode">—</div>
+    <div class="g-code-big" id="bigCode" title="탭하면 클립보드에 복사">—</div>
+    <button id="btnCopyCode" class="g-primary g-secondary" style="margin-top:10px">📋 코드 복사</button>
   </section>
 </div>
 
 <div id="game" class="screen game-table hidden">
-  <div class="g-portrait-hint" style="display:none">📱 가로로 회전하면 더 편해요</div>
+  <div class="g-portrait-hint" id="portraitHint">
+    <span>📱 가로로 회전하면 더 편해요</span>
+    <button class="g-portrait-hint-close" id="btnPortraitHintClose" aria-label="닫기">✕</button>
+  </div>
   <header class="g-head g-table-head">
+    <!-- 빌드 태그는 푸터로 이동. 디버그 필요 시 콘솔에서 window.GOSTOP_BUILD 확인 -->
+    <script>window.GOSTOP_BUILD = 'v92';</script>
     <button id="btnQuit" class="g-back">← 나가기</button>
     <div id="gameStatus" class="g-status g-status-compact"></div>
     <span id="turnTimer" class="g-turn-timer" aria-label="남은 시간">30s</span>
+    <button id="btnSpeed" class="g-mute-btn" aria-label="진행 속도" title="속도: 상/중/하">⚡중</button>
     <button id="btnMute" class="g-mute-btn" aria-label="음소거 토글" title="소리 켜기/끄기">🔊</button>
   </header>
+
+  <!-- ★ 내 정보 — 우하단 floating (헤더에서 빠짐) -->
+  <div class="g-me-meta-pill g-me-meta-bottom" id="gameMyMetaPill">
+    <span class="g-pl-avatar g-me-avatar" id="gameMyAvatar"></span>
+    <span class="g-me-name" id="gameMyName">나</span>
+    <span class="g-me-score" id="gameMyScore">0점</span>
+  </div>
 
   <!-- 상대 영역 (상단) -->
   <div id="gameOpponents" class="g-opp-wrap"></div>
@@ -142,11 +189,6 @@
 
   <!-- 내 영역 (하단) -->
   <div class="g-me-wrap">
-    <div class="g-me-meta">
-      <span class="g-pl-avatar g-me-avatar" id="gameMyAvatar"></span>
-      <span class="g-me-name" id="gameMyName">나</span>
-      <span class="g-me-score" id="gameMyScore">0점</span>
-    </div>
     <div id="gameMyCapturedPeek" class="g-my-captured-peek"></div>
     <div id="gameMyCaptured" class="g-my-captured g-my-captured-chips hidden"></div>
     <div id="gameHand" class="g-hand g-hand-arc"></div>
@@ -155,6 +197,9 @@
   <div class="g-actions">
     <button id="btnFlip" class="g-primary hidden">덱 뒤집기</button>
   </div>
+
+  <!-- 내 차례 floating 표시 (좌하단) -->
+  <div id="myTurnFloat" class="g-my-turn-float hidden">✋ 내 차례</div>
 
   <!-- 빠른 이모티콘 -->
   <div class="g-emoji-bar">
@@ -168,11 +213,8 @@
     <button class="g-emoji-btn" data-e="👏" aria-label="👏">👏</button>
   </div>
 
-  <!-- 로그 (접힘 기본) -->
-  <details class="g-log-wrap">
-    <summary class="g-log-head">진행 기록 펼치기</summary>
-    <ul id="gameLog" class="g-log"></ul>
-  </details>
+  <!-- 진행 기록 제거됨 -->
+  <ul id="gameLog" class="g-log" style="display:none"></ul>
 </div>
 
 <!-- 게임 종료 오버레이 -->
@@ -189,23 +231,30 @@
   </div>
 </div>
 
-<!-- 고/스톱 다이얼로그 -->
+<!-- 고/스톱 다이얼로그 — 한게임 풍 -->
 <div id="goStopDialog" class="g-dlg-backdrop hidden" style="display:none">
-  <div class="g-dlg">
-    <h2>🎉 3점 달성!</h2>
-    <p>현재 <b id="gsScore">3점</b>. 여기서 멈출까요, 더 갈까요?</p>
-    <div class="g-dlg-actions">
-      <button id="btnStop" class="g-primary g-dlg-stop">스톱 · 이기기</button>
-      <button id="btnGo" class="g-primary g-dlg-go">고! 계속</button>
+  <div class="g-dlg g-gostop-dlg">
+    <div class="g-gostop-emoji">🌸</div>
+    <h2 class="g-gostop-title">고 하시겠습니까?</h2>
+    <div class="g-gostop-money">
+      <span id="gsMoney">0원</span>
+      <span class="g-gostop-money-sub">획득 가능</span>
+    </div>
+    <div class="g-gostop-score-line">
+      현재 <b id="gsScore">3점</b>
+    </div>
+    <div class="g-dlg-actions g-gostop-actions">
+      <button id="btnGo" class="g-gostop-btn g-gostop-go" data-go-num="1">고!</button>
+      <button id="btnStop" class="g-gostop-btn g-gostop-stop">스톱</button>
     </div>
   </div>
 </div>
 
 <script src="/gostop/socket/socket.io.js"></script>
-<script src="./engine.js?v=34"></script>
-<script src="./cards-svg.js?v=34"></script>
-<script src="./sfx.js?v=34"></script>
-<script src="./lobby.js?v=34"></script>
-<script src="./game.js?v=34"></script>
+<script src="./engine.js?v=92"></script>
+<script src="./cards-svg.js?v=92"></script>
+<script src="./sfx.js?v=92"></script>
+<script src="./lobby.js?v=92"></script>
+<script src="./game.js?v=92"></script>
 </body>
 </html>

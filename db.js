@@ -87,6 +87,8 @@ async function ensureSchema() {
   await ensureColumn('users', 'mood', 'VARCHAR(20) NULL');
   await ensureColumn('users', 'last_recovery_week', 'VARCHAR(10) NULL');
   await ensureColumn('users', 'mood_date', 'DATE NULL');
+  await ensureColumn('users', 'mood_comment', 'VARCHAR(120) NULL');
+  await ensureColumn('mood_history', 'comment', 'VARCHAR(120) NULL');
   await ensureColumn('users', 'phone', 'VARCHAR(30) NULL');
   await ensureColumn('users', 'photo_url', 'VARCHAR(500) NULL');
   await ensureColumn('users', 'is_pet', "TINYINT(1) NOT NULL DEFAULT 0");
@@ -413,6 +415,10 @@ async function ensureSchema() {
       PRIMARY KEY (user_id, family_id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   `);
+  // 채팅 사진 첨부
+  await ensureColumn('chat_messages', 'image_url', 'VARCHAR(500) NULL DEFAULT NULL');
+  await changeColumn('chat_messages', 'text', "VARCHAR(1000) NOT NULL DEFAULT ''");
+
   // 기존 하트 전용 → 이모지 포함 버전 업그레이드
   await ensureColumn('answer_reactions', 'emoji', "VARCHAR(10) NOT NULL DEFAULT '❤️'");
   await dropIndexIfExists('answer_reactions', 'uq_answer_user');

@@ -10,7 +10,7 @@
 <link rel="manifest" href="/manifest.json" />
 <link rel="apple-touch-icon" href="/icons/icon-192.png" />
 <link rel="icon" href="/icons/icon-192.png" />
-<link rel="stylesheet" href="/style.css?v=41" />
+<link rel="stylesheet" href="/style.css?v=66" />
 <title>가족보드</title>
 </head>
 <body>
@@ -163,6 +163,51 @@
     </div>
   </div>
 
+  <!-- 가족 여정 (개선안 §2.3 시간 가치·데이터 자산화) -->
+  <section class="card journey-card hidden" data-card-id="journey" id="journeyCard">
+    <p class="card-title">💚 우리 가족 여정</p>
+    <div class="journey-hero">
+      <div class="journey-days">
+        <span class="journey-days-num" id="jDays">—</span>
+        <span class="journey-days-unit">일째</span>
+      </div>
+      <p class="journey-sub" id="jSub">함께 기록하고 있어요</p>
+      <div class="journey-progress hidden" id="jProg">
+        <div class="journey-progress-bar" id="jProgBar"></div>
+        <p class="journey-progress-label" id="jProgLabel"></p>
+      </div>
+    </div>
+    <div class="journey-stats" id="jStats"></div>
+    <div class="journey-active hidden" id="jActive"></div>
+    <div class="journey-mood hidden" id="jMood"></div>
+    <div class="journey-memory hidden" id="jMemory">
+      <p class="journey-memory-label" id="jMemLabel">한 달 전 오늘</p>
+      <p class="journey-memory-q" id="jMemQ">—</p>
+      <p class="journey-memory-meta" id="jMemMeta"></p>
+    </div>
+    <div class="journey-firsts hidden" id="jFirsts">
+      <p class="journey-firsts-label">🌱 우리 가족의 첫 순간들</p>
+      <ul class="journey-firsts-list" id="jFirstsList"></ul>
+    </div>
+  </section>
+
+  <!-- 이번 주 가족 무드 그리드 (개선안 §2.3 감정 자산 시각화) -->
+  <section class="card moodweek-card hidden" data-card-id="moodweek" id="moodweekCard">
+    <p class="card-title">🌈 이번 주 우리 가족 기분</p>
+    <div class="moodweek-wrap" id="moodweekWrap"></div>
+    <p class="moodweek-empty hidden" id="moodweekEmpty">이번 주 기분 기록이 아직 없어요</p>
+  </section>
+
+  <!-- 응원 넛지: 오늘 조용한 가족에게 한 마디 보내기 (개선안 §8.1 가족 의존성) -->
+  <section class="card nudge-card hidden" data-card-id="nudge" id="nudgeCard" role="button" tabindex="0">
+    <span class="nudge-emoji">💌</span>
+    <div class="nudge-body">
+      <p class="nudge-title" id="nudgeTitle">—</p>
+      <p class="nudge-sub" id="nudgeSub">응원 한 마디 보내볼까요?</p>
+    </div>
+    <span class="nudge-arrow">›</span>
+  </section>
+
   <!-- 주간 가족 활동 요약 -->
   <section class="card weekly-card hidden" data-card-id="weekly" id="weeklyCard">
     <p class="card-title">📊 지난 7일 우리 가족</p>
@@ -243,18 +288,27 @@
     <ul class="timeline-list" id="timelineList"></ul>
   </section>
 
-  <!-- 오늘 가족 기분 -->
+  <!-- 오늘 가족 기분 (개선안 §3.3 기능1 — 1이모지 + 1줄 코멘트) -->
   <section class="card mood-card" data-card-id="mood" id="moodCard">
     <p class="card-title">오늘 우리 가족 기분</p>
     <div class="mood-my">
       <span class="mood-my-label">나는 오늘</span>
       <div class="mood-picker" id="moodPicker"></div>
     </div>
+    <div class="mood-comment-wrap hidden" id="moodCommentWrap">
+      <input id="moodComment" class="mood-comment" type="text" maxlength="120" placeholder="한 줄로 오늘 마음을 적어 볼까요? (선택)" autocomplete="off" />
+      <button type="button" id="moodCommentSave" class="mood-comment-save">저장</button>
+      <span id="moodCommentOk" class="mood-comment-ok hidden">저장됐어요</span>
+    </div>
     <div class="mood-family" id="moodFamily"></div>
   </section>
 
   <section class="card family-card" data-card-id="family" id="familyCard">
     <p class="card-title" id="familyCardTitle">우리 가족</p>
+    <div class="family-all-in hidden" id="familyAllIn">
+      <span class="fai-emoji">🎊</span>
+      <span class="fai-text">오늘 가족 전원이 기록을 남겼어요!</span>
+    </div>
     <div class="family-row" id="familyRow"></div>
   </section>
 
@@ -1018,13 +1072,41 @@
     <p id="galleryEmpty" class="gallery-empty hidden">아직 공유된 사진이 없어요. ＋ 사진을 눌러 첫 장을 올려 보세요.</p>
   </section>
 
-  <!-- 가족 채팅 -->
-  <section class="card chat-card" data-card-id="chat" id="chatCard">
-    <div class="card-head-row">
-      <h2 class="card-title">💬 가족 채팅 <span id="chatUnreadBadge" class="chat-unread-badge hidden">0</span></h2>
-      <button type="button" id="chatOpenBtn" class="ufi-btn">열기</button>
+  <!-- 가족 채팅 (탭 본문에 임베드) -->
+  <section class="card chat-embed" data-card-id="chat" id="chatCard">
+    <div class="chat-embed-head">
+      <span class="chat-embed-title">💬 가족 채팅 <span id="chatUnreadBadge" class="chat-unread-badge hidden">0</span></span>
+      <span class="chat-embed-sub" id="chatSubtitle">실시간으로 가족과 대화해요</span>
     </div>
-    <ul id="chatPeek" class="chat-peek"></ul>
+    <div class="chat-embed-body">
+      <button type="button" id="chatLoadOlderBtn" class="chat-load-older hidden">이전 메시지 보기</button>
+      <ul id="chatMessages" class="chat-messages"></ul>
+      <div id="chatEmpty" class="chat-empty hidden">
+        <div class="chat-empty-emoji">💬</div>
+        <div class="chat-empty-title">아직 대화가 없어요</div>
+        <div class="chat-empty-sub">가족에게 첫 메시지를 보내 보세요</div>
+      </div>
+      <div id="chatTyping" class="chat-typing hidden" aria-live="polite">
+        <span class="chat-typing-text"></span>
+        <span class="chat-typing-dots"><span></span><span></span><span></span></span>
+      </div>
+      <button type="button" id="chatNewMsgPill" class="chat-new-pill hidden">↓ 새 메시지</button>
+    </div>
+    <form id="chatForm" class="chat-composer" autocomplete="off">
+      <button type="button" id="chatPhotoBtn" class="chat-photo-btn" aria-label="사진 보내기">
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" aria-hidden="true">
+          <rect x="3" y="5" width="18" height="14" rx="2" stroke="currentColor" stroke-width="2"/>
+          <circle cx="9" cy="11" r="1.6" fill="currentColor"/>
+          <path d="M3 17l5-5 4 4 3-3 6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </button>
+      <input type="file" id="chatPhotoFile" class="hidden" accept="image/jpeg,image/png,image/webp,image/heic,image/*" />
+      <textarea id="chatInput" class="chat-input" maxlength="1000" placeholder="메시지 입력 (/ 입력 시 사용 가능한 기능 표시)" rows="1"></textarea>
+      <div id="chatCommandMenu" class="chat-cmd-menu hidden"></div>
+      <button type="submit" id="chatSendBtn" class="chat-send" aria-label="보내기" disabled>
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" aria-hidden="true"><path d="M12 5v14M5 12l7-7 7 7" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+    </form>
   </section>
 
   <!-- 가족 놀이 -->
@@ -1034,11 +1116,16 @@
     </div>
     <p class="games-sub">가족끼리 같이 즐길 수 있는 놀이</p>
     <div class="games-grid">
-      <a href="/games/gostop/" class="game-tile">
+      <button type="button" class="game-tile" id="ladderGameTile">
+        <span class="game-tile-emoji">🎲</span>
+        <span class="game-tile-name">사다리타기</span>
+        <span class="game-tile-meta">2~8명 · 운명의 한 판</span>
+      </button>
+      <a href="/games/gostop/?mode=single" class="game-tile">
         <span class="game-tile-emoji">🎴</span>
-        <span class="game-tile-name">고스톱</span>
-        <span class="game-tile-meta">2·3·4인 · 실시간</span>
-        <span class="game-tile-badge">TEST</span>
+        <span class="game-tile-name">고스톱 — 싱글</span>
+        <span class="game-tile-meta">AI Lv.1 → 20 도전</span>
+        <span class="game-tile-badge">SOLO</span>
       </a>
     </div>
   </section>
@@ -1105,35 +1192,7 @@
   </div>
 </div>
 
-<!-- 가족 채팅 시트 -->
-<div id="chatSheet" class="sheet-backdrop hidden" role="dialog">
-  <div class="sheet sheet-tall chat-sheet" role="document">
-    <div class="chat-head">
-      <button type="button" id="chatSheetClose" class="chat-close-btn" aria-label="닫기">✕</button>
-      <div class="chat-head-title">
-        <div class="chat-title">💬 가족 채팅</div>
-        <div class="chat-subtitle" id="chatSubtitle">실시간으로 가족과 대화해요</div>
-      </div>
-      <div class="chat-head-spacer"></div>
-    </div>
-    <div class="chat-body">
-      <button type="button" id="chatLoadOlderBtn" class="chat-load-older hidden">이전 메시지 보기</button>
-      <ul id="chatMessages" class="chat-messages"></ul>
-      <div id="chatEmpty" class="chat-empty hidden">
-        <div class="chat-empty-emoji">💬</div>
-        <div class="chat-empty-title">아직 대화가 없어요</div>
-        <div class="chat-empty-sub">가족에게 첫 메시지를 보내 보세요</div>
-      </div>
-      <button type="button" id="chatNewMsgPill" class="chat-new-pill hidden">↓ 새 메시지</button>
-    </div>
-    <form id="chatForm" class="chat-composer" autocomplete="off">
-      <textarea id="chatInput" class="chat-input" maxlength="1000" placeholder="메시지 입력" rows="1"></textarea>
-      <button type="submit" id="chatSendBtn" class="chat-send" aria-label="보내기" disabled>
-        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" aria-hidden="true"><path d="M12 5v14M5 12l7-7 7 7" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      </button>
-    </form>
-  </div>
-</div>
+<!-- (이전 가족 채팅 시트 제거 — 채팅 탭에 직접 임베드됨) -->
 
 <!-- 갤러리 업로드 미리보기 시트 -->
 <div id="galleryUploadSheet" class="sheet-backdrop hidden" role="dialog">
@@ -1210,11 +1269,103 @@
 <!-- 이미지 라이트박스 -->
 <div id="lightbox" class="lightbox hidden" role="dialog" aria-label="이미지 확대">
   <button class="lightbox-close" id="lightboxClose" aria-label="닫기">✕</button>
+  <button class="lightbox-action hidden" id="lightboxSaveBtn" type="button">💾 가족 갤러리에 저장</button>
   <img id="lightboxImg" src="" alt="" />
 </div>
 
 <!-- 고스톱 진입 FAB -->
 <a id="gostopFab" class="gostop-fab" href="/games/gostop/" aria-label="고스톱 열기">🎴</a>
+
+<!-- 고스톱 셋업 시트 (/고스톱 명령으로 호출) -->
+<div id="gostopSetupSheet" class="sheet-backdrop hidden" role="dialog">
+  <div class="sheet" role="document">
+    <div class="sheet-handle"></div>
+    <h2 class="sheet-title">🎴 고스톱 방 만들기</h2>
+    <p class="sheet-sub">인원만 고르면 바로 게임 방이 열려요. 채팅으로 가족이 입장할 수 있어요.</p>
+    <label class="admin-label">참여 인원</label>
+    <div class="ladder-count-row" id="gostopSetupPcRow"></div>
+    <button type="button" id="gostopSetupCreate" class="auth-btn">방 만들고 입장</button>
+    <button class="sheet-close" id="gostopSetupCancel">취소</button>
+  </div>
+</div>
+
+<!-- 사다리 게임 셋업 시트 (/사다리 명령으로 호출) -->
+<div id="ladderSetupSheet" class="sheet-backdrop hidden" role="dialog">
+  <div class="sheet" role="document">
+    <div class="sheet-handle"></div>
+    <h2 class="sheet-title">🎲 사다리 게임 만들기</h2>
+    <p class="sheet-sub">참여 인원과 결과를 정하면 채팅에 게임 방이 열려요. 가족이 각자 자리를 선택하고 준비를 누르면 자동으로 시작!</p>
+    <label class="admin-label">참여 인원 (최대)</label>
+    <div class="ladder-count-row" id="ladderSetupCountRow"></div>
+    <label class="admin-label">결과 프리셋</label>
+    <div class="ladder-presets" id="ladderSetupPresets"></div>
+    <label class="admin-label">결과 (직접 수정 가능)</label>
+    <div class="ladder-inputs" id="ladderSetupResults"></div>
+    <button type="button" id="ladderSetupCreate" class="auth-btn">방 만들기</button>
+    <button class="sheet-close" id="ladderSetupCancel">취소</button>
+  </div>
+</div>
+
+<!-- 사다리 게임 로비/실행 시트 (실시간 동기화) -->
+<div id="ladderLobbySheet" class="sheet-backdrop hidden" role="dialog">
+  <div class="sheet sheet-tall" role="document">
+    <div class="sheet-handle"></div>
+    <h2 class="sheet-title" id="ladderLobbyTitle">🎲 사다리 게임</h2>
+    <p class="sheet-sub" id="ladderLobbySub">참여할 자리를 선택하고 준비를 눌러 주세요</p>
+
+    <div id="ladderLobbyStatus" class="ladder-lobby-status"></div>
+    <div id="ladderLobbyStage" class="ladder-stage ladder-lobby-stage hidden"></div>
+    <div id="ladderLobbySlots" class="ladder-lobby-slots"></div>
+    <div id="ladderLobbyResults" class="ladder-lobby-results hidden"></div>
+
+    <div id="ladderLobbyCountdown" class="ladder-countdown hidden"></div>
+
+    <div class="ladder-action-row" id="ladderLobbyActions">
+      <button type="button" id="ladderLobbyReadyBtn" class="ladder-shuffle-btn hidden">✓ 준비</button>
+      <button type="button" id="ladderLobbyLeaveBtn" class="ladder-reveal-btn hidden">자리 비우기</button>
+    </div>
+
+    <button class="sheet-close" id="ladderLobbyClose">닫기</button>
+  </div>
+</div>
+
+<!-- 사다리타기 시트 -->
+<div id="ladderSheet" class="sheet-backdrop hidden" role="dialog">
+  <div class="sheet sheet-tall ladder-sheet" role="document">
+    <div class="sheet-handle"></div>
+    <button type="button" id="ladderMuteBtn" class="ladder-mute-btn" aria-label="효과음 끄기/켜기" title="효과음 켜기/끄기">🔊</button>
+    <h2 class="sheet-title">🎲 사다리타기</h2>
+    <p class="sheet-sub">참여자와 결과를 정하고 사다리를 만들어 결과를 확인해 보세요</p>
+    <div id="ladderProgress" class="ladder-progress hidden"></div>
+
+    <div id="ladderModeBar" class="ladder-mode-bar"></div>
+
+    <div class="ladder-controls hidden" id="ladderSetup">
+      <label class="admin-label">참여자 수</label>
+      <div class="ladder-count-row" id="ladderCountRow"></div>
+
+      <label class="admin-label">참여자 <span class="admin-label-sub">(드래그해서 순서 바꾸기 — 본인이 어느 자리에 설지 운명에 맡기지 않고 직접 결정)</span></label>
+      <div class="ladder-players-list" id="ladderPlayerInputs"></div>
+
+      <label class="admin-label">결과 (자유롭게 또는 프리셋 선택)</label>
+      <div class="ladder-presets" id="ladderResultPresets"></div>
+      <div class="ladder-inputs" id="ladderResultInputs"></div>
+
+      <div class="ladder-action-row">
+        <button type="button" id="ladderShuffleBtn" class="ladder-shuffle-btn">🎲 사다리 만들기</button>
+        <button type="button" id="ladderRevealAllBtn" class="ladder-reveal-btn hidden">결과 모두 보기</button>
+        <button type="button" id="ladderShareBtn" class="ladder-share-btn hidden">💬 채팅으로 공유</button>
+      </div>
+    </div>
+
+    <div class="ladder-stage-wrap">
+      <div class="ladder-hint" id="ladderHint">위 버튼으로 사다리를 만든 뒤, 참여자 이름을 탭하면 결과가 보여요.</div>
+      <div class="ladder-stage" id="ladderStage"></div>
+    </div>
+
+    <button class="sheet-close" id="ladderCloseBtn">닫기</button>
+  </div>
+</div>
 
 <!-- 퀵 메모 미니 입력 -->
 <div id="quickMemoSheet" class="sheet-backdrop hidden" role="dialog">
@@ -1247,6 +1398,6 @@
     caches.keys().then((ks) => ks.forEach((k) => caches.delete(k))).catch(() => {});
   }
 </script>
-<script src="/app.js?v=42" defer></script>
+<script src="/app.js?v=77" defer></script>
 </body>
 </html>

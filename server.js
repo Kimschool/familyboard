@@ -228,7 +228,7 @@ app.get('/api/family/:alias', async (req, res) => {
     if (!f.length) return res.status(404).json({ error: 'not-found' });
     const [users] = await getPool().query(
       `SELECT id, display_name, icon, role, birth_year, birth_month, birth_day, is_pet,
-              phone, photo_url, mood, mood_date,
+              phone, photo_url, mood, mood_date, mood_comment,
               (password_hash IS NOT NULL) AS activated
          FROM users WHERE family_id = ?
          ORDER BY role DESC, id ASC`,
@@ -245,6 +245,7 @@ app.get('/api/family/:alias', async (req, res) => {
           ? new Intl.DateTimeFormat('sv-SE', { year:'numeric', month:'2-digit', day:'2-digit' }).format(new Date(u.mood_date))
           : null;
         const moodToday = moodYmd === todayStr ? u.mood : null;
+        const commentToday = moodYmd === todayStr ? (u.mood_comment || null) : null;
         return {
           id: u.id,
           displayName: u.display_name,
@@ -256,6 +257,7 @@ app.get('/api/family/:alias', async (req, res) => {
           phone: normalizePhoneOut(u.phone),
           photoUrl: u.photo_url || null,
           mood: moodToday,
+          moodComment: commentToday,
           activated: !!u.activated,
           isPet: !!u.is_pet,
         };
@@ -471,17 +473,22 @@ app.post('/api/me/mood', requireAuth, async (req, res) => {
   try {
     const mood = (req.body?.mood || '').toString().trim();
     if (mood && mood.length > 20) return res.status(400).json({ error: 'too-long' });
+    // 개선안 §3.3 기능1: 1이모지 + 1줄 코멘트
+    let comment = (req.body?.comment ?? '').toString().trim();
+    if (comment.length > 120) comment = comment.slice(0, 120);
+    const commentVal = comment ? comment : null;
+
     const tz = process.env.DEFAULT_TZ || 'Asia/Tokyo';
     const today = new Intl.DateTimeFormat('sv-SE', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
     await getPool().query(
-      'UPDATE users SET mood = ?, mood_date = ? WHERE id = ?',
-      [mood || null, mood ? today : null, req.user.id]
+      'UPDATE users SET mood = ?, mood_date = ?, mood_comment = ? WHERE id = ?',
+      [mood || null, mood ? today : null, mood ? commentVal : null, req.user.id]
     );
     if (mood) {
       await getPool().query(
-        `INSERT INTO mood_history (user_id, mood, mood_date) VALUES (?, ?, ?)
-         ON DUPLICATE KEY UPDATE mood = VALUES(mood)`,
-        [req.user.id, mood, today]
+        `INSERT INTO mood_history (user_id, mood, mood_date, comment) VALUES (?, ?, ?, ?)
+         ON DUPLICATE KEY UPDATE mood = VALUES(mood), comment = VALUES(comment)`,
+        [req.user.id, mood, today, commentVal]
       );
     } else {
       await getPool().query(
@@ -489,7 +496,7 @@ app.post('/api/me/mood', requireAuth, async (req, res) => {
         [req.user.id, today]
       );
     }
-    res.json({ ok: true, mood: mood || null });
+    res.json({ ok: true, mood: mood || null, comment: mood ? commentVal : null });
   } catch (e) { res.status(500).json({ error: 'internal', message: e.message }); }
 });
 
@@ -1459,9 +1466,51 @@ function mapChatRow(r) {
     userName: r.user_name,
     userIcon: r.user_icon,
     userPhoto: r.user_photo,
-    text: r.text,
+    text: r.text || '',
+    imageUrl: r.image_url || null,
     createdAt: r.created_at,
   };
+}
+
+// 채팅 이미지: 갤러리와 같은 보안 패턴, 별도 디렉터리
+const CHAT_DIR = path.join(DATA_DIR, 'chat');
+try { fs.mkdirSync(CHAT_DIR, { recursive: true }); } catch (e) { console.warn('[chat] mkdir:', e.message); }
+function makeChatDestination(req, _file, cb) {
+  try {
+    const dir = path.join(CHAT_DIR, familySubDir(req));
+    fs.mkdirSync(dir, { recursive: true });
+    cb(null, dir);
+  } catch (e) { cb(e); }
+}
+const chatPhotoUpload = multer({
+  storage: multer.diskStorage({
+    destination: makeChatDestination,
+    filename: (_req, _file, cb) => {
+      cb(null, `c-${Date.now()}-${Math.random().toString(36).slice(2, 11)}.jpg`);
+    },
+  }),
+  limits: { fileSize: Math.ceil(3.1 * 1024 * 1024) },
+  fileFilter: (_req, file, cb) => {
+    const ok = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'].includes(file.mimetype);
+    cb(ok ? null : new Error('invalid-image-type'), ok);
+  },
+});
+function resolveSafeChatPath(url) {
+  if (!url || typeof url !== 'string' || !url.startsWith('/uploads/chat/')) return null;
+  const rel = url.slice('/uploads/chat/'.length);
+  if (!rel || rel.includes('..')) return null;
+  const parts = rel.split('/').filter(Boolean);
+  if (!parts.length) return null;
+  const baseDir = path.resolve(CHAT_DIR);
+  const fp = path.resolve(baseDir, ...parts);
+  if (fp !== baseDir && !fp.startsWith(baseDir + path.sep)) return null;
+  return { fullPath: fp, basename: parts[parts.length - 1] };
+}
+function safeUnlinkChatFile(url) {
+  const r = resolveSafeChatPath(url);
+  if (!r) return;
+  if (!/^c-\d+-[a-z0-9]+\.jpg$/i.test(r.basename)) return;
+  fs.unlink(r.fullPath, () => {});
 }
 app.get('/api/chat', requireAuth, async (req, res) => {
   try {
@@ -1470,7 +1519,7 @@ app.get('/api/chat', requireAuth, async (req, res) => {
     const after = Number(req.query.after) || 0;
     if (after > 0) {
       const [rows] = await getPool().query(
-        `SELECT c.id, c.user_id, c.text, c.created_at,
+        `SELECT c.id, c.user_id, c.text, c.image_url, c.created_at,
                 u.display_name AS user_name, u.icon AS user_icon, u.photo_url AS user_photo
            FROM chat_messages c
            LEFT JOIN users u ON u.id = c.user_id
@@ -1483,7 +1532,7 @@ app.get('/api/chat', requireAuth, async (req, res) => {
     const args = before > 0 ? [req.user.family_id, before] : [req.user.family_id];
     const where = before > 0 ? 'WHERE c.family_id = ? AND c.id < ?' : 'WHERE c.family_id = ?';
     const [rows] = await getPool().query(
-      `SELECT c.id, c.user_id, c.text, c.created_at,
+      `SELECT c.id, c.user_id, c.text, c.image_url, c.created_at,
               u.display_name AS user_name, u.icon AS user_icon, u.photo_url AS user_photo
          FROM chat_messages c
          LEFT JOIN users u ON u.id = c.user_id
@@ -1515,20 +1564,96 @@ app.post('/api/chat', requireAuth, async (req, res) => {
   } catch (e) { res.status(500).json({ error: 'internal', message: e.message }); }
 });
 
+// 채팅 삭제: 본인 메시지만, 작성 후 5분 이내만
+const CHAT_DELETE_WINDOW_MS = 5 * 60 * 1000;
 app.delete('/api/chat/:id', requireAuth, async (req, res) => {
   try {
     const id = Number(req.params.id);
     if (!Number.isInteger(id)) return res.status(400).json({ error: 'bad-id' });
     const [rows] = await getPool().query(
-      'SELECT user_id FROM chat_messages WHERE id = ? AND family_id = ? LIMIT 1',
+      'SELECT user_id, image_url, created_at FROM chat_messages WHERE id = ? AND family_id = ? LIMIT 1',
       [id, req.user.family_id]
     );
     if (!rows.length) return res.status(404).json({ error: 'not-found' });
-    if (rows[0].user_id !== req.user.id && req.user.role !== 'admin') {
-      return res.status(403).json({ error: 'forbidden' });
+    if (rows[0].user_id !== req.user.id) {
+      return res.status(403).json({ error: 'forbidden', message: '본인이 쓴 메시지만 삭제할 수 있어요' });
+    }
+    const createdAt = new Date(rows[0].created_at).getTime();
+    if (Number.isFinite(createdAt) && Date.now() - createdAt > CHAT_DELETE_WINDOW_MS) {
+      return res.status(403).json({ error: 'too-late', message: '5분 이상 지난 메시지는 삭제할 수 없어요' });
     }
     await getPool().query('DELETE FROM chat_messages WHERE id = ?', [id]);
+    if (rows[0].image_url) safeUnlinkChatFile(rows[0].image_url);
     res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: 'internal', message: e.message }); }
+});
+
+// 채팅 사진 업로드 — 압축된 JPEG Blob 한 장 + 선택적 text
+app.post(
+  '/api/chat/photo',
+  requireAuth,
+  (req, res, next) => {
+    chatPhotoUpload.single('photo')(req, res, (err) => {
+      if (err) {
+        const msg = err.message === 'invalid-image-type' ? '이미지 파일만 올릴 수 있어요'
+          : err.code === 'LIMIT_FILE_SIZE' ? '파일이 너무 커요 (3MB 이하)'
+          : (err.message || '업로드 실패');
+        return res.status(400).json({ error: 'upload-failed', message: msg });
+      }
+      if (!req.file) return res.status(400).json({ error: 'no-file', message: '파일이 없어요' });
+      next();
+    });
+  },
+  async (req, res) => {
+    try {
+      const text = (req.body?.text || '').toString().trim().slice(0, 1000);
+      const url = `/uploads/chat/${familySubDir(req)}/${req.file.filename}`;
+      const [r] = await getPool().query(
+        'INSERT INTO chat_messages (family_id, user_id, text, image_url) VALUES (?, ?, ?, ?)',
+        [req.user.family_id, req.user.id, text, url]
+      );
+      await getPool().query(
+        `INSERT INTO chat_reads (user_id, family_id, last_read_id) VALUES (?, ?, ?)
+           ON DUPLICATE KEY UPDATE last_read_id = GREATEST(last_read_id, VALUES(last_read_id))`,
+        [req.user.id, req.user.family_id, r.insertId]
+      );
+      res.json({ ok: true, id: r.insertId, imageUrl: url, text });
+    } catch (e) {
+      try { fs.unlink(req.file.path, () => {}); } catch {}
+      res.status(500).json({ error: 'internal', message: e.message });
+    }
+  }
+);
+
+// 채팅 사진을 가족 갤러리에 복사 저장
+app.post('/api/chat/:id/save-to-gallery', requireAuth, async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id)) return res.status(400).json({ error: 'bad-id' });
+    const [rows] = await getPool().query(
+      'SELECT image_url, text FROM chat_messages WHERE id = ? AND family_id = ? LIMIT 1',
+      [id, req.user.family_id]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'not-found' });
+    const srcUrl = rows[0].image_url;
+    if (!srcUrl) return res.status(400).json({ error: 'no-image', message: '사진이 없는 메시지예요' });
+    const srcInfo = resolveSafeChatPath(srcUrl);
+    if (!srcInfo) return res.status(400).json({ error: 'bad-path' });
+
+    const dstDir = path.join(GALLERY_DIR, familySubDir(req));
+    fs.mkdirSync(dstDir, { recursive: true });
+    const dstName = `g-${Date.now()}-${Math.random().toString(36).slice(2, 11)}.jpg`;
+    const dstPath = path.join(dstDir, dstName);
+    await new Promise((resolve, reject) => {
+      fs.copyFile(srcInfo.fullPath, dstPath, (err) => err ? reject(err) : resolve());
+    });
+    const dstUrl = `/uploads/gallery/${familySubDir(req)}/${dstName}`;
+    const caption = (rows[0].text || '').toString().trim().slice(0, 300) || null;
+    const [ins] = await getPool().query(
+      'INSERT INTO gallery_photos (family_id, uploader_id, url, caption) VALUES (?, ?, ?, ?)',
+      [req.user.family_id, req.user.id, dstUrl, caption]
+    );
+    res.json({ ok: true, id: ins.insertId, url: dstUrl });
   } catch (e) { res.status(500).json({ error: 'internal', message: e.message }); }
 });
 
@@ -1548,6 +1673,34 @@ app.get('/api/chat/unread', requireAuth, async (req, res) => {
   } catch (e) { res.status(500).json({ error: 'internal', message: e.message }); }
 });
 
+// 타이핑 인디케이터 (메모리, family_id 별 user_id → 마지막 ping 시각)
+const TYPING_TTL_MS = 4500;
+const TYPING_STATE = new Map();
+function setTypingFor(familyId, userId) {
+  let m = TYPING_STATE.get(familyId);
+  if (!m) { m = new Map(); TYPING_STATE.set(familyId, m); }
+  m.set(userId, Date.now());
+}
+function getTypingFor(familyId, excludeUserId) {
+  const m = TYPING_STATE.get(familyId);
+  if (!m) return [];
+  const now = Date.now();
+  const out = [];
+  for (const [uid, ts] of m) {
+    if (now - ts >= TYPING_TTL_MS) { m.delete(uid); continue; }
+    if (uid !== excludeUserId) out.push(uid);
+  }
+  return out;
+}
+app.post('/api/chat/typing', requireAuth, (req, res) => {
+  setTypingFor(req.user.family_id, req.user.id);
+  res.json({ ok: true });
+});
+app.get('/api/chat/typing', requireAuth, (req, res) => {
+  const userIds = getTypingFor(req.user.family_id, req.user.id);
+  res.json({ userIds });
+});
+
 app.post('/api/chat/read', requireAuth, async (req, res) => {
   try {
     const lastId = Number(req.body?.lastId) || 0;
@@ -1558,6 +1711,218 @@ app.post('/api/chat/read', requireAuth, async (req, res) => {
     );
     res.json({ ok: true });
   } catch (e) { res.status(500).json({ error: 'internal', message: e.message }); }
+});
+
+// ---------- 실시간 사다리타기 ----------
+const LADDER_GAMES = new Map();      // gameId → game
+let LADDER_NEXT_ID = 1;
+const LADDER_GAME_TTL_MS = 10 * 60 * 1000; // 10분 후 자동 정리
+const LADDER_COUNTDOWN_MS = 5000;    // 5초 카운트다운 (3 → 5)
+const LADDER_RUN_MS = 11000;         // 애니메이션·발표 시간 (8명 stagger + 4.8s 느린 애니 + reveal 여유)
+
+const LADDER_LOBBY_IDLE_MS = 5 * 60 * 1000; // 5분 동안 활동 없는 lobby 자동 정리
+
+function ladderFindActiveByFamily(familyId) {
+  for (const g of LADDER_GAMES.values()) {
+    if (g.familyId !== familyId) continue;
+    if (g.status === 'done') continue;
+    // lobby 인데 너무 오래 방치된 방은 정리
+    if (g.status === 'lobby') {
+      const lastTouch = g.lastActivityAt || g.createdAt;
+      if (Date.now() - lastTouch > LADDER_LOBBY_IDLE_MS && g.participants.length === 0) {
+        LADDER_GAMES.delete(g.id);
+        continue;
+      }
+    }
+    return g;
+  }
+  return null;
+}
+
+function ladderSerialize(game) {
+  return {
+    id: game.id,
+    hostId: game.hostId,
+    status: game.status,
+    count: game.count,
+    results: game.results,
+    participants: game.participants,
+    rungs: (game.status === 'running' || game.status === 'done') ? game.rungs : null,
+    traces: (game.status === 'running' || game.status === 'done') ? game.traces : null,
+    rows: game.rows || 0,
+    countdownStartAt: game.countdownStartAt,
+    runStartAt: game.runStartAt,
+    finishedAt: game.finishedAt,
+  };
+}
+
+function ladderGenerate(cols) {
+  // 1.5배 더 빽빽한 사다리 — 행 수 1.5x + 가지 확률 0.45 → 0.55 (인접 차단으로 한도 있어 두 축 함께 증가)
+  const ROWS = Math.max(15, Math.round(cols * 4.5));
+  const rungs = [];
+  for (let r = 0; r < ROWS; r++) {
+    rungs[r] = [];
+    for (let g = 0; g < cols - 1; g++) {
+      if (g > 0 && rungs[r][g - 1]) { rungs[r][g] = false; continue; }
+      rungs[r][g] = Math.random() < 0.55;
+    }
+  }
+  const traces = [];
+  for (let start = 0; start < cols; start++) {
+    let col = start;
+    const path = [{ col, row: 0 }];
+    for (let r = 0; r < ROWS; r++) {
+      if (col > 0 && rungs[r][col - 1]) col -= 1;
+      else if (col < cols - 1 && rungs[r][col]) col += 1;
+      path.push({ col, row: r + 1 });
+    }
+    traces.push({ start, finalCol: col, path });
+  }
+  return { rungs, traces, rows: ROWS };
+}
+
+async function ladderPostResult(game) {
+  const lines = ['🎲 사다리 결과'];
+  const sorted = [...game.participants].sort((a, b) => a.slot - b.slot);
+  for (const p of sorted) {
+    const trace = game.traces[p.slot];
+    const result = game.results[trace.finalCol] || `결과 ${trace.finalCol + 1}`;
+    lines.push(`• ${p.name} → ${result}`);
+  }
+  try {
+    await getPool().query(
+      'INSERT INTO chat_messages (family_id, user_id, text) VALUES (?, ?, ?)',
+      [game.familyId, game.hostId, lines.join('\n')]
+    );
+  } catch {}
+}
+
+function ladderStartCountdown(game) {
+  if (game.status !== 'lobby') return;
+  game.status = 'countdown';
+  game.countdownStartAt = Date.now();
+  setTimeout(() => {
+    if (game.status !== 'countdown') return;
+    const ladder = ladderGenerate(game.count);
+    game.rungs = ladder.rungs;
+    game.traces = ladder.traces;
+    game.rows = ladder.rows;
+    game.status = 'running';
+    game.runStartAt = Date.now();
+    setTimeout(async () => {
+      if (game.status !== 'running') return;
+      game.status = 'done';
+      game.finishedAt = Date.now();
+      await ladderPostResult(game);
+      setTimeout(() => LADDER_GAMES.delete(game.id), LADDER_GAME_TTL_MS);
+    }, LADDER_RUN_MS);
+  }, LADDER_COUNTDOWN_MS);
+}
+
+app.get('/api/ladder/games/active', requireAuth, (req, res) => {
+  const game = ladderFindActiveByFamily(req.user.family_id);
+  if (!game) return res.json({ active: false });
+  res.json({ active: true, game: ladderSerialize(game) });
+});
+
+app.post('/api/ladder/games', requireAuth, async (req, res) => {
+  try {
+    const existing = ladderFindActiveByFamily(req.user.family_id);
+    if (existing) return res.status(409).json({ error: 'active-game-exists', gameId: existing.id });
+    const count = Math.max(2, Math.min(8, Number(req.body?.count) || 4));
+    let results = Array.isArray(req.body?.results) ? req.body.results.slice(0, count).map(r => String(r || '').slice(0, 14)) : [];
+    while (results.length < count) results.push(results.length === 0 ? '💣 당첨' : '꽝');
+    const id = LADDER_NEXT_ID++;
+    const game = {
+      id,
+      familyId: req.user.family_id,
+      hostId: req.user.id,
+      status: 'lobby',
+      count, results,
+      participants: [],
+      rungs: null, traces: null, rows: 0,
+      countdownStartAt: null, runStartAt: null, finishedAt: null,
+      createdAt: Date.now(),
+    };
+    game.lastActivityAt = Date.now();
+    LADDER_GAMES.set(id, game);
+    // 채팅에 게임 시작 메시지 (특수 prefix — 클라이언트가 카드로 렌더)
+    await getPool().query(
+      'INSERT INTO chat_messages (family_id, user_id, text) VALUES (?, ?, ?)',
+      [req.user.family_id, req.user.id, `/ladder-game/${id}`]
+    );
+    res.json({ ok: true, game: ladderSerialize(game) });
+  } catch (e) { res.status(500).json({ error: 'internal', message: e.message }); }
+});
+
+app.get('/api/ladder/games/:id', requireAuth, (req, res) => {
+  const game = LADDER_GAMES.get(Number(req.params.id));
+  if (!game || game.familyId !== req.user.family_id) return res.status(404).json({ error: 'not-found' });
+  res.json(ladderSerialize(game));
+});
+
+app.post('/api/ladder/games/:id/join', requireAuth, async (req, res) => {
+  try {
+    const game = LADDER_GAMES.get(Number(req.params.id));
+    if (!game || game.familyId !== req.user.family_id) return res.status(404).json({ error: 'not-found' });
+    if (game.status !== 'lobby') return res.status(409).json({ error: 'locked' });
+    const slot = Number(req.body?.slot);
+    if (!Number.isInteger(slot) || slot < 0 || slot >= game.count) {
+      return res.status(400).json({ error: 'bad-slot' });
+    }
+    if (game.participants.some(p => p.slot === slot && p.userId !== req.user.id)) {
+      return res.status(409).json({ error: 'slot-taken', message: '이미 다른 가족이 선택한 자리에요' });
+    }
+    const [rows] = await getPool().query(
+      'SELECT id, display_name, icon, photo_url FROM users WHERE id = ? LIMIT 1',
+      [req.user.id]
+    );
+    const me = rows[0];
+    const existing = game.participants.find(p => p.userId === req.user.id);
+    if (existing) {
+      existing.slot = slot;
+      existing.ready = false;
+    } else {
+      game.participants.push({
+        userId: req.user.id, slot, ready: false,
+        name: me?.display_name || '가족',
+        icon: me?.icon || 'star',
+        photoUrl: me?.photo_url || null,
+      });
+    }
+    game.lastActivityAt = Date.now();
+    res.json(ladderSerialize(game));
+  } catch (e) { res.status(500).json({ error: 'internal', message: e.message }); }
+});
+
+app.post('/api/ladder/games/:id/ready', requireAuth, (req, res) => {
+  const game = LADDER_GAMES.get(Number(req.params.id));
+  if (!game || game.familyId !== req.user.family_id) return res.status(404).json({ error: 'not-found' });
+  if (game.status !== 'lobby') return res.status(409).json({ error: 'locked' });
+  const me = game.participants.find(p => p.userId === req.user.id);
+  if (!me) return res.status(404).json({ error: 'not-joined' });
+  me.ready = !!req.body?.ready;
+  game.lastActivityAt = Date.now();
+  // 모든 슬롯이 차고(N=count) + 모두 준비완료여야 자동 시작
+  if (game.participants.length === game.count &&
+      game.participants.length >= 2 &&
+      game.participants.every(p => p.ready)) {
+    ladderStartCountdown(game);
+  }
+  res.json(ladderSerialize(game));
+});
+
+app.post('/api/ladder/games/:id/leave', requireAuth, (req, res) => {
+  const game = LADDER_GAMES.get(Number(req.params.id));
+  if (!game || game.familyId !== req.user.family_id) return res.status(404).json({ error: 'not-found' });
+  if (game.status !== 'lobby') return res.status(409).json({ error: 'locked' });
+  game.participants = game.participants.filter(p => p.userId !== req.user.id);
+  game.lastActivityAt = Date.now();
+  // 모두 떠나면 즉시 정리
+  if (game.participants.length === 0 && game.status === 'lobby') {
+    LADDER_GAMES.delete(game.id);
+  }
+  res.json(ladderSerialize(game));
 });
 
 app.get('/api/notice/history', requireAuth, async (req, res) => {
@@ -2519,6 +2884,389 @@ app.get('/api/activity/week', requireAuth, async (req, res) => {
   } catch (e) { res.status(500).json({ error: 'internal', message: e.message }); }
 });
 
+// 가족 여정: 함께한 일수·누적 기록·이번 주 참여·한 달 전 오늘 회상
+app.get('/api/family/journey', requireAuth, async (req, res) => {
+  try {
+    const fid = req.user.family_id;
+    const pool = getPool();
+
+    const [famRows] = await pool.query(
+      'SELECT display_name, created_at FROM families WHERE id = ? LIMIT 1',
+      [fid]
+    );
+    if (!famRows.length) return res.status(404).json({ error: 'no_family' });
+    const fam = famRows[0];
+
+    const [memberRows] = await pool.query(
+      'SELECT COUNT(*) AS cnt FROM users WHERE family_id = ?',
+      [fid]
+    );
+    const memberCount = Number(memberRows[0].cnt);
+
+    // 누적 답변 수 (skip 제외)
+    const [totalAns] = await pool.query(
+      `SELECT COUNT(*) AS cnt FROM daily_answers a
+        JOIN daily_questions q ON q.id = a.question_id
+       WHERE q.family_id = ? AND a.answer_text IS NOT NULL AND a.is_skip = 0`,
+      [fid]
+    );
+
+    // 누적 기분 체크인
+    const [totalMood] = await pool.query(
+      `SELECT COUNT(*) AS cnt FROM mood_history mh
+        JOIN users u ON u.id = mh.user_id
+       WHERE u.family_id = ?`,
+      [fid]
+    );
+
+    // 누적 사진
+    let totalPhoto = [{ cnt: 0 }];
+    try {
+      const [r] = await pool.query(
+        'SELECT COUNT(*) AS cnt FROM gallery_photos WHERE family_id = ?',
+        [fid]
+      );
+      totalPhoto = r;
+    } catch {}
+
+    // 누적 응원
+    const [totalStk] = await pool.query(
+      'SELECT COUNT(*) AS cnt FROM family_stickers WHERE family_id = ?',
+      [fid]
+    );
+
+    // 최근 30일 기분 Top 1
+    const [topMood] = await pool.query(
+      `SELECT mh.mood, COUNT(*) AS cnt FROM mood_history mh
+        JOIN users u ON u.id = mh.user_id
+       WHERE u.family_id = ? AND mh.mood_date >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
+       GROUP BY mh.mood ORDER BY cnt DESC LIMIT 1`,
+      [fid]
+    );
+
+    // 이번 주 활동한 고유 멤버 수 (답변·기분·메모·응원 중 하나라도)
+    const [activeWk] = await pool.query(
+      `SELECT COUNT(DISTINCT uid) AS cnt FROM (
+         SELECT a.user_id AS uid FROM daily_answers a
+           JOIN daily_questions q ON q.id = a.question_id
+          WHERE q.family_id = ? AND q.question_date >= DATE_SUB(CURDATE(), INTERVAL 6 DAY)
+            AND a.answer_text IS NOT NULL AND a.is_skip = 0
+         UNION
+         SELECT mh.user_id FROM mood_history mh
+           JOIN users u ON u.id = mh.user_id
+          WHERE u.family_id = ? AND mh.mood_date >= DATE_SUB(CURDATE(), INTERVAL 6 DAY)
+         UNION
+         SELECT created_by FROM memos
+          WHERE family_id = ? AND created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY) AND created_by IS NOT NULL
+         UNION
+         SELECT sender_id FROM family_stickers
+          WHERE family_id = ? AND sticker_date >= DATE_SUB(CURDATE(), INTERVAL 6 DAY)
+       ) t`,
+      [fid, fid, fid, fid]
+    );
+
+    // 한 달 전 오늘 질문·답변 (있으면)
+    const [monthBack] = await pool.query(
+      `SELECT q.id, q.question_text, q.question_date,
+              (SELECT COUNT(*) FROM daily_answers a
+                WHERE a.question_id = q.id AND a.answer_text IS NOT NULL AND a.is_skip = 0) AS answered
+         FROM daily_questions q
+        WHERE q.family_id = ? AND q.question_date = DATE_SUB(CURDATE(), INTERVAL 30 DAY)
+        LIMIT 1`,
+      [fid]
+    );
+
+    // 1년 전 오늘 질문·답변 (있으면, 가능한 오래된 가족만 데이터 있음)
+    const [yearBack] = await pool.query(
+      `SELECT q.id, q.question_text, q.question_date,
+              (SELECT COUNT(*) FROM daily_answers a
+                WHERE a.question_id = q.id AND a.answer_text IS NOT NULL AND a.is_skip = 0) AS answered
+         FROM daily_questions q
+        WHERE q.family_id = ? AND q.question_date = DATE_SUB(CURDATE(), INTERVAL 365 DAY)
+        LIMIT 1`,
+      [fid]
+    );
+
+    const createdAt = fam.created_at;
+    const daysTogether = Math.max(1, Math.floor((Date.now() - new Date(createdAt).getTime()) / 86400000) + 1);
+
+    // 마일스톤: 가까운 미래의 "함께한 N일" 기록
+    const NEXT_MS = [7, 30, 100, 180, 365, 730, 1000, 1825, 3650];
+    const nextMilestone = NEXT_MS.find((n) => n >= daysTogether) || null;
+
+    res.json({
+      familyName: fam.display_name,
+      createdAt,
+      daysTogether,
+      memberCount,
+      weeklyActive: Number(activeWk[0]?.cnt || 0),
+      totals: {
+        answers: Number(totalAns[0]?.cnt || 0),
+        moods:   Number(totalMood[0]?.cnt || 0),
+        photos:  Number(totalPhoto[0]?.cnt || 0),
+        stickers: Number(totalStk[0]?.cnt || 0),
+      },
+      topMood30d: topMood[0] ? { mood: topMood[0].mood, count: Number(topMood[0].cnt) } : null,
+      monthAgo: monthBack[0] ? { question: monthBack[0].question_text, answered: Number(monthBack[0].answered), date: monthBack[0].question_date } : null,
+      yearAgo:  yearBack[0]  ? { question: yearBack[0].question_text,  answered: Number(yearBack[0].answered),  date: yearBack[0].question_date }  : null,
+      nextMilestone,
+      firsts: await computeFamilyFirsts(pool, fid),
+    });
+  } catch (e) { res.status(500).json({ error: 'internal', message: e.message }); }
+});
+
+// 가족 "첫 순간들" — 첫 기분/답변/사진/응원/메모 (각각 날짜 + 주인공)
+async function computeFamilyFirsts(pool, fid) {
+  const out = {};
+  try {
+    const [r] = await pool.query(
+      `SELECT mh.mood_date AS d, u.display_name AS name, mh.mood AS mood
+         FROM mood_history mh JOIN users u ON u.id = mh.user_id
+        WHERE u.family_id = ? ORDER BY mh.mood_date ASC, mh.id ASC LIMIT 1`,
+      [fid]
+    );
+    if (r.length) out.firstMood = {
+      date: new Intl.DateTimeFormat('sv-SE', { year:'numeric', month:'2-digit', day:'2-digit' }).format(new Date(r[0].d)),
+      name: r[0].name,
+      mood: r[0].mood,
+    };
+  } catch {}
+  try {
+    const [r] = await pool.query(
+      `SELECT q.question_date AS d, u.display_name AS name
+         FROM daily_answers a
+         JOIN daily_questions q ON q.id = a.question_id
+         JOIN users u ON u.id = a.user_id
+        WHERE q.family_id = ? AND a.answer_text IS NOT NULL AND a.is_skip = 0
+        ORDER BY q.question_date ASC, a.created_at ASC LIMIT 1`,
+      [fid]
+    );
+    if (r.length) out.firstAnswer = {
+      date: new Intl.DateTimeFormat('sv-SE', { year:'numeric', month:'2-digit', day:'2-digit' }).format(new Date(r[0].d)),
+      name: r[0].name,
+    };
+  } catch {}
+  try {
+    const [r] = await pool.query(
+      `SELECT g.created_at AS d, u.display_name AS name
+         FROM gallery_photos g LEFT JOIN users u ON u.id = g.uploader_id
+        WHERE g.family_id = ? ORDER BY g.created_at ASC LIMIT 1`,
+      [fid]
+    );
+    if (r.length) out.firstPhoto = {
+      date: new Intl.DateTimeFormat('sv-SE', { year:'numeric', month:'2-digit', day:'2-digit' }).format(new Date(r[0].d)),
+      name: r[0].name || null,
+    };
+  } catch {}
+  try {
+    const [r] = await pool.query(
+      `SELECT s.sticker_date AS d, u.display_name AS name, s.emoji
+         FROM family_stickers s JOIN users u ON u.id = s.sender_id
+        WHERE s.family_id = ? ORDER BY s.sticker_date ASC, s.id ASC LIMIT 1`,
+      [fid]
+    );
+    if (r.length) out.firstSticker = {
+      date: new Intl.DateTimeFormat('sv-SE', { year:'numeric', month:'2-digit', day:'2-digit' }).format(new Date(r[0].d)),
+      name: r[0].name,
+      emoji: r[0].emoji,
+    };
+  } catch {}
+  return out;
+}
+
+// 가족 전원의 최근 7일 기분 그리드 (개선안 §2.3 감정 자산 시각화)
+app.get('/api/family/mood-week', requireAuth, async (req, res) => {
+  try {
+    const fid = req.user.family_id;
+    const pool = getPool();
+    const tz = process.env.DEFAULT_TZ || 'Asia/Tokyo';
+    const today = new Intl.DateTimeFormat('sv-SE', { timeZone: tz, year:'numeric', month:'2-digit', day:'2-digit' }).format(new Date());
+
+    const [members] = await pool.query(
+      `SELECT id, display_name, icon, photo_url, role
+         FROM users WHERE family_id = ?
+        ORDER BY role DESC, id ASC`,
+      [fid]
+    );
+    if (!members.length) return res.json({ start: today, days: [], members: [] });
+
+    const ids = members.map((m) => m.id);
+
+    const [rows] = await pool.query(
+      `SELECT user_id, DATE_FORMAT(mood_date, '%Y-%m-%d') AS d, mood, comment
+         FROM mood_history
+        WHERE user_id IN (?)
+          AND mood_date >= DATE_SUB(?, INTERVAL 6 DAY)
+          AND mood_date <= ?`,
+      [ids, today, today]
+    );
+    const map = new Map(); // "uid|date" → {mood, comment}
+    for (const r of rows) map.set(`${r.user_id}|${r.d}`, { mood: r.mood, comment: r.comment });
+
+    // 날짜 라인 생성 (오래된 → 오늘 방향)
+    const days = [];
+    const base = new Date(today + 'T00:00:00');
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(base);
+      d.setDate(d.getDate() - i);
+      const iso = d.toISOString().slice(0, 10);
+      days.push({
+        date: iso,
+        dow: d.getDay(),
+        day: d.getDate(),
+        isToday: iso === today,
+      });
+    }
+
+    const outMembers = members.map((m) => ({
+      id: m.id,
+      displayName: m.display_name,
+      icon: m.icon,
+      photoUrl: m.photo_url || null,
+      days: days.map((d) => {
+        const k = `${m.id}|${d.date}`;
+        const e = map.get(k);
+        return { date: d.date, mood: e?.mood || null, comment: e?.comment || null };
+      }),
+    }));
+
+    res.json({ today, days, members: outMembers });
+  } catch (e) { res.status(500).json({ error: 'internal', message: e.message }); }
+});
+
+// 가족 멤버별 오늘 참여 여부 (기분·질문답변·메모·응원 보내기)
+app.get('/api/family/today-status', requireAuth, async (req, res) => {
+  try {
+    const fid = req.user.family_id;
+    const pool = getPool();
+    const tz = process.env.DEFAULT_TZ || 'Asia/Tokyo';
+    const today = new Intl.DateTimeFormat('sv-SE', { timeZone: tz, year:'numeric', month:'2-digit', day:'2-digit' }).format(new Date());
+
+    const [members] = await pool.query(
+      'SELECT id FROM users WHERE family_id = ?',
+      [fid]
+    );
+    const ids = members.map((m) => m.id);
+    if (!ids.length) return res.json({ date: today, byUser: {} });
+
+    const [moodRows] = await pool.query(
+      'SELECT DISTINCT user_id FROM mood_history WHERE mood_date = ? AND user_id IN (?)',
+      [today, ids]
+    );
+    const [answerRows] = await pool.query(
+      `SELECT DISTINCT a.user_id FROM daily_answers a
+         JOIN daily_questions q ON q.id = a.question_id
+        WHERE q.question_date = ? AND q.family_id = ?
+          AND a.answer_text IS NOT NULL AND a.is_skip = 0
+          AND a.user_id IN (?)`,
+      [today, fid, ids]
+    );
+    const [memoRows] = await pool.query(
+      `SELECT DISTINCT created_by AS user_id FROM memos
+        WHERE family_id = ? AND DATE(created_at) = ? AND created_by IN (?)`,
+      [fid, today, ids]
+    );
+    const [stickerRows] = await pool.query(
+      'SELECT DISTINCT sender_id AS user_id FROM family_stickers WHERE family_id = ? AND sticker_date = ? AND sender_id IN (?)',
+      [fid, today, ids]
+    );
+
+    const moodSet    = new Set(moodRows.map((r) => r.user_id));
+    const answerSet  = new Set(answerRows.map((r) => r.user_id));
+    const memoSet    = new Set(memoRows.map((r) => r.user_id));
+    const stickerSet = new Set(stickerRows.map((r) => r.user_id));
+
+    const byUser = {};
+    for (const m of members) {
+      byUser[m.id] = {
+        mood:    moodSet.has(m.id),
+        answered: answerSet.has(m.id),
+        memo:    memoSet.has(m.id),
+        sticker: stickerSet.has(m.id),
+      };
+    }
+    res.json({ date: today, byUser });
+  } catch (e) { res.status(500).json({ error: 'internal', message: e.message }); }
+});
+
+// 응원 넛지 — 오늘 조용한 가족 한 명을 추천 (자기 자신 제외)
+app.get('/api/family/nudge', requireAuth, async (req, res) => {
+  try {
+    const fid = req.user.family_id;
+    const myId = req.user.id;
+    const tz = process.env.DEFAULT_TZ || 'Asia/Tokyo';
+    const today = new Intl.DateTimeFormat('sv-SE', { timeZone: tz, year:'numeric', month:'2-digit', day:'2-digit' }).format(new Date());
+
+    // 가족 멤버 중 오늘 활동이 전혀 없는 사람 찾기 (pet 제외, 본인 제외)
+    // 활동 = 기분·답변·메모·응원 보내기 중 하나라도
+    const [rows] = await getPool().query(
+      `SELECT u.id, u.display_name, u.icon, u.photo_url,
+              (SELECT MAX(mh.mood_date) FROM mood_history mh WHERE mh.user_id = u.id) AS last_mood,
+              (SELECT MAX(q.question_date) FROM daily_answers a
+                 JOIN daily_questions q ON q.id = a.question_id
+                WHERE a.user_id = u.id AND a.answer_text IS NOT NULL AND a.is_skip = 0) AS last_answer
+         FROM users u
+        WHERE u.family_id = ?
+          AND u.id != ?
+          AND COALESCE(u.is_pet,0) = 0
+          AND NOT EXISTS (
+                SELECT 1 FROM mood_history mh WHERE mh.user_id = u.id AND mh.mood_date = ?
+              )
+          AND NOT EXISTS (
+                SELECT 1 FROM daily_answers a JOIN daily_questions q ON q.id = a.question_id
+                 WHERE a.user_id = u.id AND q.question_date = ?
+                   AND a.answer_text IS NOT NULL AND a.is_skip = 0
+              )
+          AND NOT EXISTS (
+                SELECT 1 FROM memos m WHERE m.created_by = u.id
+                   AND DATE(m.created_at) = ?
+              )
+          AND NOT EXISTS (
+                SELECT 1 FROM family_stickers s WHERE s.sender_id = u.id
+                   AND s.sticker_date = ?
+              )
+        ORDER BY
+          /* 오래 조용한 사람 우선: last_mood/last_answer 최대값이 가장 작은 쪽 */
+          GREATEST(COALESCE(last_mood, '1970-01-01'), COALESCE(last_answer, '1970-01-01')) ASC,
+          u.id ASC
+        LIMIT 1`,
+      [fid, myId, today, today, today, today]
+    );
+
+    // 내가 오늘 이미 응원을 보낸 대상은 제외
+    let pick = rows[0] || null;
+    if (pick) {
+      const [sent] = await getPool().query(
+        `SELECT 1 FROM family_stickers WHERE sender_id = ? AND receiver_id = ? AND sticker_date = ? LIMIT 1`,
+        [myId, pick.id, today]
+      );
+      if (sent.length) pick = null;
+    }
+
+    if (!pick) return res.json({ target: null });
+
+    const last = pick.last_mood || pick.last_answer || null;
+    let hint = `${pick.display_name}님은 오늘 아직 조용하세요`;
+    if (last) {
+      const days = Math.max(0, Math.floor((new Date(today) - new Date(last)) / 86400000));
+      if (days >= 3) hint = `${pick.display_name}님을 ${days}일 동안 못 들었어요`;
+    } else {
+      hint = `${pick.display_name}님에게 첫 응원을 보내보세요`;
+    }
+
+    res.json({
+      target: {
+        id: pick.id,
+        displayName: pick.display_name,
+        icon: pick.icon,
+        photoUrl: pick.photo_url || null,
+      },
+      reason: 'quiet_today',
+      hint,
+    });
+  } catch (e) { res.status(500).json({ error: 'internal', message: e.message }); }
+});
+
 app.get('/api/question/yesterday', requireAuth, async (req, res) => {
   try {
     const y = yesterdayLocal();
@@ -2998,6 +3746,12 @@ app.use('/uploads/profiles', express.static(PROFILE_PHOTOS_DIR, {
   },
 }));
 app.use('/uploads/gallery', express.static(GALLERY_DIR, {
+  maxAge: '7d',
+  immutable: true,
+  index: false,
+  fallthrough: true,
+}));
+app.use('/uploads/chat', express.static(CHAT_DIR, {
   maxAge: '7d',
   immutable: true,
   index: false,
