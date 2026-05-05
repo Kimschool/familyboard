@@ -3,7 +3,7 @@
   "appName": "가족보드",
   "webDir": "public",
   "server": {
-    "url": "https://family.weavus-group.com",
+    "url": "https://fb.weavus-group.com",
     "cleartext": false,
     "androidScheme": "https"
   },
