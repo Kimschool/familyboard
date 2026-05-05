@@ -530,6 +530,17 @@ async function ensureSchema() {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   `);
 
+  await p.query(`
+    CREATE TABLE IF NOT EXISTS device_tokens (
+      token VARCHAR(255) PRIMARY KEY,
+      user_id INT NOT NULL,
+      platform ENUM('ios','android','web') NOT NULL,
+      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      INDEX idx_user (user_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  `);
+
   // ---------- 1회성 마이그레이션 ----------
   await p.query(`
     CREATE TABLE IF NOT EXISTS migrations_applied (

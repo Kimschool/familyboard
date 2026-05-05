@@ -326,6 +326,7 @@ async function acceptInvite() {
 // ---------- 메인 진입 ----------
 function enterApp() {
   showOnly('app');
+  try { window.dispatchEvent(new CustomEvent('fb-logged-in', { detail: { user: ME } })); } catch {}
   try { renderHero(); } catch (e) { console.warn('[hero]', e); }
   try { $('tipsTitle').textContent = `${ME.displayName}님을 위한 오늘의 안내`; } catch {}
   setTimeout(renderHeroSummary, 500); // 데이터 로드 후 한 번 더

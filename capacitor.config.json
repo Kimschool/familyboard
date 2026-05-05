@@ -1,0 +1,16 @@
+{
+  "appId": "com.weavus.familyboard",
+  "appName": "가족보드",
+  "webDir": "public",
+  "server": {
+    "url": "https://family.weavus-group.com",
+    "cleartext": false,
+    "androidScheme": "https"
+  },
+  "ios": {
+    "contentInset": "always"
+  },
+  "android": {
+    "allowMixedContent": false
+  }
+}

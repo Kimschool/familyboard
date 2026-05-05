@@ -12,6 +12,7 @@ const {
   newInviteToken, INVITE_TTL_DAYS,
 } = require('./auth');
 const { attachGostopServer } = require('./gostop-server');
+const { sendPush, familyUserIds } = require('./push');
 
 const app = express();
 
@@ -331,6 +332,31 @@ app.get('/api/me', async (req, res) => {
   const u = await verify(req.cookies?.fb_token);
   if (!u) return res.json({ authed: false });
   res.json({ authed: true, user: publicUser(u) });
+});
+
+// ---------- 푸시 알림 디바이스 토큰 등록/해제 ----------
+app.post('/api/devices/register-token', requireAuth, async (req, res) => {
+  try {
+    const token = String(req.body?.token || '').trim();
+    const platform = String(req.body?.platform || '').trim().toLowerCase();
+    if (!token || token.length > 255) return res.status(400).json({ error: 'bad-token' });
+    if (!['ios', 'android', 'web'].includes(platform)) return res.status(400).json({ error: 'bad-platform' });
+    await getPool().query(
+      `INSERT INTO device_tokens (token, user_id, platform) VALUES (?, ?, ?)
+       ON DUPLICATE KEY UPDATE user_id = VALUES(user_id), platform = VALUES(platform)`,
+      [token, req.user.id, platform]
+    );
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: 'internal', message: e.message }); }
+});
+
+app.post('/api/devices/unregister-token', requireAuth, async (req, res) => {
+  try {
+    const token = String(req.body?.token || '').trim();
+    if (!token) return res.status(400).json({ error: 'bad-token' });
+    await getPool().query('DELETE FROM device_tokens WHERE token = ? AND user_id = ?', [token, req.user.id]);
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: 'internal', message: e.message }); }
 });
 
 // ---------- 내 프로필 편집 (본인 전용) ----------
@@ -1605,6 +1631,7 @@ app.post('/api/chat', requireAuth, async (req, res) => {
       [req.user.id, req.user.family_id, r.insertId]
     );
     res.json({ ok: true, id: r.insertId });
+    notifyChat(req.user, text).catch((e) => console.warn('[push] chat:', e.message));
   } catch (e) { res.status(500).json({ error: 'internal', message: e.message }); }
 });
 
@@ -1662,6 +1689,7 @@ app.post(
         [req.user.id, req.user.family_id, r.insertId]
       );
       res.json({ ok: true, id: r.insertId, imageUrl: url, text });
+      notifyChat(req.user, text || '사진을 보냈어요').catch((e) => console.warn('[push] chat-photo:', e.message));
     } catch (e) {
       try { fs.unlink(req.file.path, () => {}); } catch {}
       res.status(500).json({ error: 'internal', message: e.message });
@@ -2626,12 +2654,19 @@ app.post('/api/diary/today', requireAuth, async (req, res) => {
     );
     return res.json({ ok: true, text: '' });
   }
+  const [existing] = await getPool().query(
+    'SELECT 1 FROM personal_diary WHERE user_id = ? AND entry_date = ? LIMIT 1',
+    [req.user.id, today]
+  );
   await getPool().query(
     `INSERT INTO personal_diary (user_id, entry_date, text) VALUES (?, ?, ?)
      ON DUPLICATE KEY UPDATE text = VALUES(text)`,
     [req.user.id, today, text]
   );
   res.json({ ok: true, text });
+  if (!existing.length) {
+    notifyDiary(req.user, text).catch((e) => console.warn('[push] diary:', e.message));
+  }
 });
 
 app.get('/api/diary/streak', requireAuth, async (req, res) => {
@@ -4013,6 +4048,8 @@ app.post('/api/events', requireAuth, async (req, res) => {
       [req.user.family_id, title, emoji, eventDate, eventTime, location, note, req.user.id]
     );
     res.json({ ok: true, id: r.insertId });
+    notifyEvent(req.user, { title, emoji, eventDate, eventTime, location })
+      .catch((e) => console.warn('[push] event:', e.message));
   } catch (e) { res.status(500).json({ error: 'internal', message: e.message }); }
 });
 
@@ -4449,6 +4486,111 @@ app.use((err, _req, res, _next) => {
   res.status(500).json({ error: 'internal', message: err.message });
 });
 
+// ---------- 푸시 알림 헬퍼 ----------
+async function notifyChat(sender, text) {
+  const recipients = await familyUserIds(sender.family_id, sender.id);
+  if (!recipients.length) return;
+  await sendPush(recipients, {
+    title: `${sender.display_name}`,
+    body: (text || '').slice(0, 120),
+    data: { kind: 'chat', path: '/#chat' },
+  });
+}
+
+async function notifyDiary(author, text) {
+  const recipients = await familyUserIds(author.family_id, author.id);
+  if (!recipients.length) return;
+  await sendPush(recipients, {
+    title: `${author.display_name}님이 일기를 썼어요`,
+    body: (text || '').slice(0, 120),
+    data: { kind: 'diary', path: '/#diary' },
+  });
+}
+
+async function notifyEvent(creator, ev) {
+  const recipients = await familyUserIds(creator.family_id, creator.id);
+  if (!recipients.length) return;
+  const dateLabel = ev.eventDate || '';
+  const timeLabel = ev.eventTime ? ` ${ev.eventTime}` : '';
+  await sendPush(recipients, {
+    title: `${ev.emoji || '📅'} 새 일정: ${ev.title}`,
+    body: `${dateLabel}${timeLabel}${ev.location ? ' · ' + ev.location : ''}`,
+    data: { kind: 'event', path: '/#events' },
+  });
+}
+
+// 매일 09:00 (DEFAULT_TZ 기준) 가족 생일/기념일 체크 후 가족 전체에 푸시.
+// 같은 날 중복 발송 방지를 위해 migrations_applied 테이블에 birthday-notified-YYYY-MM-DD 마커 사용.
+async function runBirthdayCheck() {
+  try {
+    const today = todayLocal();
+    const marker = `birthday-notified-${today}`;
+    const [exists] = await getPool().query(
+      'SELECT 1 FROM migrations_applied WHERE name = ? LIMIT 1',
+      [marker]
+    );
+    if (exists.length) return;
+
+    const now = new Date();
+    const m = now.getMonth() + 1;
+    const d = now.getDate();
+
+    const [families] = await getPool().query('SELECT id FROM families');
+    for (const fam of families) {
+      const [bdays] = await getPool().query(
+        `SELECT id, display_name FROM users
+          WHERE family_id = ? AND birth_month = ? AND birth_day = ?`,
+        [fam.id, m, d]
+      );
+      const [annis] = await getPool().query(
+        `SELECT title, emoji FROM anniversaries
+          WHERE family_id = ? AND month = ? AND day = ?`,
+        [fam.id, m, d]
+      );
+      if (!bdays.length && !annis.length) continue;
+
+      const parts = [];
+      if (bdays.length) parts.push(`🎂 ${bdays.map(b => b.display_name).join(', ')} 생일`);
+      for (const a of annis) parts.push(`${a.emoji || '🎈'} ${a.title}`);
+
+      const recipients = await familyUserIds(fam.id);
+      if (!recipients.length) continue;
+      await sendPush(recipients, {
+        title: '오늘의 가족 기념일',
+        body: parts.join(' · '),
+        data: { kind: 'birthday', path: '/#anniversaries' },
+      });
+    }
+
+    await getPool().query(
+      'INSERT IGNORE INTO migrations_applied (name) VALUES (?)',
+      [marker]
+    );
+  } catch (e) {
+    console.warn('[push] birthday-check failed:', e.message);
+  }
+}
+
+function scheduleBirthdayCheck() {
+  const tz = process.env.DEFAULT_TZ || 'Asia/Tokyo';
+  const targetHour = 9;
+  function msUntilNext() {
+    const now = new Date();
+    const local = new Date(now.toLocaleString('en-US', { timeZone: tz }));
+    const target = new Date(local);
+    target.setHours(targetHour, 0, 0, 0);
+    if (target <= local) target.setDate(target.getDate() + 1);
+    return target.getTime() - local.getTime();
+  }
+  function tick() {
+    runBirthdayCheck();
+    setTimeout(tick, msUntilNext());
+  }
+  // 부팅 직후 한 번 체크 (서버 재시작 후 누락 방지) → 다음 09:00 까지 대기 후 반복
+  setTimeout(tick, msUntilNext());
+  runBirthdayCheck();
+}
+
 // ---------- 부팅 ----------
 const PORT = Number(process.env.PORT || 3003);
 (async () => {
@@ -4456,6 +4598,7 @@ const PORT = Number(process.env.PORT || 3003);
     await ensureSchema();
     console.log('[db] schema ready');
     await bootstrapAdmin();
+    scheduleBirthdayCheck();
   } catch (e) { console.warn('[db] init failed (continuing):', e.message); }
   // socket.io 는 http.Server 에 attach 해야 하므로 express → http.createServer 래핑
   const httpServer = http.createServer(app);
