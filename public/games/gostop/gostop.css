@@ -10,6 +10,16 @@
   --success: #34C759;
 }
 * { box-sizing: border-box; }
+/* 스크린 리더·레이블 전용 (시각적 숨김, 포커스 시에도 감춤 유지) */
+.g-sr-only {
+  position: absolute !important;
+  width: 1px; height: 1px;
+  padding: 0; margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
 html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text);
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
   -webkit-text-size-adjust: 100%; }
@@ -36,6 +46,10 @@ body { min-height: 100vh; padding-bottom: 40px; }
 }
 .g-back:hover { background: rgba(10,132,255,.08); }
 .g-back:active { transform: translateX(-2px) scale(.96); background: rgba(10,132,255,.14); }
+.g-back:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
 .g-badge {
   margin-left: auto; background: var(--accent); color: #fff;
   font-size: 10px; font-weight: 800; padding: 3px 8px; border-radius: 999px;
@@ -49,6 +63,7 @@ body { min-height: 100vh; padding-bottom: 40px; }
 }
 .g-card h2 { margin: 0 0 8px; font-size: 16px; }
 .g-sub { color: var(--sub); font-size: 13.5px; margin: 0 0 12px; line-height: 1.55; }
+.g-lobby-multi-hint { margin-top: -2px; margin-bottom: 10px; }
 
 .g-pc-picker { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 10px 0 12px; }
 .g-pc-btn {
@@ -66,6 +81,11 @@ body { min-height: 100vh; padding-bottom: 40px; }
 }
 .g-pc-btn.is-selected span { color: var(--primary); }
 .g-pc-btn:active { transform: scale(.96); }
+.g-pc-btn:focus-visible,
+.g-ws-btn:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
 
 .g-ws-row {
   display: flex;
@@ -123,6 +143,10 @@ body { min-height: 100vh; padding-bottom: 40px; }
   filter: brightness(0.95);
 }
 .g-primary:disabled { opacity: .45; cursor: default; box-shadow: none; }
+.g-primary:focus-visible {
+  outline: 3px solid rgba(10, 132, 255, 0.55);
+  outline-offset: 2px;
+}
 
 .g-room-list { list-style: none; padding: 0; margin: 0; }
 .g-room-list li {
@@ -149,22 +173,6 @@ body { min-height: 100vh; padding-bottom: 40px; }
 }
 .g-rl-meta { color: var(--sub); font-size: 13px; margin-left: auto; max-width: 50%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .g-empty { color: var(--sub); text-align: center; padding: 16px 0; font-size: 14px; }
-
-.g-join-row { display: flex; gap: 8px; }
-.g-join-row input {
-  flex: 1; height: 48px; border: 1.5px solid var(--line); border-radius: 12px;
-  padding: 0 14px; font-size: 16px; font-weight: 700; letter-spacing: 2px;
-  text-transform: uppercase; text-align: center;
-  font-family: 'SF Mono', 'Courier New', monospace; background: var(--bg);
-  transition: border-color .15s, box-shadow .15s, background .15s;
-  outline: none;
-}
-.g-join-row input:focus {
-  border-color: var(--primary);
-  box-shadow: 0 0 0 3px rgba(10,132,255,.15), 0 4px 14px rgba(10,132,255,.12);
-  background: var(--card);
-}
-.g-join-row button { flex: 0 0 auto; padding: 0 18px; }
 
 .g-player-list { list-style: none; padding: 0; margin: 0 0 12px; }
 .g-player-list li {
@@ -451,55 +459,164 @@ body { min-height: 100vh; padding-bottom: 40px; }
 .hwa-card-wrap.is-highlight .hwa-img { box-shadow: 0 0 0 3px #FFD84D, 0 0 18px rgba(255,200,0,.6); }
 .hwa-card-wrap.is-selected .hwa-img { box-shadow: 0 4px 16px rgba(0,0,0,.25); }
 
-/* ===== 가로 모드 (landscape) 전용 레이아웃 ===== */
+/* ===== 가로 모드 (landscape) — 한 열 + 세로 스크롤 없이 view 안에 수급 (DOM 순서·fixed 요소 겹침 이슈 회피) */
 @media (orientation: landscape) and (min-height: 380px) {
   .game-table {
     max-width: none;
-    padding: 8px 14px 10px;
-    display: grid;
-    grid-template-rows: auto auto 1fr auto;
-    gap: 6px;
-    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    min-height: 0;
+    height: 100dvh;
+    max-height: 100dvh;
+    overflow: hidden;
     box-sizing: border-box;
+    padding: max(2px, env(safe-area-inset-top, 0px)) max(6px, env(safe-area-inset-right, 0px)) max(2px, env(safe-area-inset-bottom, 0px)) max(6px, env(safe-area-inset-left, 0px));
+    row-gap: 0;
+    touch-action: manipulation;
   }
-  .game-table .g-table-head { margin: 0; }
-  .game-table .g-opp-wrap { margin: 0; }
+  .game-table .g-table-head {
+    margin: 0;
+    flex: 0 0 auto;
+    min-width: 0;
+  }
+  .game-table .g-table-head .g-status-compact {
+    font-size: 10.5px;
+    padding: 4px 8px;
+    min-width: 0;
+  }
+  .game-table .g-table-head .g-status-compact .g-status-phase { font-size: 10px; }
+  .game-table .g-table-head .g-status-round { font-size: 9px; padding: 0 4px; }
+  .game-table .g-table-head .g-status-stock { font-size: 9px; margin-left: 2px; opacity: 0.8; }
+  .game-table .g-turn-timer { min-width: 36px; height: 30px; font-size: 12px; }
+  .game-table #gamePhaseHint {
+    flex: 0 0 auto;
+    font-size: 10.5px;
+    line-height: 1.3;
+    padding: 0 4px 2px;
+    max-height: 2.6em;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    line-clamp: 2;
+    overflow: hidden;
+  }
+  .game-table .g-me-meta-pill {
+    /* 우하 pill 유지 — 시야는 좁은 가로에 맞게 살짝 축소 */
+    right: max(6px, env(safe-area-inset-right, 0px)) !important;
+    bottom: max(6px, env(safe-area-inset-bottom, 0px)) !important;
+    top: auto !important;
+    padding: 4px 8px 4px 4px !important;
+    max-width: min(200px, 40vw) !important;
+  }
+  .game-table .g-opp-wrap {
+    margin: 0;
+    flex: 0 0 auto;
+    max-height: 16vh;
+    min-height: 0;
+    overflow-x: auto;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    align-content: flex-start;
+    gap: 4px 8px;
+    padding: 0 2px 2px;
+  }
+  .game-table .g-opp-wrap .g-opp { padding: 3px 6px; gap: 3px; min-width: 0; }
+  .game-table .g-opp-wrap .g-opp-avatar { width: 24px; height: 24px; font-size: 13px; }
+  .game-table .g-opp-wrap .g-opp-head { font-size: 11.5px; }
+  .game-table .g-opp-wrap .g-opp-hand { height: 24px; max-height: 24px; }
+  .game-table .g-opp-wrap .g-opp-card { width: 18px !important; height: 25px !important; }
+  .game-table .g-opp-wrap .g-opp-captured-peek { max-height: 32px; }
   .game-table .g-felt {
     margin: 0;
-    padding: 18px 14px 14px;
+    flex: 1 1 0;
     min-height: 0;
-    flex: 1;
+    min-width: 0;
     display: flex;
     flex-direction: column;
+    padding: 8px 8px 10px;
+    border-radius: 12px;
+    border-width: 3px;
+  }
+  .game-table .g-felt .g-felt-label { top: 4px; left: 6px; font-size: 9px; }
+  .game-table .g-felt .g-board {
+    flex: 1 1 0;
+    min-height: 0;
+    overflow: auto;
+    -webkit-overflow-scrolling: touch;
+    align-content: start;
   }
   .game-table .g-felt .g-board {
-    flex: 1;
-    align-content: center;
+    grid-template-columns: repeat(auto-fit, minmax(32px, 1fr)) !important;
   }
+  .game-table .g-felt .g-deck {
+    top: 6px;
+    right: 6px;
+    left: auto;
+    transform: none;
+    width: 38px;
+    height: 58px;
+    font-size: 20px;
+  }
+  .game-table .g-felt .g-deck .g-deck-count { font-size: 10px; }
   .game-table .g-me-wrap {
     margin: 0;
+    flex: 0 0 auto;
+    max-height: 34vh;
+    min-height: 0;
     display: flex;
     flex-direction: column;
-    gap: 4px;
-    padding: 4px 8px 6px;
+    gap: 2px;
+    padding: 2px 0 0;
   }
-  .game-table .g-my-captured-peek { margin: 0; }
-  .game-table .g-hand-arc {
-    padding: 4px 0;
+  .game-table .g-my-captured-peek { margin: 0; min-height: 30px; max-height: 40px; }
+  .game-table .g-hand-arc,
+  .game-table #gameHand {
+    padding: 2px 0 !important;
     min-height: 0;
+    max-height: 24vh;
+    overflow-x: auto;
+    overflow-y: hidden;
   }
-  .game-table .g-hand-arc > .hwa-card-wrap {
-    width: clamp(32px, calc((100vw - 32px) / 11), 50px) !important;
-    height: auto !important;
-    aspect-ratio: 54 / 86;
+  .game-table .g-hand-arc > .hwa-card-wrap,
+  .game-table #gameHand > .hwa-card-wrap {
+    width: clamp(28px, calc((100vw - 32px) / 8), 48px) !important;
+    max-width: 48px !important;
   }
-  /* 바닥 카드 — auto-fit grid 가 알아서 — 별도 강제 사이즈 X */
-  /* 상대 박스 한 줄로 좁게 */
-  .game-table .g-opp-wrap .g-opp { padding: 4px 8px; gap: 3px; }
-  .game-table .g-opp-wrap .g-opp-avatar { width: 26px; height: 26px; font-size: 15px; }
-  .game-table .g-opp-wrap .g-opp-hand { height: 28px; }
-  .game-table .g-opp-wrap .g-opp-card { width: 20px !important; height: 28px !important; }
-  .game-table .g-log-wrap { display: none; } /* 가로 모드에선 공간 부족 — 숨김 */
+  .game-table .g-actions {
+    flex: 0 0 auto;
+    margin: 0;
+  }
+  .game-table .g-actions .g-primary { min-height: 32px; font-size: 14px; }
+  .game-table .g-my-turn-float {
+    left: max(6px, env(safe-area-inset-left, 0px)) !important;
+    bottom: calc(44px + env(safe-area-inset-bottom, 0px)) !important;
+    padding: 5px 10px;
+    font-size: 12px;
+    max-width: 44vw;
+  }
+  .game-table .g-emoji-bar {
+    flex: 0 0 auto;
+    margin: 0;
+    padding: 0 0 2px;
+    flex-wrap: nowrap;
+    justify-content: center;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .game-table .g-emoji-bar::-webkit-scrollbar { display: none; }
+  .game-table .g-emoji-btn {
+    width: 40px; height: 40px; min-width: 40px; min-height: 40px;
+    font-size: 20px;
+  }
+  .game-table .g-game-help-btn { width: 28px; height: 28px; min-width: 28px; font-size: 15px; }
+  .game-table .g-help:not(.hidden) { font-size: 12px; padding: 5px 8px; max-height: 18vh; overflow: auto; }
+  .game-table .g-log-wrap { display: none; }
 }
 
 /* 세로 모드 가로 회전 안내 — 기본 숨김, 좁은 세로 화면에서만 표시. 사용자가 닫으면 .is-dismissed 로 영구 숨김. */
@@ -910,10 +1027,11 @@ body { min-height: 100vh; padding-bottom: 40px; }
 /* ========== 한게임 스타일 테이블 게임 화면 ========== */
 .game-table {
   max-width: 480px;
-  padding: 8px 10px 12px;
+  padding: 8px 10px max(12px, env(safe-area-inset-bottom, 0px));
   display: flex;
   flex-direction: column;
   min-height: 100dvh;
+  min-height: 100svh;
   box-sizing: border-box;
   gap: 6px;
 }
@@ -923,10 +1041,49 @@ body { min-height: 100vh; padding-bottom: 40px; }
 .game-table .g-me-wrap { flex-shrink: 0; }
 .game-table .g-emoji-bar { flex-shrink: 0; }
 .game-table .g-table-head {
-  margin: 4px 0 10px;
+  margin: 4px 0 4px;
   gap: 10px;
   align-items: center;
+  padding-top: max(0px, env(safe-area-inset-top, 0px));
+  padding-left: max(0px, env(safe-area-inset-left, 0px));
+  padding-right: max(0px, env(safe-area-inset-right, 0px));
 }
+/* 게임 중 한 줄 힌트 (단계 안내) */
+.g-phase-hint {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #4a4a4e;
+  text-align: center;
+  line-height: 1.4;
+  padding: 2px 14px 6px;
+  max-width: 100%;
+  box-sizing: border-box;
+  flex-shrink: 0;
+}
+.g-phase-hint.is-my-turn { color: #5a3d00; }
+.g-phase-hint:empty { display: none; }
+.g-game-help-btn {
+  width: 32px; height: 32px; min-width: 32px;
+  border-radius: 50%;
+  border: 1.5px solid var(--line);
+  background: var(--card);
+  color: var(--primary);
+  font-size: 17px; font-weight: 900; font-family: inherit;
+  line-height: 1;
+  cursor: pointer; padding: 0;
+  flex-shrink: 0;
+  -webkit-tap-highlight-color: transparent;
+  position: relative;
+  transition: background 0.12s, transform 0.1s;
+}
+.g-game-help-btn::after {
+  content: '';
+  position: absolute;
+  inset: -6px;
+}
+.g-game-help-btn:hover { background: rgba(10, 132, 255, 0.08); }
+.g-game-help-btn:active { transform: scale(0.92); }
+.g-game-help-btn:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
 .g-build-tag {
   position: absolute;
   top: 2px;
@@ -1002,6 +1159,15 @@ body { min-height: 100vh; padding-bottom: 40px; }
   min-width: 44px; min-height: 44px;
 }
 .g-mute-btn.is-muted { opacity: .45; }
+.g-mute-btn.is-tts-on {
+  border-color: rgba(52, 199, 89, 0.55);
+  background: rgba(52, 199, 89, 0.12);
+}
+.g-mute-btn:focus-visible,
+#btnSpeed:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
 
 /* 턴 타이머 */
 .g-turn-timer {
@@ -1141,6 +1307,113 @@ body[data-ai-level="20"] .g-felt {
 .g-single-now-label { font-size: 11px; color: var(--sub); font-weight: 700; }
 .g-single-now-name { font-size: 17px; font-weight: 800; margin-top: 2px; }
 .g-single-record { font-size: 13px; font-weight: 700; color: var(--sub); }
+.g-single-ai-card {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 12px 14px;
+  margin-bottom: 14px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0,0,0,.04);
+}
+.g-single-tarot-wrap {
+  flex-shrink: 0;
+  width: 60px;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.18), 0 0 0 1.5px rgba(120,80,200,0.25);
+  background: #1a1030;
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.g-single-tarot-img {
+  width: 100%;
+  height: auto;
+  display: block;
+  object-fit: contain;
+}
+.g-single-ai-avatar-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.g-single-ai-avatar {
+  flex-shrink: 0;
+  width: 72px; height: 72px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 40px; line-height: 1;
+  border-radius: 50%;
+  background: linear-gradient(145deg, #e8eef5, #dce4ee);
+  border: 2px solid var(--line);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  transition: background .2s, border-color .2s, transform .15s;
+}
+.g-single-ai-avatar img { width: 100%; height: 100%; object-fit: contain; display: block; }
+.g-ai-photo-label {
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--sub);
+  background: var(--bg);
+  border: 1.5px solid var(--line);
+  border-radius: 999px;
+  padding: 3px 10px;
+  line-height: 1.6;
+  user-select: none;
+  white-space: nowrap;
+  transition: background .15s, color .15s, border-color .15s;
+  display: inline-block;
+}
+.g-ai-photo-label:hover { background: rgba(0,0,0,0.05); color: var(--text); border-color: var(--primary); }
+.g-ai-photo-label:active { transform: scale(0.95); }
+.g-ai-photo-clear {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--sub);
+  background: none;
+  border: 1.5px solid var(--line);
+  border-radius: 999px;
+  padding: 2px 8px;
+  cursor: pointer;
+  font-family: inherit;
+  line-height: 1.6;
+  transition: background .15s, color .15s, border-color .15s;
+}
+.g-ai-photo-clear:hover { background: rgba(229,57,53,0.07); color: #e53935; border-color: #e53935; }
+.g-single-ai-avatar[data-persona="bal"]   { background: linear-gradient(145deg, #e3eaf2, #c8d4e2); }
+.g-single-ai-avatar[data-persona="greed"] { background: linear-gradient(145deg, #fff0d0, #ffd8a8); }
+.g-single-ai-avatar[data-persona="build"]{ background: linear-gradient(145deg, #e0f0ff, #b8d9ff); }
+.g-single-ai-avatar[data-persona="shark"]{ background: linear-gradient(145deg, #dfe8f5, #9bb0d0); }
+.g-single-ai-avatar[data-persona="safe"] { background: linear-gradient(145deg, #e8f5e8, #c5e3c5); }
+.g-single-ai-avatar[data-persona="wild"] { background: linear-gradient(145deg, #f5e8ff, #e0c8ff); }
+.g-single-ai-body { flex: 1; min-width: 0; }
+.g-single-ai-pill {
+  display: inline-block;
+  font-size: 11px; font-weight: 800; letter-spacing: 0.02em;
+  color: var(--sub);
+  margin-bottom: 4px;
+}
+.g-single-ai-tier {
+  font-size: 12px; font-weight: 700; color: var(--text);
+  margin: 0 0 4px; line-height: 1.35;
+}
+.g-single-ai-hint {
+  font-size: 12px; color: var(--text);
+  margin: 0 0 6px; line-height: 1.4;
+  opacity: 0.92;
+}
+.g-single-econ {
+  font-size: 11px; line-height: 1.5;
+  color: var(--sub);
+  font-weight: 600;
+  margin: 0;
+}
 .g-single-grid {
   display: grid;
   grid-template-columns: repeat(5, 1fr);
@@ -1213,11 +1486,14 @@ body[data-ai-level="20"] .g-felt {
 .g-felt-label {
   position: absolute;
   top: 8px; left: 14px;
-  color: rgba(255,255,255,.6);
+  z-index: 1;
+  color: rgba(255, 255, 255, 0.75);
   font-size: 10.5px;
   font-weight: 800;
   letter-spacing: 2px;
   text-transform: uppercase;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+  pointer-events: none;
 }
 /* 바닥 — 녹색 판 안에 가로 그리드, 카드가 화면 폭에 맞춰 자동 축소.
    auto-fit + minmax 으로 좁은 화면에선 작은 카드 많이, 넓으면 적게 — 항상 가로 한 줄~두 줄 안에 다 들어감 */
@@ -1386,7 +1662,7 @@ body[data-ai-level="20"] .g-felt {
   overflow: hidden;
   align-self: flex-start;
 }
-.g-opp-avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.g-opp-avatar img { width: 100%; height: 100%; object-fit: contain; display: block; }
 .g-opp-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
 .g-turn-arrow {
   position: absolute;
@@ -1462,8 +1738,8 @@ body[data-ai-level="20"] .g-felt {
 /* ★ 내 정보 우하단 floating (요청 3번째 반영) */
 .g-me-meta-bottom {
   position: fixed !important;
-  right: 14px !important;
-  bottom: 14px !important;
+  right: max(14px, env(safe-area-inset-right, 0px)) !important;
+  bottom: max(14px, env(safe-area-inset-bottom, 0px)) !important;
   z-index: 8500;
   background: linear-gradient(180deg, #FFFDF5, #FFE7C2) !important;
   border: 2px solid #D4A574 !important;
@@ -1562,6 +1838,16 @@ body[data-ai-level="20"] .g-felt {
 .game-table #gameHand > .hwa-card-wrap.is-hand-prelift {
   transform: translateY(-9px) scale(1.03) !important;
 }
+/* 손패 탭 직감 — 살짝 눌림 */
+#gameHand .hwa-card-wrap:active {
+  transform: scale(0.97);
+  filter: brightness(1.04);
+  transition: transform 0.08s ease, filter 0.08s ease;
+}
+#gameHand .hwa-card-wrap.is-selected:active,
+#gameHand .hwa-card-wrap.is-hand-prelift:active {
+  transform: scale(0.99);
+}
 
 /* 기존 전통 레이아웃의 scratch 공간 리셋 */
 .game-table .g-board-wrap,
@@ -1577,6 +1863,21 @@ body[data-ai-level="20"] .g-felt {
   flex-wrap: wrap;
   margin-bottom: 8px;
 }
+@media (max-width: 420px) {
+  .g-emoji-bar {
+    flex-wrap: nowrap;
+    justify-content: flex-start;
+    padding: 6px 4px max(6px, env(safe-area-inset-bottom, 0px));
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    scroll-snap-type: x mandatory;
+  }
+  .g-emoji-bar::-webkit-scrollbar { display: none; }
+}
+.game-table .g-emoji-bar {
+  margin-bottom: max(4px, env(safe-area-inset-bottom, 0px));
+}
 .g-emoji-btn {
   width: 44px;                  /* iOS/Android 권장 최소 터치 타겟 */
   height: 44px;
@@ -1589,12 +1890,18 @@ body[data-ai-level="20"] .g-felt {
   cursor: pointer;
   padding: 0;
   line-height: 1;
+  flex-shrink: 0;
+  scroll-snap-align: center;
   -webkit-tap-highlight-color: transparent;
   transition: transform .15s, background .15s;
 }
 .g-emoji-btn:hover { background: var(--bg); }
 .g-emoji-btn:active { transform: scale(.88); }
 .g-emoji-btn.is-sent { transform: scale(1.3); background: #FFE5B4; }
+.g-emoji-btn:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
 
 .g-emoji-bubble {
   position: absolute;
@@ -1696,8 +2003,8 @@ body[data-ai-level="20"] .g-felt {
 /* 내 차례 — 화면 좌하단 floating 표시 (애니메이션은 여기만, 손패 위쪽) */
 .g-my-turn-float {
   position: fixed;
-  left: 14px;
-  bottom: 110px;
+  left: max(14px, env(safe-area-inset-left, 0px));
+  bottom: calc(110px + env(safe-area-inset-bottom, 0px));
   z-index: 9000;
   background: linear-gradient(135deg, #FFD84D, #F5B342);
   color: #5A3D00;
@@ -1831,7 +2138,7 @@ body[data-ai-level="20"] .g-felt {
 /* ===== 액션 토스트 (상단 고정) ===== */
 .g-toast {
   position: fixed;
-  top: 14px;
+  top: max(10px, env(safe-area-inset-top, 0px));
   left: 50%;
   transform: translateX(-50%) translateY(-24px);
   background: rgba(20, 30, 50, .92);
@@ -1841,15 +2148,28 @@ body[data-ai-level="20"] .g-felt {
   font-size: 14px;
   font-weight: 700;
   letter-spacing: -0.2px;
+  line-height: 1.35;
   box-shadow: 0 6px 20px rgba(0,0,0,.3);
   z-index: 9999;
   opacity: 0;
   pointer-events: none;
   transition: opacity .25s, transform .35s cubic-bezier(.22,1.4,.4,1.1);
-  max-width: 90%;
+  max-width: min(92vw, 420px);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+.g-toast.is-long {
+  white-space: normal;
+  text-align: center;
+  border-radius: 14px;
+  padding: 12px 16px;
+  max-width: min(94vw, 440px);
+}
+.g-toast.is-warn {
+  background: linear-gradient(180deg, rgba(70, 35, 20, 0.96) 0%, rgba(50, 22, 12, 0.98) 100%);
+  border: 1px solid rgba(255, 200, 120, 0.45);
+  box-shadow: 0 6px 22px rgba(180, 60, 20, 0.35);
 }
 .g-toast.show {
   opacity: 1;
@@ -1913,6 +2233,10 @@ body[data-ai-level="20"] .g-felt {
 @keyframes matchPulse {
   from { transform: scale(1); }
   to   { transform: scale(1.08); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .g-card-event-label.is-match { animation: none !important; }
+  .g-turn-timer.is-warning { animation: none !important; }
 }
 .g-card-event.is-flip { background: rgba(101, 67, 33, 0.92); box-shadow: 0 12px 40px rgba(0,0,0,0.55), 0 0 80px rgba(255,180,80,0.3); }
 .g-card-event.is-match { box-shadow: 0 12px 40px rgba(16,185,129,0.4), 0 0 100px rgba(52,211,153,0.5); }
@@ -2069,6 +2393,13 @@ body[data-ai-level="20"] .g-felt {
   margin: 0 0 16px;
   font-weight: 700;
   letter-spacing: 1px;
+}
+.g-end-kbd-hint {
+  font-size: 12px;
+  color: #888;
+  margin: -4px 0 16px;
+  line-height: 1.4;
+  font-weight: 600;
 }
 .g-end-bak {
   display: inline-block;
@@ -2286,6 +2617,9 @@ body[data-ai-level="20"] .g-felt {
 .g-log li:last-child { border-bottom: none; color: var(--text); font-weight: 600; }
 
 /* 고/스톱 다이얼로그 */
+#helpSheet.g-dlg-backdrop {
+  z-index: 11020;
+}
 .g-dlg-backdrop {
   position: fixed;
   top: 0; left: 0; right: 0; bottom: 0;
@@ -2743,4 +3077,483 @@ body[data-ai-level="20"] .g-felt {
   .g-bomb-fab-icon { font-size: 20px; }
   .g-bomb-fab-text { font-size: 12px; }
   .g-bomb-fab-month { font-size: 10px; }
+}
+
+/* ── 대전(멀티) 로비·대기방 개선 ── */
+.g-lobby-conn {
+  margin: 0 14px 10px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 700;
+  text-align: center;
+  background: rgba(10, 132, 255, 0.10);
+  border: 1px solid rgba(10, 132, 255, 0.25);
+  color: var(--text);
+}
+.g-lobby-conn.is-bad {
+  background: rgba(255, 59, 48, 0.10);
+  border-color: rgba(255, 59, 48, 0.35);
+  color: #B91C1C;
+}
+.g-lobby-conn.is-ok {
+  background: rgba(52, 199, 89, 0.12);
+  border-color: rgba(52, 199, 89, 0.35);
+  color: #166534;
+}
+.g-room-h2-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+.g-room-h2-row h2 { margin: 0; flex: 1; }
+.g-room-refresh {
+  width: 40px; height: 40px;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  background: var(--card);
+  font-size: 18px;
+  cursor: pointer;
+  line-height: 1;
+  flex-shrink: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+.g-room-refresh:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+.g-room-refresh.is-spin { animation: gRefreshSpin 0.55s ease; }
+@keyframes gRefreshSpin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+.g-room-list-wrap {
+  max-height: min(52vh, 420px);
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  margin: 0 -4px;
+  padding: 0 4px 4px;
+}
+.g-room-list li:focus-visible {
+  outline: 3px solid var(--primary);
+  outline-offset: 2px;
+}
+.g-room-list li.is-me-in-room {
+  border-color: rgba(52, 199, 89, 0.45);
+  background: linear-gradient(180deg, rgba(52, 199, 89, 0.07), var(--card));
+}
+.g-rl-left { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.g-rl-line2 {
+  font-size: 12px; font-weight: 700; color: var(--sub);
+  display: flex; flex-wrap: wrap; align-items: center; gap: 4px;
+}
+.g-rl-pill { background: rgba(10, 132, 255, 0.08); padding: 1px 7px; border-radius: 6px; color: var(--text); }
+.g-rl-dot { opacity: 0.45; user-select: none; }
+.g-rl-host { font-weight: 800; color: var(--text); max-width: 9em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.g-rl-right { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; text-align: right; min-width: 0; flex-shrink: 0; }
+.g-rl-joined {
+  font-size: 10px; font-weight: 800; color: #34C759;
+  background: rgba(52, 199, 89, 0.12);
+  padding: 2px 6px;
+  border-radius: 6px;
+}
+.g-room-code-label { font-size: 12px; font-weight: 700; color: var(--sub); margin: 0 0 4px; }
+.g-room-invite-hint { margin-top: 14px; }
+.g-invite-url-box { margin: 4px 0 10px; }
+.g-invite-url {
+  display: block; width: 100%; font-size: 11px; line-height: 1.45; word-break: break-all;
+  padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line);
+  background: var(--bg); color: var(--text); cursor: pointer; box-sizing: border-box; font-family: inherit;
+}
+.g-invite-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+.g-invite-actions .g-primary { width: auto; flex: 1; min-width: 128px; }
+@media (prefers-reduced-motion: reduce) {
+  .g-room-refresh.is-spin { animation: none; }
+}
+
+/* ── 상대 초상화 영역 ── */
+.g-opp-portrait {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 6px;
+  flex-shrink: 0;
+}
+.g-opp-portrait-img {
+  width: 72px; height: 72px;
+  border-radius: 50%;
+  overflow: hidden;
+  background: rgba(0,0,0,0.06);
+  border: 2.5px solid rgba(0,0,0,0.12);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 40px;
+  flex-shrink: 0;
+  transition: border-color .2s, box-shadow .2s;
+}
+.g-opp-portrait-img img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.g-opp.is-turn .g-opp-portrait-img {
+  border-color: #0A84FF;
+  box-shadow: 0 0 0 3px rgba(10,132,255,0.25), 0 4px 14px rgba(10,132,255,0.2);
+}
+.g-opp-wrap-2 .g-opp-portrait,
+.g-opp-wrap-3 .g-opp-portrait { display: none; }
+.g-opp-wrap-1 .g-opp-avatar { display: none; }
+
+.game-table .g-opp-wrap-1 .g-opp {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+.game-table .g-opp-wrap-1 .g-opp-portrait {
+  margin-bottom: 0;
+  flex-shrink: 0;
+}
+.game-table .g-opp-portrait-img {
+  width: 40px; height: 40px;
+  font-size: 22px;
+  border-width: 2px;
+}
+.game-table .g-opp-wrap-1 .g-opp-captured-peek { display: none; }
+.game-table .g-opp-wrap-2 .g-opp-portrait,
+.game-table .g-opp-wrap-3 .g-opp-portrait { display: none; }
+
+/* ── 매칭 바닥 카드 pulse 효과 ── */
+.is-match-target {
+  outline: 3px solid rgba(52,211,153,0.85);
+  outline-offset: 2px;
+  animation: matchTargetPulse 0.55s ease-in-out infinite;
+}
+@keyframes matchTargetPulse {
+  0%, 100% { outline-color: rgba(52,211,153,0.85); outline-width: 3px; }
+  50% { outline-color: rgba(255,210,50,0.95); outline-width: 5px; }
+}
+
+/* ==========================================================================
+   R27 로비 탭 + 타로 운세 (v108)
+   ========================================================================== */
+
+/* ── 로비 탭 바 ── */
+.g-lobby-tabs {
+  display: flex;
+  border-bottom: 2px solid var(--line);
+  margin: 0 -16px 16px;
+  padding: 0 16px;
+}
+.g-lobby-tab {
+  flex: 1;
+  padding: 10px 8px;
+  background: none;
+  border: none;
+  border-bottom: 3px solid transparent;
+  margin-bottom: -2px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--sub);
+  cursor: pointer;
+  font-family: inherit;
+  transition: color .15s, border-color .15s;
+  -webkit-tap-highlight-color: transparent;
+}
+.g-lobby-tab.is-active {
+  color: var(--primary);
+  border-bottom-color: var(--primary);
+}
+.g-lobby-tab:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+/* ── 타로 섹션 ── */
+.tarot-section { padding: 16px 18px; }
+
+.tarot-pick-title {
+  font-size: 22px;
+  font-weight: 800;
+  text-align: center;
+  color: #7c3aed;
+  margin: 0 0 6px;
+}
+.tarot-pick-sub {
+  font-size: 13px;
+  color: var(--sub);
+  text-align: center;
+  margin: 0 0 20px;
+}
+
+.tarot-spread-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.tarot-spread-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 14px 10px;
+  border: 1.5px solid var(--line);
+  border-radius: 12px;
+  background: var(--card);
+  cursor: pointer;
+  font-family: inherit;
+  transition: border-color .15s, box-shadow .15s, transform .12s;
+  -webkit-tap-highlight-color: transparent;
+  gap: 4px;
+}
+.tarot-spread-btn:hover {
+  border-color: #9b59b6;
+  box-shadow: 0 0 0 3px rgba(155,89,182,.14);
+}
+.tarot-spread-btn:active { transform: scale(.96); }
+.tarot-spread-btn:focus-visible {
+  outline: 2px solid #7c3aed;
+  outline-offset: 2px;
+}
+.tarot-spread-emoji { font-size: 26px; line-height: 1; }
+.tarot-spread-name  { font-size: 13px; font-weight: 700; color: var(--text); }
+.tarot-spread-count { font-size: 11px; color: var(--sub); }
+
+/* ── 팬 영역 ── */
+.tarot-fan-area {
+  position: relative;
+  height: 100px;
+  display: flex;
+  justify-content: center;
+  margin: 20px 0;
+}
+.tarot-fan-card {
+  position: absolute;
+  width: 48px;
+  height: 80px;
+  border-radius: 6px;
+  background: linear-gradient(160deg, #2d1b4e 0%, #1a0533 100%);
+  border: 1px solid rgba(200,150,255,.3);
+  box-shadow: 0 2px 8px rgba(0,0,0,.35);
+  transform: rotate(calc((var(--i) - 4.5) * 12deg)) translateY(-8px);
+  transform-origin: bottom center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.tarot-fan-card::after {
+  content: '✦';
+  color: rgba(200,150,255,.4);
+  font-size: 18px;
+}
+
+@keyframes tarotShuffle {
+  0%   { transform: rotate(calc((var(--i) - 4.5) * 12deg)) translateY(-8px); }
+  25%  { transform: rotate(calc((var(--i) - 4.5) * 12deg + 15deg)) translateY(-22px) scale(1.05); }
+  50%  { transform: rotate(calc((var(--i) - 4.5) * 12deg - 8deg)) translateY(-14px); }
+  75%  { transform: rotate(calc((var(--i) - 4.5) * 12deg + 5deg)) translateY(-18px) scale(1.02); }
+  100% { transform: rotate(calc((var(--i) - 4.5) * 12deg)) translateY(-8px); }
+}
+.tarot-fan-card.shuffling {
+  animation: tarotShuffle 0.8s cubic-bezier(.4,0,.2,1) both;
+}
+
+/* ── draw/reveal 헤더 ── */
+.tarot-draw-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+.tarot-draw-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+}
+.tarot-back-btn {
+  font-size: 12px !important;
+  padding: 6px 10px !important;
+  color: var(--sub);
+}
+
+/* ── 카드 줄 ── */
+.tarot-cards-row {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin: 12px 0;
+}
+.tarot-slot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+.tarot-pos-label {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--sub);
+  text-transform: uppercase;
+  letter-spacing: .05em;
+}
+
+/* ── 카드 3D 뒤집기 ── */
+.tarot-card {
+  width: 72px;
+  height: 120px;
+  perspective: 800px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.tarot-card.is-revealed { cursor: default; pointer-events: none; }
+.tarot-card-inner {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  transform-style: preserve-3d;
+  transition: transform 0.65s cubic-bezier(.4,0,.2,1);
+}
+.tarot-card.is-revealed .tarot-card-inner {
+  transform: rotateY(180deg);
+}
+.tarot-card-front,
+.tarot-card-back {
+  position: absolute;
+  inset: 0;
+  border-radius: 8px;
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+}
+
+/* 뒷면 */
+.tarot-card-back {
+  background: linear-gradient(160deg, #1a0533 0%, #2d1b4e 100%);
+  border: 1.5px solid rgba(200,150,255,.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  color: rgba(200,150,255,.5);
+}
+.tarot-card-back::before { content: '✦'; }
+
+/* 앞면 */
+.tarot-card-front {
+  transform: rotateY(180deg);
+  background: var(--card);
+  border: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  overflow: hidden;
+}
+.tarot-card-img-wrap {
+  flex: 1;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+.tarot-card-img-wrap img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.tarot-card-img-wrap.is-reversed img {
+  transform: rotate(180deg);
+}
+.tarot-card-fallback {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  font-weight: 900;
+  opacity: .7;
+  color: #fff;
+}
+.tarot-card-name {
+  font-size: 8px;
+  font-weight: 700;
+  padding: 3px 2px;
+  text-align: center;
+  line-height: 1.2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  width: 100%;
+  color: var(--text);
+}
+.tarot-rev-badge {
+  font-size: 7px;
+  font-weight: 900;
+  color: #e53935;
+  background: rgba(229,57,53,.1);
+  border-radius: 3px;
+  padding: 1px 2px;
+}
+
+/* ── 힌트·해석 ── */
+.tarot-card-hint {
+  font-size: 9px;
+  color: var(--sub);
+  text-align: center;
+  max-width: 72px;
+  line-height: 1.3;
+}
+.tarot-card-reading {
+  font-size: 10.5px;
+  line-height: 1.5;
+  color: var(--text);
+  max-width: 88px;
+  text-align: center;
+  margin: 0;
+  animation: tarotFadeIn .4s ease-out both;
+}
+@keyframes tarotFadeIn {
+  0%   { opacity: 0; transform: translateY(4px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+/* ── 요약 & 액션 ── */
+.tarot-summary {
+  background: linear-gradient(135deg, rgba(124,58,237,.07), rgba(41,182,246,.05));
+  border: 1.5px solid rgba(124,58,237,.2);
+  border-radius: 12px;
+  padding: 14px 16px;
+  font-size: 13px;
+  line-height: 1.6;
+  text-align: center;
+  margin: 8px 0 12px;
+  color: var(--text);
+  animation: tarotFadeIn .4s ease-out both;
+}
+.tarot-result-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+}
+.tarot-result-actions .g-primary {
+  flex: 1;
+  max-width: 160px;
+}
+
+/* ── 힌트 줄 (reveal 단계) ── */
+.tarot-reveal-hint {
+  font-size: 11px;
+  color: var(--sub);
+  text-align: center;
+  padding: 6px 0;
+  margin: 0;
+}
+
+/* ── 뽑기 버튼 ── */
+.tarot-draw-btn { width: 100%; margin-top: 8px; }
+
+/* ── prefers-reduced-motion ── */
+@media (prefers-reduced-motion: reduce) {
+  .tarot-fan-card.shuffling       { animation: none !important; }
+  .tarot-card-inner               { transition: none !important; }
+  .tarot-card.is-revealed .tarot-card-inner { transform: rotateY(180deg) !important; }
+  .tarot-card-reading             { animation: none !important; opacity: 1; }
+  .tarot-summary                  { animation: none !important; opacity: 1; }
 }

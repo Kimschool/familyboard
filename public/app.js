@@ -90,6 +90,7 @@ const iconLabel = (code) => (ICON_MAP[code] || ICON_MAP.star).label;
 // ---------- 유틸 ----------
 const $ = (id) => document.getElementById(id);
 const fmt = new Intl.NumberFormat('ko-KR');
+const escHtml = (s) => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 /** 전화번호 표시용 — 빈 값·문자열 "null" 제거 */
 function displayPhone(p) {
   if (p == null) return '';
@@ -129,6 +130,27 @@ function showOnly(id) {
 let ME = null;
 let FAMILY_ALIAS = localStorage.getItem('fb_alias') || '';
 let PICKED = null;
+
+// ---------- 버전 / 업데이트 내역 ----------
+const APP_VERSION = '1.01';
+const CHANGELOG = [
+  {
+    v: '1.01', date: '2026-05-04',
+    items: [
+      '🎯 목표 카드: 연간 / 분기별 / 이번달 목표 탭 추가',
+      '🔮 오늘의 운세: 패턴 21가지로 확대, 대길 반짝 테두리 효과',
+      '📅 탭 구성 개선: 운세가 오늘 탭으로 이동',
+    ],
+  },
+  {
+    v: '1.00', date: '2026-04-30',
+    items: [
+      '🚀 가족보드 첫 출시',
+      '📌 공지 · 오늘의 질문 · 큐레이션 · 무드 · 날씨 · 팁',
+      '🎯 목표 · 🗓 일정 · 📸 갤러리 · 💬 채팅 · 🎮 고스톱',
+    ],
+  },
+];
 
 // ---------- 부팅 ----------
 async function boot() {
@@ -335,6 +357,8 @@ function enterApp() {
   loadPoll();
   loadEvents();
   loadGallery();
+  loadGoals();
+  loadTarot();
   refreshChatUnread();
 
   // 관리자 UI — 설정 화면으로 이동 (계정 카드의 '가족 관리' 버튼으로 열림)
@@ -350,10 +374,7 @@ function enterApp() {
     }
   } catch (e) { console.warn('[admin ui]', e); }
 
-  applyCardOrder();
-
-  // 카드 순서 적용 이후에 계정 카드를 최상단으로 이동하고 아코디언 마운트
-  // (applyCardOrder 가 account 카드를 default 순서 맨 뒤로 옮겨버리는 걸 방지)
+  // 계정 카드를 최상단으로 이동하고 아코디언 마운트
   mountAccountAsAccordion();
 
   // 탭 시스템 마운트 (계정 아코디언 뒤에 탭 바 삽입)
@@ -2528,8 +2549,10 @@ function relativeTime(dateStr) {
   if (diffSec < 60)      return '방금';
   if (diffSec < 3600)    return `${Math.floor(diffSec / 60)}분 전`;
   if (diffSec < 86400)   return `${Math.floor(diffSec / 3600)}시간 전`;
-  if (diffSec < 604800)  return `${Math.floor(diffSec / 86400)}일 전`;
-  return `${d.getMonth() + 1}월 ${d.getDate()}일`;
+  const year = d.getFullYear(), nowYear = now.getFullYear();
+  const mo = d.getMonth() + 1, day = d.getDate();
+  if (year === nowYear) return `${mo}월 ${day}일`;
+  return `${year}년 ${mo}월 ${day}일`;
 }
 
 let FAMILY_CACHE = [];
@@ -2783,18 +2806,22 @@ function closeProfileSheet() {
 }
 
 function spawnConfetti() {
-  const emojis = ['🎉','🎊','🎂','🎈','✨','💖','🌸'];
-  const count = 30;
+  const emojis = ['🎉','🎊','🎂','🎈','✨','💖','🌸','🌟','💝','🥳','🌺','🎁','🪄','💫'];
+  const count = 90;
   for (let i = 0; i < count; i++) {
     const d = document.createElement('div');
     d.className = 'confetti';
     d.textContent = emojis[Math.floor(Math.random() * emojis.length)];
     d.style.left = Math.random() * 100 + 'vw';
-    d.style.animationDelay = (Math.random() * 1.2) + 's';
-    d.style.animationDuration = (3 + Math.random() * 2) + 's';
-    d.style.fontSize = (18 + Math.random() * 16) + 'px';
+    // 0~6초 딜레이: 긴 시간에 걸쳐 골고루 분산
+    d.style.animationDelay = (Math.random() * 6) + 's';
+    const dur = (3.5 + Math.random() * 3).toFixed(2) + 's';
+    d.style.animationDuration = dur;
+    d.style.fontSize = (16 + Math.random() * 20) + 'px';
+    // 좌우 드리프트
+    d.style.setProperty('--drift', (Math.random() * 120 - 60) + 'px');
     document.body.appendChild(d);
-    setTimeout(() => d.remove(), 6000);
+    setTimeout(() => d.remove(), 11000);
   }
 }
 
@@ -2814,30 +2841,26 @@ async function loadBirthday() {
     }
     renderHeroSummary();
     const el = $('birthdayBanner');
-    el.classList.remove('today');
+    el.classList.add('hidden');
+    el.classList.remove('is-today');
     TODAY_BIRTHDAY_USER = null;
     if (r.today) {
       const isMe = ME && r.today.id === ME.id;
       TODAY_BIRTHDAY_USER = r.today;
-      // 세션 중 1회만 폭죽
       if (!sessionStorage.getItem('fb_confetti_' + (r.today.id || 'x'))) {
         spawnConfetti();
         sessionStorage.setItem('fb_confetti_' + (r.today.id || 'x'), '1');
       }
-      $('bdEmoji').textContent = isMe ? '🎉' : iconEmoji(r.today.icon);
+      $('bdHeroAv').innerHTML = inlineAvatarHtml(
+        { name: r.today.display_name, icon: r.today.icon, photoUrl: r.today.photoUrl }, 72
+      );
       $('bdTitle').textContent = isMe
-        ? `${ME.displayName}님, 생일 축하드려요!`
-        : `오늘은 ${r.today.display_name}님 생일이에요`;
+        ? `🎉 ${ME.displayName}님, 생일 축하드려요!`
+        : `🎂 오늘은 ${r.today.display_name}님 생일이에요!`;
       $('bdSub').textContent = isMe
-        ? '가족들이 남긴 축하 메시지를 확인해 보세요 🎂'
+        ? '가족들이 남긴 축하 메시지를 확인해 보세요'
         : '탭해서 축하 메시지를 남겨보세요 🌷';
-      el.classList.add('today');
-      el.classList.remove('hidden');
-    } else if (r.upcoming?.length) {
-      const u = r.upcoming[0];
-      $('bdEmoji').textContent = iconEmoji(u.icon);
-      $('bdTitle').textContent = `${u.daysLeft}일 뒤 ${u.display_name}님 생일`;
-      $('bdSub').textContent = `${u.birth_month}월 ${u.birth_day}일${u.is_lunar ? ' (음력)' : ''}`;
+      el.classList.add('is-today');
       el.classList.remove('hidden');
     }
   } catch {}
@@ -3068,7 +3091,7 @@ async function loadWeatherAndAir() {
   if (a) {
     if (a.pm10 != null) { $('aPm10').textContent = Math.round(a.pm10); $('aPm10L').className = 'lvl ' + a.pm10Level; }
     if (a.pm25 != null) { $('aPm25').textContent = Math.round(a.pm25); $('aPm25L').className = 'lvl ' + a.pm25Level; }
-    $('aPol').textContent = a.pollen != null ? Math.round(a.pollen) : '-';
+    $('aPol').textContent = { good: '적음', normal: '보통', bad: '많음', worst: '매우 많음' }[a.pollenLevel] || (a.pollen != null ? Math.round(a.pollen) : '-');
     $('aPolL').className = 'lvl ' + (a.pollenLevel || 'unknown');
     // 꽃가루 종별 상세 (Google Pollen API) 가 있으면 title 에 힌트 (호버 시 나무/풀 구체 정보)
     const polChip = $('aPol')?.closest('.chip');
@@ -3841,19 +3864,6 @@ const TODAY_ACTIVITIES = [
   '시장 한 바퀴',
   '맛있는 간식 준비',
 ];
-const LUCKY_COLORS = [
-  { name: '파랑',   hex: '#0A84FF' },
-  { name: '초록',   hex: '#34C759' },
-  { name: '빨강',   hex: '#FF3B30' },
-  { name: '노랑',   hex: '#FFCC00' },
-  { name: '분홍',   hex: '#FF69B4' },
-  { name: '보라',   hex: '#AF52DE' },
-  { name: '주황',   hex: '#FF9500' },
-  { name: '하늘색', hex: '#64D2FF' },
-  { name: '남색',   hex: '#1D3557' },
-  { name: '금색',   hex: '#D4AF37' },
-];
-const LUCKY_DIR = ['동쪽','동남쪽','남쪽','서남쪽','서쪽','서북쪽','북쪽','동북쪽'];
 function dayOfYearClient(d = new Date()) {
   return Math.floor((d - new Date(d.getFullYear(), 0, 0)) / 86400000);
 }
@@ -3874,20 +3884,11 @@ async function loadZodiac() {
     const doy = dayOfYearClient();
     for (const z of list) {
       const seed = doy + (z.year || z.name?.charCodeAt(0) || 0);
-      const color = LUCKY_COLORS[seed % LUCKY_COLORS.length];
-      const dir   = LUCKY_DIR[seed % LUCKY_DIR.length];
-      const num   = (seed % 9) + 1;
+      const activity = TODAY_ACTIVITIES[seed % TODAY_ACTIVITIES.length];
       const li = document.createElement('li');
       if (z.isPet) li.classList.add('is-pet');
-      const activity = TODAY_ACTIVITIES[seed % TODAY_ACTIVITIES.length];
-      // 펫은 행운 chip / 추천 활동 생략 — 펫 운세 한 줄로 깔끔하게
-      const luckyHtml = z.isPet ? '' : `
-          <div class="zodiac-activity">🌿 오늘 추천 <span class="activity-txt"></span></div>
-          <div class="zodiac-lucky">
-            <span class="lucky-chip"><span class="lucky-dot" style="background:${color.hex}"></span>${color.name}</span>
-            <span class="lucky-chip">🧭 ${dir}</span>
-            <span class="lucky-chip">🔢 ${num}</span>
-          </div>`;
+      const grade = z.grade || '평';
+      const actHtml = z.isPet ? '' : `<div class="zodiac-activity">🌿 오늘 추천 <span class="activity-txt"></span></div>`;
       li.innerHTML = `
         <span class="zodiac-emoji">${inlineAvatarHtml({ name: z.name, icon: z.icon, photoUrl: z.photoUrl }, 44)}</span>
         <div class="zodiac-body">
@@ -3896,13 +3897,14 @@ async function loadZodiac() {
             <span class="zodiac-tag"></span>
           </div>
           <div class="zodiac-fortune"></div>
-          ${luckyHtml}
+          ${actHtml}
         </div>`;
       li.querySelector('.zodiac-name').textContent = z.name;
       li.querySelector('.zodiac-tag').textContent = z.isPet ? '🐾 우리 가족 펫' : `${z.zodiac}띠`;
       li.querySelector('.zodiac-fortune').textContent = z.fortune;
       const aTxt = li.querySelector('.activity-txt');
       if (aTxt) aTxt.textContent = activity;
+      if (grade === '대길') li.classList.add('zodiac-lucky-glow');
       ul.appendChild(li);
     }
   } catch {}
@@ -3918,13 +3920,13 @@ $('settingsBack').addEventListener('click', () => { showOnly('app'); });
 // ==========================================================
 const TABS = [
   { id: 'family', emoji: '👨‍👩‍👧', label: '가족',
-    cards: ['journey','nudge','moodweek','family','upcoming','events','calendar','gallery','timeline','stickers','weekly','zodiac','poll'] },
+    cards: ['journey','nudge','moodweek','family','upcoming','events','calendar','gallery','timeline','stickers','goals','poll'] },
   { id: 'today',  emoji: '🏠', label: '오늘',
-    cards: ['notice','mood','question','reveal','birthday','quote','weather','tips'] },
+    cards: ['notice','mood','question','reveal','quote','weather','tips','zodiac'] },
   { id: 'chat',   emoji: '💬', label: '채팅',
     cards: ['chat'] },
   { id: 'tools',  emoji: '🧰', label: '도구',
-    cards: ['meds','sos','games','memo','fx','calc'] },
+    cards: ['meds','sos','games','tarot','memo','fx','calc'] },
 ];
 const CARD_TO_TAB = (() => {
   const m = new Map();
@@ -4053,205 +4055,6 @@ function initTabs() {
   initTabSwipe();
 }
 
-// ---------- 카드 순서 편집 ----------
-// 2026-04 재배치: 개선안 Phase 1 — 핵심(마음·질문·큐레이션) 상단, 부가 기능 하단
-const DEFAULT_CARD_ORDER = [
-  // 가족 여정 + 응원 넛지 + 주간 무드 (가족 탭 최상단)
-  'journey','nudge','moodweek',
-  // 0) 긴급·공지 (최우선)
-  'notice',
-  // 1) 🌟 오늘 우리 가족 마음 — 핵심 (최상단)
-  'mood',
-  // 2) 💬 오늘의 가족 질문 — 핵심
-  'question',
-  // 3) ✨ 오늘의 큐레이션 (어제 답변 공개 = 시간 큐레이션 씨앗)
-  'reveal',
-  // 4) 🎂 생일/가족 이벤트 배너
-  'birthday',
-  // 5) 👨‍👩‍👧‍👦 우리 가족
-  'family',
-  // 6) 📅 다가오는 일정·기념일 (보조)
-  'upcoming','events','calendar',
-  // 7) 📸 오늘의 추억 — 가족 사진·활동 (보조)
-  'gallery','timeline',
-  // 8) 💌 오늘의 응원
-  'stickers',
-  // 9) 📊 주간 가족 요약
-  'weekly','quote',
-  // 10) 💊 건강·약 복용
-  'meds',
-  // 11) 🗳️ 투표·상호작용
-  'poll',
-  // 12) 일상 정보 (날씨·팁·운세)
-  'weather','tips','zodiac',
-  // 13) 📞 빠른 연락처
-  'sos',
-  // 14) 부가 기능 — 개선안 "더보기/숨김" 권장 영역
-  //     (사용자는 🧩 편집에서 숨길 수 있음)
-  'chat','games','memo','fx','calc',
-  // 15) 계정 (항상 마지막)
-  'account'
-];
-
-// 2026-04 재배치 마이그레이션
-// 이전 기본값과 일치하거나 유사한 저장(= 사용자가 직접 순서 바꾼 적 없음)은 새 기본값으로 교체.
-// 실제로 ↑↓ 버튼으로 재배치한 사용자는 그대로 유지.
-const CARD_ORDER_VERSION = 2;
-const PREV_DEFAULT_CARD_ORDER = [
-  'notice','question','reveal','upcoming','family','mood','sos','chat','birthday',
-  'weather','tips','gallery','games','zodiac','fx','calc','memo','account'
-];
-(function migrateCardOrder(){
-  try {
-    const v = Number(localStorage.getItem('fb_card_order_v') || '1');
-    if (v >= CARD_ORDER_VERSION) return;
-    const rawSaved = localStorage.getItem('fb_card_order');
-    if (rawSaved) {
-      const saved = JSON.parse(rawSaved);
-      if (Array.isArray(saved)) {
-        // saved 가 이전 기본 순서의 부분집합/동일이면 (= 직접 재배치 안 함) 초기화
-        const savedCore = saved.filter((k) => PREV_DEFAULT_CARD_ORDER.includes(k));
-        const sameAsPrev = savedCore.length === PREV_DEFAULT_CARD_ORDER.length
-          && savedCore.every((k, i) => k === PREV_DEFAULT_CARD_ORDER[i]);
-        if (sameAsPrev) localStorage.removeItem('fb_card_order');
-      }
-    }
-    localStorage.setItem('fb_card_order_v', String(CARD_ORDER_VERSION));
-  } catch {}
-})();
-
-function loadCardOrder() {
-  try {
-    const saved = JSON.parse(localStorage.getItem('fb_card_order') || 'null');
-    if (!Array.isArray(saved)) return DEFAULT_CARD_ORDER.slice();
-    // 누락된 신규 카드는 기본 순서상 앞 이웃 뒤에 끼워 넣음 (뒤에 뭉쳐 붙지 않게)
-    for (let i = 0; i < DEFAULT_CARD_ORDER.length; i++) {
-      const k = DEFAULT_CARD_ORDER[i];
-      if (saved.includes(k)) continue;
-      let insertAt = saved.length;
-      for (let j = i - 1; j >= 0; j--) {
-        const prevIdx = saved.indexOf(DEFAULT_CARD_ORDER[j]);
-        if (prevIdx >= 0) { insertAt = prevIdx + 1; break; }
-      }
-      saved.splice(insertAt, 0, k);
-    }
-    return saved;
-  } catch { return DEFAULT_CARD_ORDER.slice(); }
-}
-function saveCardOrder(order) { localStorage.setItem('fb_card_order', JSON.stringify(order)); }
-
-function applyCardOrder() {
-  const app = $('app');
-  const order = loadCardOrder();
-  const cards = new Map();
-  app.querySelectorAll('[data-card-id]').forEach((el) => cards.set(el.dataset.cardId, el));
-  // hero 바로 뒤부터 순서대로 이동
-  const hero = app.querySelector('.hero');
-  let anchor = hero;
-  for (const id of order) {
-    const el = cards.get(id);
-    if (!el) continue;
-    anchor.after(el);
-    anchor = el;
-  }
-}
-
-// 카드 숨김 목록
-function loadHiddenCards() {
-  try { return new Set(JSON.parse(localStorage.getItem('fb_hidden_cards') || '[]')); }
-  catch { return new Set(); }
-}
-function saveHiddenCards(s) { localStorage.setItem('fb_hidden_cards', JSON.stringify([...s])); }
-function applyHiddenCards() {
-  const hidden = loadHiddenCards();
-  document.querySelectorAll('#app [data-card-id]').forEach((el) => {
-    if (el.dataset.cardId === 'account') return;
-    if (hidden.has(el.dataset.cardId)) el.classList.add('user-hidden');
-    else el.classList.remove('user-hidden');
-  });
-}
-applyHiddenCards();
-
-let REORDER_MODE = false;
-function setReorderMode(on) {
-  REORDER_MODE = on;
-  document.body.classList.toggle('reorder-mode', on);
-  // 편집 모드에선 탭 필터링 해제하여 모든 카드를 정렬 가능하게.
-  // 종료 시 마지막 활성 탭을 복원.
-  if (on) {
-    document.body.removeAttribute('data-active-tab');
-  } else if (typeof getActiveTab === 'function') {
-    document.body.setAttribute('data-active-tab', getActiveTab());
-  }
-  $('reorderToggleBtn').textContent = on ? '✅ 저장하고 끝내기' : '🧩 카드 순서·표시 편집';
-
-  // 편집 모드: 숨긴 카드를 다시 보여서 선택할 수 있게
-  document.querySelectorAll('#app [data-card-id]').forEach((el) => {
-    el.querySelector('.reorder-actions')?.remove();
-    if (!on) {
-      applyHiddenCards();
-      return;
-    }
-    el.classList.remove('user-hidden'); // 편집 중엔 모두 보이게
-    el.classList.add('reorder-target');
-    if (el.dataset.cardId === 'account') return;
-    const hidden = loadHiddenCards();
-    const isHidden = hidden.has(el.dataset.cardId);
-    const box = document.createElement('div');
-    box.className = 'reorder-actions';
-    box.innerHTML = `
-      <button class="reo-btn" data-dir="up" title="위로">↑</button>
-      <button class="reo-btn" data-dir="down" title="아래로">↓</button>
-      <button class="reo-btn reo-toggle${isHidden ? ' off' : ''}" data-dir="toggle" title="${isHidden ? '보이기' : '숨기기'}">${isHidden ? '🙈' : '👁'}</button>`;
-    el.appendChild(box);
-    box.addEventListener('click', (e) => {
-      const b = e.target.closest('.reo-btn'); if (!b) return;
-      if (b.dataset.dir === 'toggle') toggleCardHidden(el);
-      else moveCard(el, b.dataset.dir);
-    });
-  });
-  if (!on) {
-    // 편집 끝, reorder 클래스 정리
-    document.querySelectorAll('#app .reorder-target').forEach((el) => el.classList.remove('reorder-target'));
-  }
-}
-
-function toggleCardHidden(el) {
-  const hidden = loadHiddenCards();
-  const id = el.dataset.cardId;
-  if (hidden.has(id)) hidden.delete(id); else hidden.add(id);
-  saveHiddenCards(hidden);
-  // 편집 모드에선 계속 보이되 버튼 상태만 업데이트
-  const btn = el.querySelector('.reo-toggle');
-  if (btn) {
-    const isHidden = hidden.has(id);
-    btn.classList.toggle('off', isHidden);
-    btn.textContent = isHidden ? '🙈' : '👁';
-    btn.title = isHidden ? '보이기' : '숨기기';
-    el.classList.toggle('dim-hidden', isHidden);
-  }
-}
-function moveCard(el, dir) {
-  const parent = el.parentElement;
-  // 스크롤 보존
-  const y = el.getBoundingClientRect().top;
-  if (dir === 'up') {
-    let prev = el.previousElementSibling;
-    while (prev && !prev.dataset.cardId) prev = prev.previousElementSibling;
-    if (prev && prev.dataset.cardId !== 'account') parent.insertBefore(el, prev);
-  } else {
-    let next = el.nextElementSibling;
-    while (next && !next.dataset.cardId) next = next.nextElementSibling;
-    if (next && next.dataset.cardId !== 'account') parent.insertBefore(next, el);
-  }
-  // 저장
-  const ids = Array.from(parent.querySelectorAll('[data-card-id]')).map((n) => n.dataset.cardId);
-  saveCardOrder(ids);
-  // 스크롤 따라가기
-  const y2 = el.getBoundingClientRect().top;
-  window.scrollBy(0, y2 - y);
-}
-$('reorderToggleBtn').addEventListener('click', () => setReorderMode(!REORDER_MODE));
 
 // 즐겨찾은 답변 시트
 $('favoritesBtn').addEventListener('click', async () => {
@@ -4331,6 +4134,57 @@ $('quickMemoAdd').addEventListener('click', quickAddMemo);
 $('quickMemoInput').addEventListener('keydown', (e) => {
   if (e.key === 'Enter') quickAddMemo();
 });
+
+// 업데이트 내역 모달
+function renderChangelog() {
+  const list = $('changelogList');
+  if (!list) return;
+  list.innerHTML = CHANGELOG.map(entry => `
+    <div class="cl-entry">
+      <div class="cl-header">
+        <span class="cl-version">v${entry.v}</span>
+        <span class="cl-date">${entry.date}</span>
+      </div>
+      <ul class="cl-items">
+        ${entry.items.map(it => `<li>${escHtml(it)}</li>`).join('')}
+      </ul>
+    </div>
+  `).join('');
+}
+function openChangelogModal() {
+  renderChangelog();
+  const chk = document.getElementById('changelogDontShow');
+  if (chk) chk.checked = false;
+  $('changelogModal')?.classList.remove('hidden');
+}
+function closeChangelogModal() {
+  const dontShow = document.getElementById('changelogDontShow')?.checked;
+  const today = new Date().toISOString().slice(0, 10);
+  if (dontShow) {
+    localStorage.setItem('fb_cl_perm', APP_VERSION);
+    $('changelogDot')?.classList.add('hidden');
+  } else {
+    localStorage.setItem('fb_cl_date', today);
+  }
+  $('changelogModal')?.classList.add('hidden');
+}
+$('changelogBtn').addEventListener('click', openChangelogModal);
+$('changelogClose').addEventListener('click', closeChangelogModal);
+$('changelogModal').addEventListener('click', (e) => {
+  if (e.target.id === 'changelogModal') closeChangelogModal();
+});
+
+// 자동 표시 — 영구 닫기 안 했고 오늘 아직 안 봤으면 표시
+(() => {
+  const today = new Date().toISOString().slice(0, 10);
+  const permDismissed = localStorage.getItem('fb_cl_perm') === APP_VERSION;
+  const seenToday    = localStorage.getItem('fb_cl_date') === today;
+  if (permDismissed || seenToday) {
+    $('changelogDot')?.classList.add('hidden');
+  } else {
+    setTimeout(openChangelogModal, 900);
+  }
+})();
 
 // 도움말 시트
 $('helpBtn').addEventListener('click', () => $('helpSheet').classList.remove('hidden'));
@@ -6080,6 +5934,35 @@ if (toTop) {
   toTop.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }));
 }
 
+// ---------- 사진 다운로드 (iOS / Android 공통) ----------
+async function downloadPhoto(url) {
+  try {
+    const resp = await fetch(url);
+    const blob = await resp.blob();
+    const ext  = (blob.type.split('/')[1] || 'jpg').replace('jpeg', 'jpg');
+    const name = `familyboard_${Date.now()}.${ext}`;
+    // iOS 15+ / Android: Web Share API (파일 공유 → 사진 앱에 저장)
+    if (navigator.canShare) {
+      const file = new File([blob], name, { type: blob.type });
+      if (navigator.canShare({ files: [file] })) {
+        await navigator.share({ files: [file] });
+        return;
+      }
+    }
+    // 그 외: blob URL → <a download> (Android Chrome, 데스크톱)
+    const blobUrl = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = blobUrl;
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(blobUrl), 2000);
+  } catch {
+    window.open(url, '_blank');
+  }
+}
+
 // ---------- 이미지 라이트박스 ----------
 function openLightbox(src, opts = {}) {
   const lb = $('lightbox');
@@ -6098,8 +5981,15 @@ function openLightbox(src, opts = {}) {
       delete saveBtn.dataset.mid;
     }
   }
+  const dlBtn = $('lightboxDownloadBtn');
+  if (dlBtn) dlBtn.dataset.src = src;
   lb.classList.remove('hidden');
 }
+$('lightboxDownloadBtn')?.addEventListener('click', async (e) => {
+  e.stopPropagation();
+  const src = e.currentTarget.dataset.src;
+  if (src) await downloadPhoto(src);
+});
 $('lightboxClose').addEventListener('click', () => $('lightbox').classList.add('hidden'));
 $('lightbox').addEventListener('click', (e) => {
   if (e.target.id === 'lightbox' || e.target.tagName === 'IMG') {
@@ -6278,6 +6168,7 @@ document.querySelectorAll('.sheet-backdrop, .lightbox').forEach((el) => {
 let GALLERY_CACHE = [];
 let GALLERY_LOADING = false;
 let GALLERY_DETAIL_ID = null;
+let GALLERY_NAV_SET = null; // null = 전체 GALLERY_CACHE, array = 현재 앨범 사진들
 
 async function loadGallery() {
   try {
@@ -6293,22 +6184,35 @@ function renderGalleryCard() {
   const openAllBtn = $('galleryOpenAllBtn');
   if (!grid) return;
   grid.innerHTML = '';
+  const deduped = _dedupeGallery(GALLERY_CACHE);
   // '전체보기' 는 카드 밖에 더 있는 경우(>9장) 에만 표시 — 빈 상태·9장 이하엔 의미 없어서 숨김
-  if (openAllBtn) openAllBtn.classList.toggle('hidden', GALLERY_CACHE.length <= 9);
-  if (!GALLERY_CACHE.length) {
+  if (openAllBtn) openAllBtn.classList.toggle('hidden', deduped.length <= 9);
+  if (!deduped.length) {
     empty?.classList.remove('hidden');
     return;
   }
   empty?.classList.add('hidden');
-  // 최근 9장만 카드에
-  const shown = GALLERY_CACHE.slice(0, 9);
+  // 최근 9장만 카드에 (앨범 중복 제거 후)
+  const shown = deduped.slice(0, 9);
   for (const p of shown) {
     const div = document.createElement('div');
     div.className = 'gallery-thumb';
-    div.innerHTML = `<img src="${p.url.replace(/"/g, '')}" alt="" loading="lazy" style="width:100%;height:100%;object-fit:cover;display:block" />${galleryThumbBadgesHtml(p)}`;
+    const albumCount = p.albumId ? GALLERY_CACHE.filter((x) => x.albumId === p.albumId).length : 1;
+    const badge = albumCount > 1 ? `<div class="gallery-album-badge">⧉ ${albumCount}</div>` : '';
+    div.innerHTML = `<img src="${p.url.replace(/"/g, '')}" alt="" loading="lazy" style="width:100%;height:100%;object-fit:cover;display:block" />${galleryThumbBadgesHtml(p)}${badge}`;
     div.onclick = () => openGalleryDetail(p);
     grid.appendChild(div);
   }
+}
+
+function _dedupeGallery(list) {
+  const seen = new Set();
+  return list.filter((p) => {
+    if (!p.albumId) return true;
+    if (seen.has(p.albumId)) return false;
+    seen.add(p.albumId);
+    return true;
+  });
 }
 
 function galleryThumbBadgesHtml(p) {
@@ -6325,12 +6229,15 @@ function renderGallerySheet(append = false) {
   const grid = $('gallerySheetGrid');
   if (!grid) return;
   if (!append) grid.innerHTML = '';
-  for (const p of GALLERY_CACHE) {
+  const deduped = _dedupeGallery(GALLERY_CACHE);
+  for (const p of deduped) {
     if (append && grid.querySelector(`[data-gid="${p.id}"]`)) continue;
     const div = document.createElement('div');
     div.className = 'gallery-thumb';
     div.dataset.gid = String(p.id);
-    div.innerHTML = `<img src="${p.url.replace(/"/g, '')}" alt="" loading="lazy" style="width:100%;height:100%;object-fit:cover;display:block" />${galleryThumbBadgesHtml(p)}`;
+    const albumCount = p.albumId ? GALLERY_CACHE.filter((x) => x.albumId === p.albumId).length : 1;
+    const badge = albumCount > 1 ? `<div class="gallery-album-badge">⧉ ${albumCount}</div>` : '';
+    div.innerHTML = `<img src="${p.url.replace(/"/g, '')}" alt="" loading="lazy" style="width:100%;height:100%;object-fit:cover;display:block" />${galleryThumbBadgesHtml(p)}${badge}`;
     div.onclick = () => openGalleryDetail(p);
     grid.appendChild(div);
   }
@@ -6368,6 +6275,7 @@ async function loadMoreGallery() {
 function openGalleryDetail(p) {
   GALLERY_DETAIL_ID = p.id;
   GALLERY_COMMENTS_EXPANDED = false;
+  GALLERY_NAV_SET = p.albumId ? GALLERY_CACHE.filter((x) => x.albumId === p.albumId) : null;
   renderGalleryDetail(p);
   $('galleryDetailSheet').classList.remove('hidden');
   loadGalleryComments(p.id);
@@ -6405,17 +6313,17 @@ function formatLikeLabel(n) {
   return `좋아요 ${n.toLocaleString('ko-KR')}개`;
 }
 
-/** Instagram 스타일 짧은 상대시간: "3일", "1주", "방금" */
+/** Instagram 스타일 짧은 상대시간: "방금 전", "3분 전", "2시간 전", "5월 1일", "2024년 12월 1일" */
 function igShortTime(dateStr) {
   const d = new Date(dateStr);
-  const sec = Math.floor((Date.now() - d.getTime()) / 1000);
-  if (sec < 60) return '방금';
-  if (sec < 3600) return `${Math.floor(sec / 60)}분`;
-  if (sec < 86400) return `${Math.floor(sec / 3600)}시간`;
-  if (sec < 604800) return `${Math.floor(sec / 86400)}일`;
-  if (sec < 2592000) return `${Math.floor(sec / 604800)}주`;
-  if (sec < 31536000) return `${Math.floor(sec / 2592000)}개월`;
-  return `${Math.floor(sec / 31536000)}년`;
+  const now = new Date();
+  const sec = Math.floor((now - d) / 1000);
+  if (sec < 60) return '방금 전';
+  if (sec < 3600) return `${Math.floor(sec / 60)}분 전`;
+  if (sec < 86400) return `${Math.floor(sec / 3600)}시간 전`;
+  const y = d.getFullYear(), m = d.getMonth() + 1, day = d.getDate();
+  if (y === now.getFullYear()) return `${m}월 ${day}일`;
+  return `${y}년 ${m}월 ${day}일`;
 }
 
 /** 현재 상세 사진 렌더 + 앞/뒤 네비 버튼 상태 업데이트 */
@@ -6432,8 +6340,10 @@ function renderGalleryDetail(p) {
   // 캡션 (IG 스타일: 업로더 이름 bold + 본문 inline)
   $('galleryDetailAuthor').textContent = p.uploaderName || '';
   renderIgCaption(p.caption || '');
-  $('galleryDetailTime').textContent = p.createdAt ? `${igShortTime(p.createdAt)} 전` : '';
+  $('galleryDetailTime').textContent = p.createdAt ? igShortTime(p.createdAt) : '';
   $('galleryDetailDeleteBtn').classList.toggle('hidden', !p.canDelete);
+  const dlBtn = $('galleryDownloadBtn');
+  if (dlBtn) dlBtn.dataset.src = p.url;
   // 좋아요 상태
   const likeBtn = $('galleryLikeBtn');
   const heart = $('galleryLikeHeart');
@@ -6448,8 +6358,9 @@ function renderGalleryDetail(p) {
   const sendBtn = $('galleryCommentSend');
   if (sendBtn) sendBtn.disabled = true;
   // 앞/뒤 네비 + 카운터
-  const idx = GALLERY_CACHE.findIndex((x) => x.id === p.id);
-  const total = GALLERY_CACHE.length;
+  const navSet = GALLERY_NAV_SET || GALLERY_CACHE;
+  const idx = navSet.findIndex((x) => x.id === p.id);
+  const total = navSet.length;
   const prevBtn = $('galleryDetailPrev');
   const nextBtn = $('galleryDetailNext');
   const counter = $('galleryDetailCounter');
@@ -6570,11 +6481,12 @@ async function toggleGalleryLike(opts = {}) {
 
 function navigateGalleryDetail(delta) {
   if (GALLERY_DETAIL_ID == null) return;
-  const idx = GALLERY_CACHE.findIndex((x) => x.id === GALLERY_DETAIL_ID);
+  const navSet = GALLERY_NAV_SET || GALLERY_CACHE;
+  const idx = navSet.findIndex((x) => x.id === GALLERY_DETAIL_ID);
   if (idx < 0) return;
   const newIdx = idx + delta;
-  if (newIdx < 0 || newIdx >= GALLERY_CACHE.length) return;
-  const p = GALLERY_CACHE[newIdx];
+  if (newIdx < 0 || newIdx >= navSet.length) return;
+  const p = navSet[newIdx];
   GALLERY_DETAIL_ID = p.id;
   renderGalleryDetail(p);
 }
@@ -6599,14 +6511,43 @@ async function deleteGalleryPhoto(id) {
 }
 
 // 업로드 시트 상태 — 파일 선택 후 미리보기 + 캡션 입력용
-let _pendingGalleryFile = null;
-let _pendingGalleryObjectUrl = null;
+let _pendingGalleryFiles = [];
+let _pendingGalleryObjectUrls = [];
 
-function openGalleryUploadSheet(file) {
-  _pendingGalleryFile = file;
-  if (_pendingGalleryObjectUrl) URL.revokeObjectURL(_pendingGalleryObjectUrl);
-  _pendingGalleryObjectUrl = URL.createObjectURL(file);
-  $('galleryUploadPreview').src = _pendingGalleryObjectUrl;
+function openGalleryUploadSheet(files) {
+  const arr = Array.from(files || []);
+  if (!arr.length) return;
+  _pendingGalleryFiles = arr;
+  _pendingGalleryObjectUrls.forEach((u) => URL.revokeObjectURL(u));
+  _pendingGalleryObjectUrls = arr.map((f) => URL.createObjectURL(f));
+
+  const single = arr.length === 1;
+  const previewImg = $('galleryUploadPreview');
+  const wrap = $('galleryPreviewWrap');
+  const strip = $('gupMultiStrip');
+
+  if (previewImg) previewImg.src = _pendingGalleryObjectUrls[0];
+  if (wrap) wrap.classList.toggle('hidden', !single);
+
+  if (!single && strip) {
+    strip.innerHTML = '';
+    strip.classList.remove('hidden');
+    _pendingGalleryObjectUrls.forEach((url, i) => {
+      const img = document.createElement('img');
+      img.src = url;
+      img.className = 'gup-mini-thumb' + (i === 0 ? ' active' : '');
+      img.onclick = () => {
+        if (previewImg) { previewImg.src = url; }
+        if (wrap) wrap.classList.remove('hidden');
+        strip.querySelectorAll('.gup-mini-thumb').forEach((t, j) => t.classList.toggle('active', j === i));
+      };
+      strip.appendChild(img);
+    });
+  } else if (strip) {
+    strip.classList.add('hidden');
+    strip.innerHTML = '';
+  }
+
   $('galleryUploadCaption').value = '';
   $('galleryUploadSheet').classList.remove('hidden');
   setTimeout(() => {
@@ -6616,29 +6557,34 @@ function openGalleryUploadSheet(file) {
 
 function closeGalleryUploadSheet() {
   $('galleryUploadSheet').classList.add('hidden');
-  if (_pendingGalleryObjectUrl) {
-    URL.revokeObjectURL(_pendingGalleryObjectUrl);
-    _pendingGalleryObjectUrl = null;
-  }
-  _pendingGalleryFile = null;
+  _pendingGalleryObjectUrls.forEach((u) => URL.revokeObjectURL(u));
+  _pendingGalleryObjectUrls = [];
+  _pendingGalleryFiles = [];
+  const strip = $('gupMultiStrip');
+  if (strip) { strip.innerHTML = ''; strip.classList.add('hidden'); }
 }
 
 async function confirmGalleryUpload() {
-  const file = _pendingGalleryFile;
-  if (!file) return;
+  const files = _pendingGalleryFiles;
+  if (!files.length) return;
   const caption = ($('galleryUploadCaption').value || '').trim();
   const confirmBtn = $('galleryUploadConfirm');
   if (confirmBtn) { confirmBtn.disabled = true; confirmBtn.textContent = '올리는 중...'; }
   try {
-    const blob = await resizeImageToJpegBlob(file, { maxSide: 2000, targetBytes: 3 * 1024 * 1024 - 1 });
-    const fd = new FormData();
-    fd.append('photo', blob, 'photo.jpg');
-    if (caption) fd.append('caption', caption);
-    const r = await fetch('/api/gallery', { method: 'POST', body: fd, credentials: 'same-origin' });
-    if (!r.ok) {
-      let msg = '업로드 실패';
-      try { const j = await r.json(); if (j.message) msg = j.message; } catch {}
-      throw new Error(msg);
+    const albumId = files.length > 1 ? crypto.randomUUID() : null;
+    for (let i = 0; i < files.length; i++) {
+      const blob = await resizeImageToJpegBlob(files[i], { maxSide: 2000, targetBytes: 3 * 1024 * 1024 - 1 });
+      const fd = new FormData();
+      fd.append('photo', blob, 'photo.jpg');
+      if (caption && i === 0) fd.append('caption', caption);
+      if (albumId) fd.append('album_id', albumId);
+      const r = await fetch('/api/gallery', { method: 'POST', body: fd, credentials: 'same-origin' });
+      if (!r.ok) {
+        let msg = '업로드 실패';
+        try { const j = await r.json(); if (j.message) msg = j.message; } catch {}
+        throw new Error(msg);
+      }
+      if (confirmBtn) confirmBtn.textContent = `올리는 중... (${i + 1}/${files.length})`;
     }
     await loadGallery();
     if (!$('gallerySheet').classList.contains('hidden')) renderGallerySheet(false);
@@ -6652,14 +6598,17 @@ async function confirmGalleryUpload() {
 
 $('galleryAddBtn')?.addEventListener('click', () => $('galleryFile')?.click());
 $('galleryFile')?.addEventListener('change', async (e) => {
-  const f = e.target.files?.[0];
-  if (!f) { e.target.value = ''; return; }
-  if (!f.type.startsWith('image/')) { e.target.value = ''; alert('이미지 파일을 선택해 주세요'); return; }
-  let stable;
-  try { stable = await stabilizePickedFile(f); }
-  catch { e.target.value = ''; alert('사진을 읽지 못했어요. 다시 선택해 주세요.'); return; }
+  const fileList = e.target.files;
+  if (!fileList?.length) { e.target.value = ''; return; }
+  const validFiles = Array.from(fileList).filter((f) => f.type.startsWith('image/'));
+  if (!validFiles.length) { e.target.value = ''; alert('이미지 파일을 선택해 주세요'); return; }
+  const stables = [];
+  for (const f of validFiles) {
+    try { stables.push(await stabilizePickedFile(f)); }
+    catch { /* skip bad files */ }
+  }
   e.target.value = '';
-  openGalleryUploadSheet(stable);
+  if (stables.length) openGalleryUploadSheet(stables);
 });
 $('galleryUploadConfirm')?.addEventListener('click', confirmGalleryUpload);
 $('galleryUploadCancel')?.addEventListener('click', closeGalleryUploadSheet);
@@ -6685,6 +6634,10 @@ $('galleryDetailSheet')?.addEventListener('click', (e) => {
 });
 $('galleryDetailDeleteBtn')?.addEventListener('click', () => {
   if (GALLERY_DETAIL_ID != null) deleteGalleryPhoto(GALLERY_DETAIL_ID);
+});
+$('galleryDownloadBtn')?.addEventListener('click', async () => {
+  const src = $('galleryDownloadBtn').dataset.src;
+  if (src) await downloadPhoto(src);
 });
 $('galleryLikeBtn')?.addEventListener('click', toggleGalleryLike);
 $('galleryCommentSend')?.addEventListener('click', sendGalleryComment);
@@ -8922,11 +8875,13 @@ function renderLadderLobby() {
   const g = LADDER_LOBBY_GAME;
   if (!g) return;
   const me = g.participants.find(p => p.userId === ME?.id);
+  const isHost = !!ME && ME.id === g.hostId;
   const slotsEl = $('ladderLobbySlots');
   const status = $('ladderLobbyStatus');
   const sub = $('ladderLobbySub');
   const readyBtn = $('ladderLobbyReadyBtn');
   const leaveBtn = $('ladderLobbyLeaveBtn');
+  const startBtn = $('ladderLobbyStartBtn');
   const cd = $('ladderLobbyCountdown');
   const stage = $('ladderLobbyStage');
   const resultsEl = $('ladderLobbyResults');
@@ -8946,7 +8901,9 @@ function renderLadderLobby() {
       } else {
         // 모든 슬롯 채워짐
         if (ready === joined) {
-          text = `모두 준비! 곧 시작합니다 🎲`;
+          text = isHost
+            ? `모두 준비! 시작 버튼을 눌러 주세요 🎲`
+            : `모두 준비! 호스트의 시작을 기다리는 중 🎲`;
           status.classList.add('allready');
         } else {
           text = `참여 ${joined}/${cap}명 · 준비 ${ready}/${joined} — 나머지 준비 대기 중`;
@@ -9032,9 +8989,22 @@ function renderLadderLobby() {
       readyBtn?.classList.add('hidden');
       leaveBtn?.classList.add('hidden');
     }
+    // 시작 버튼 — 호스트에게만 노출. 모든 자리가 차고 모두 준비해야 활성화.
+    if (startBtn) {
+      if (isHost) {
+        startBtn.classList.remove('hidden');
+        const joined = g.participants.length;
+        const allReady = joined === g.count && joined >= 2 && g.participants.every(p => p.ready);
+        startBtn.disabled = !allReady;
+        startBtn.textContent = allReady ? '🎲 시작!' : '시작 (모두 준비 대기 중)';
+      } else {
+        startBtn.classList.add('hidden');
+      }
+    }
   } else {
     readyBtn?.classList.add('hidden');
     leaveBtn?.classList.add('hidden');
+    startBtn?.classList.add('hidden');
   }
 
   // 카운트다운 — 클라이언트 자체 타이머로 정확히 3 → 2 → 1 → 시작!
@@ -9098,6 +9068,15 @@ async function leaveLadderLobby() {
     renderLadderLobby();
   } catch (e) { alert(e?.message || '나가기 실패'); }
 }
+async function startLadderGame() {
+  if (!LADDER_LOBBY_GAME_ID) return;
+  const btn = $('ladderLobbyStartBtn');
+  if (btn?.disabled) return;
+  try {
+    LADDER_LOBBY_GAME = await api(`/api/ladder/games/${LADDER_LOBBY_GAME_ID}/start`, { method: 'POST' });
+    renderLadderLobby();
+  } catch (e) { alert(e?.message || '시작 실패'); }
+}
 
 // 핸들러 바인딩
 $('ladderSetupCreate')?.addEventListener('click', createLadderGameRoom);
@@ -9116,6 +9095,7 @@ $('ladderLobbySheet')?.addEventListener('click', (e) => {
 });
 $('ladderLobbyReadyBtn')?.addEventListener('click', toggleLadderReady);
 $('ladderLobbyLeaveBtn')?.addEventListener('click', leaveLadderLobby);
+$('ladderLobbyStartBtn')?.addEventListener('click', startLadderGame);
 
 // 채팅에 표시된 게임 카드들을 주기적으로 갱신 — 다른 가족이 참여/준비할 때마다 카드 sub 갱신
 setInterval(() => {
@@ -9146,5 +9126,735 @@ $('ladderShuffleBtn')?.addEventListener('click', () => {
 $('ladderMuteBtn')?.addEventListener('click', ladderToggleMute);
 $('ladderRevealAllBtn')?.addEventListener('click', ladderRevealAll);
 $('ladderShareBtn')?.addEventListener('click', ladderShareToChat);
+
+// ==========================================================
+// 올해의 목표 (goals 카드)
+// ==========================================================
+let GOALS_CACHE = [];
+let GOAL_CATEGORY = 'year';
+let GOAL_DETAIL_ID = null;
+let GOAL_EV_GOAL_ID = null;
+let GOAL_EV_PHOTO_FILE = null;
+let GOAL_EV_SELECTED_PCT = 0;
+
+const CHEER_EMOJIS = ['👏','💪','🔥','❤️','🙌','⭐'];
+
+async function loadGoals() {
+  const card = $('goalsCard');
+  if (!card) return;
+  card.classList.remove('hidden');
+  try {
+    const now = new Date();
+    const year = now.getFullYear();
+    const q = Math.ceil((now.getMonth() + 1) / 3);
+    const m = now.getMonth() + 1;
+    let url = `/api/goals?year=${year}&category=${GOAL_CATEGORY}`;
+    if (GOAL_CATEGORY === 'month') url += `&month=${m}`;
+    const data = await api(url);
+    GOALS_CACHE = data;
+  } catch {}
+  renderGoalsList();
+}
+
+function renderGoalsList() {
+  const wrap = $('goalsList');
+  if (!wrap) return;
+  if (!GOALS_CACHE.length) {
+    const now = new Date();
+    const q = Math.ceil((now.getMonth() + 1) / 3);
+    const m = now.getMonth() + 1;
+    const hint = GOAL_CATEGORY === 'month' ? `${m}월 목표가 없어요` : '연간 목표가 없어요';
+    wrap.innerHTML = `<p class="goals-empty">🎯 ${hint}<br/>목표를 추가해 보세요!</p>`;
+    return;
+  }
+  const byUser = {};
+  for (const g of GOALS_CACHE) {
+    if (!byUser[g.userId]) byUser[g.userId] = { name: g.displayName, icon: g.icon, photoUrl: g.photoUrl, goals: [] };
+    byUser[g.userId].goals.push(g);
+  }
+  let html = '';
+  for (const uid of Object.keys(byUser)) {
+    const u = byUser[uid];
+    const avatarHtml = u.photoUrl
+      ? `<img class="goal-avatar" src="${u.photoUrl}" alt="${u.name}" />`
+      : `<span class="goal-avatar goal-avatar-emoji">${iconEmoji(u.icon)}</span>`;
+    const doneCount = u.goals.filter(g => (g.progress || 0) === 100).length;
+    const countLabel = doneCount > 0
+      ? `✅ ${doneCount}/${u.goals.length}`
+      : `${u.goals.length}개`;
+    html += `<div class="goal-member-group">
+      <div class="goal-member-head">
+        ${avatarHtml}
+        <span class="goal-member-name">${u.name}</span>
+        <span class="goal-member-count">${countLabel}</span>
+      </div>
+      <ul class="goal-items">`;
+    for (const g of u.goals) {
+      const pct = g.progress || 0;
+      const isDone = pct === 100;
+      const myCheer = g.cheers.some(c => c.fromUserId === ME?.id && c.emoji === '👏');
+      const evBadge = g.evidenceCount ? `<span class="goal-item-ev">📸 ${g.evidenceCount}</span>` : '';
+      html += `<li class="goal-item${isDone ? ' done' : ''}" data-goal-id="${g.id}">
+        <div class="goal-item-top">
+          <span class="goal-item-title">${isDone ? '✅ ' : ''}${escHtml(g.title)}</span>
+          ${evBadge}
+        </div>
+        <div class="goal-item-bar-row">
+          <div class="goal-progress-bar-wrap">
+            <div class="goal-progress-bar" style="width:${pct}%"></div>
+          </div>
+          <span class="goal-progress-pct">${pct}%</span>
+        </div>
+        <div class="goal-item-footer">
+          <button type="button" class="goal-cheer-btn ${myCheer ? 'cheered' : ''}" data-goal-id="${g.id}">
+            👏 ${g.cheerCount || 0}
+          </button>
+          <span class="goal-item-more">자세히 →</span>
+        </div>
+      </li>`;
+    }
+    html += `</ul></div>`;
+  }
+  wrap.innerHTML = html;
+
+  wrap.querySelectorAll('.goal-item').forEach((el) => {
+    el.addEventListener('click', (e) => {
+      if (e.target.closest('.goal-cheer-btn')) return;
+      openGoalDetail(Number(el.dataset.goalId));
+    });
+  });
+  wrap.querySelectorAll('.goal-cheer-btn').forEach((btn) => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      toggleGoalCheer(Number(btn.dataset.goalId), CHEER_EMOJIS[0], btn);
+    });
+  });
+}
+
+function syncDetailProgress() {
+  if (!GOAL_DETAIL_ID) return;
+  const g = GOALS_CACHE.find(x => x.id === GOAL_DETAIL_ID);
+  if (!g) return;
+  const pct = g.progress || 0;
+  $('goalDetailProgressBar').style.width = `${pct}%`;
+  $('goalDetailProgressPct').textContent = `${pct}%`;
+}
+
+function patchGoalItem(g) {
+  const li = document.querySelector(`.goal-item[data-goal-id="${g.id}"]`);
+  if (!li) return;
+  const btn = li.querySelector('.goal-cheer-btn');
+  if (!btn) return;
+  const myCheer = g.cheers.some(c => c.fromUserId === ME?.id && c.emoji === CHEER_EMOJIS[0]);
+  btn.textContent = `${CHEER_EMOJIS[0]} ${g.cheerCount || 0}`;
+  btn.classList.toggle('cheered', myCheer);
+}
+
+async function toggleGoalCheer(goalId, emoji, btn) {
+  const g = GOALS_CACHE.find(x => x.id === goalId);
+  if (!g) return;
+  const mine = g.cheers.some(c => c.fromUserId === ME?.id && c.emoji === emoji);
+  try {
+    if (mine) {
+      const res = await api(`/api/goals/${goalId}/cheers?emoji=${encodeURIComponent(emoji)}`, { method: 'DELETE' });
+      g.cheerCount = res.cheerCount;
+      g.cheers = g.cheers.filter(c => !(c.fromUserId === ME?.id && c.emoji === emoji));
+      if (btn) btn.classList.remove('cheered');
+    } else {
+      const res = await api(`/api/goals/${goalId}/cheers`, { method: 'POST', body: JSON.stringify({ emoji }) });
+      g.cheerCount = res.cheerCount;
+      g.cheers.push({ fromUserId: ME?.id, emoji });
+      if (btn) { btn.classList.add('cheered'); btn.classList.remove('pop'); void btn.offsetWidth; btn.classList.add('pop'); }
+    }
+    if (GOAL_DETAIL_ID === goalId) renderGoalDetailCheers(g);
+    patchGoalItem(g);
+  } catch {}
+}
+
+async function openGoalDetail(goalId) {
+  GOAL_DETAIL_ID = goalId;
+  const g = GOALS_CACHE.find(x => x.id === goalId);
+  if (!g) return;
+  $('goalDetailTitle').textContent = g.title;
+  const avatarHtml = g.photoUrl
+    ? `<img class="goal-avatar" src="${g.photoUrl}" alt="${escHtml(g.displayName)}" />`
+    : `<span class="goal-avatar goal-avatar-emoji">${iconEmoji(g.icon)}</span>`;
+  $('goalDetailOwner').innerHTML = avatarHtml + `<span class="goal-detail-owner-name">${escHtml(g.displayName)}</span>`;
+  syncDetailProgress();
+  const isOwner = g.userId === ME?.id || ME?.role === 'admin';
+  $('goalEvAddBtn')?.classList.toggle('hidden', !isOwner);
+  $('goalDetailActions')?.classList.toggle('hidden', !isOwner);
+  renderGoalDetailCheers(g);
+  await loadGoalEvidences(goalId);
+  $('goalDetailSheet').classList.remove('hidden');
+}
+
+$('goalEditBtn').addEventListener('click', async () => {
+  const g = GOALS_CACHE.find(x => x.id === GOAL_DETAIL_ID);
+  if (!g) return;
+  const newTitle = prompt('목표 제목을 수정하세요', g.title);
+  if (!newTitle || newTitle.trim() === g.title) return;
+  try {
+    await api(`/api/goals/${g.id}`, { method: 'PATCH', body: JSON.stringify({ title: newTitle.trim() }) });
+    g.title = newTitle.trim();
+    $('goalDetailTitle').textContent = g.title;
+    renderGoalsList();
+  } catch { alert('수정에 실패했어요. 다시 시도해 주세요.'); }
+});
+
+$('goalDeleteBtn').addEventListener('click', async () => {
+  const g = GOALS_CACHE.find(x => x.id === GOAL_DETAIL_ID);
+  if (!g) return;
+  if (!confirm(`"${g.title}" 목표를 삭제할까요?`)) return;
+  try {
+    await api(`/api/goals/${g.id}`, { method: 'DELETE' });
+    GOALS_CACHE = GOALS_CACHE.filter(x => x.id !== g.id);
+    $('goalDetailSheet').classList.add('hidden');
+    renderGoalsList();
+  } catch { alert('삭제에 실패했어요. 다시 시도해 주세요.'); }
+});
+
+function renderGoalDetailCheers(g) {
+  const wrap = $('goalDetailCheers');
+  if (!wrap) return;
+  const totalCheers = g.cheers.length;
+  let html = `<div class="goal-cheer-section-label">응원 ${totalCheers > 0 ? `· ${totalCheers}명` : ''}</div><div class="goal-cheer-row">`;
+  for (const em of CHEER_EMOJIS) {
+    const myThis = g.cheers.some(c => c.fromUserId === ME?.id && c.emoji === em);
+    const cnt = g.cheers.filter(c => c.emoji === em).length;
+    html += `<button type="button" class="goal-cheer-emoji-btn ${myThis ? 'cheered' : ''}" data-emoji="${em}">
+      ${em}${cnt > 0 ? `<span>${cnt}</span>` : ''}
+    </button>`;
+  }
+  html += '</div>';
+  wrap.innerHTML = html;
+  wrap.querySelectorAll('.goal-cheer-emoji-btn').forEach((btn) => {
+    btn.addEventListener('click', () => toggleGoalCheer(g.id, btn.dataset.emoji, btn));
+  });
+}
+
+async function loadGoalEvidences(goalId) {
+  const wrap = $('goalDetailEvList');
+  if (!wrap) return;
+  wrap.innerHTML = '<p class="goals-empty goals-empty-pad">⏳ 불러오는 중...</p>';
+  try {
+    const evs = await api(`/api/goals/${goalId}/evidences`);
+    if (!evs.length) {
+      wrap.innerHTML = '<p class="goals-empty goals-empty-pad">📷 아직 인증 기록이 없어요<br/><span class="goals-empty-hint">인증 추가 버튼으로 첫 기록을 남겨보세요</span></p>';
+      return;
+    }
+    wrap.innerHTML = evs.map((ev) => {
+      const d = new Date(ev.createdAt);
+      const dateStr = `${d.getMonth()+1}/${d.getDate()}`;
+      const avatarHtml = ev.uploaderPhoto
+        ? `<img class="goal-avatar goal-avatar-sm" src="${ev.uploaderPhoto}" alt="${escHtml(ev.displayName)}" />`
+        : `<span class="goal-avatar goal-avatar-sm goal-avatar-emoji">${iconEmoji(ev.icon)}</span>`;
+      return `<div class="goal-ev-item">
+        <div class="goal-ev-item-head">
+          ${avatarHtml}
+          <span class="goal-ev-item-name">${escHtml(ev.displayName)}</span>
+          <span class="goal-ev-item-date">${dateStr}</span>
+          <span class="goal-ev-item-pct goal-pct-${ev.progress}">${ev.progress}%</span>
+          ${ev.canDelete ? `<button type="button" class="goal-ev-del-btn" data-ev-id="${ev.id}">✕</button>` : ''}
+        </div>
+        ${ev.imageUrl ? `<img class="goal-ev-img" src="${ev.imageUrl}" alt="인증사진" loading="lazy" />` : ''}
+        ${ev.caption ? `<p class="goal-ev-caption">${escHtml(ev.caption)}</p>` : ''}
+      </div>`;
+    }).join('');
+    wrap.querySelectorAll('.goal-ev-del-btn').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        if (!confirm('인증 기록을 삭제할까요?')) return;
+        const evId = Number(btn.dataset.evId);
+        try {
+          await api(`/api/goals/${goalId}/evidences/${evId}`, { method: 'DELETE' });
+          await Promise.all([loadGoalEvidences(goalId), loadGoals()]);
+          syncDetailProgress();
+        } catch {}
+      });
+    });
+  } catch { wrap.innerHTML = '<p class="goals-empty">불러오기 실패</p>'; }
+}
+
+function openGoalAddSheet() {
+  $('goalTitleInput').value = '';
+  const now = new Date();
+  const q = Math.ceil((now.getMonth() + 1) / 3);
+  const m = now.getMonth() + 1;
+  const sub = $('goalAddSub');
+  if (sub) sub.textContent = GOAL_CATEGORY === 'month' ? `${m}월 목표를 적어보세요` : '올해 이루고 싶은 목표를 적어보세요';
+  $('goalAddSheet').classList.remove('hidden');
+  setTimeout(() => $('goalTitleInput').focus(), 80);
+}
+function closeGoalAddSheet() { $('goalAddSheet').classList.add('hidden'); }
+
+async function confirmGoalAdd() {
+  const title = ($('goalTitleInput').value || '').trim();
+  if (!title) { $('goalTitleInput').focus(); return; }
+  try {
+    const now = new Date();
+    const q = Math.ceil((now.getMonth() + 1) / 3);
+    const m = now.getMonth() + 1;
+    const body = { title, category: GOAL_CATEGORY };
+    if (GOAL_CATEGORY === 'month') body.month = m;
+    await api('/api/goals', { method: 'POST', body: JSON.stringify(body) });
+    closeGoalAddSheet();
+    await loadGoals();
+  } catch (e) { alert(e.message || '추가 실패'); }
+}
+
+function openGoalEvSheet(goalId) {
+  GOAL_EV_GOAL_ID = goalId;
+  GOAL_EV_PHOTO_FILE = null;
+  GOAL_EV_SELECTED_PCT = 0;
+  $('goalEvCaption').value = '';
+  $('goalEvPhotoPreview').classList.add('hidden');
+  $('goalEvPhotoPreview').innerHTML = '';
+  $('goalEvPhotoFile').value = '';
+  $('goalEvProgressOpts').querySelectorAll('.goal-ev-prog-btn').forEach((b) => {
+    b.classList.toggle('is-selected', Number(b.dataset.pct) === 0);
+  });
+  $('goalEvSheet').classList.remove('hidden');
+}
+function closeGoalEvSheet() { $('goalEvSheet').classList.add('hidden'); }
+
+async function confirmGoalEv() {
+  if (!GOAL_EV_GOAL_ID) return;
+  const caption = ($('goalEvCaption').value || '').trim();
+  const btn = $('goalEvConfirm');
+  btn.disabled = true;
+  try {
+    const fd = new FormData();
+    fd.append('progress', String(GOAL_EV_SELECTED_PCT));
+    if (caption) fd.append('caption', caption);
+    if (GOAL_EV_PHOTO_FILE) fd.append('photo', GOAL_EV_PHOTO_FILE);
+    const res = await fetch(`/api/goals/${GOAL_EV_GOAL_ID}/evidences`, { method: 'POST', credentials: 'same-origin', body: fd });
+    if (!res.ok) { const d = await res.json(); throw new Error(d.message || '업로드 실패'); }
+    closeGoalEvSheet();
+    await loadGoalEvidences(GOAL_EV_GOAL_ID);
+    await loadGoals();
+    if (GOAL_DETAIL_ID) {
+      const g = GOALS_CACHE.find(x => x.id === GOAL_DETAIL_ID);
+      if (g) {
+        const pct = g.progress || 0;
+        $('goalDetailProgressBar').style.width = `${pct}%`;
+        $('goalDetailProgressPct').textContent = `${pct}%`;
+      }
+    }
+  } catch (e) { alert(e.message || '업로드 실패'); }
+  finally { btn.disabled = false; }
+}
+
+// 목표 카드 이벤트
+$('goalCatTabs')?.addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-cat]');
+  if (!btn) return;
+  GOAL_CATEGORY = btn.dataset.cat;
+  document.querySelectorAll('.goal-cat-tab').forEach(b => b.classList.toggle('is-active', b === btn));
+  loadGoals();
+});
+$('goalAddBtn')?.addEventListener('click', openGoalAddSheet);
+$('goalAddConfirm')?.addEventListener('click', confirmGoalAdd);
+$('goalAddClose')?.addEventListener('click', closeGoalAddSheet);
+$('goalAddSheet')?.addEventListener('click', (e) => { if (e.target.id === 'goalAddSheet') closeGoalAddSheet(); });
+$('goalTitleInput')?.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); confirmGoalAdd(); } });
+
+$('goalDetailClose')?.addEventListener('click', () => { $('goalDetailSheet').classList.add('hidden'); GOAL_DETAIL_ID = null; });
+$('goalDetailSheet')?.addEventListener('click', (e) => { if (e.target.id === 'goalDetailSheet') { $('goalDetailSheet').classList.add('hidden'); GOAL_DETAIL_ID = null; } });
+$('goalEvAddBtn')?.addEventListener('click', () => { if (GOAL_DETAIL_ID) openGoalEvSheet(GOAL_DETAIL_ID); });
+
+$('goalEvClose')?.addEventListener('click', closeGoalEvSheet);
+$('goalEvSheet')?.addEventListener('click', (e) => { if (e.target.id === 'goalEvSheet') closeGoalEvSheet(); });
+$('goalEvConfirm')?.addEventListener('click', confirmGoalEv);
+$('goalEvPhotoBtn')?.addEventListener('click', () => $('goalEvPhotoFile')?.click());
+$('goalEvPhotoFile')?.addEventListener('change', async (e) => {
+  const f = e.target.files?.[0];
+  if (!f) return;
+  e.target.value = '';
+  try {
+    const stable = await stabilizePickedFile(f);
+    GOAL_EV_PHOTO_FILE = stable;
+    const url = URL.createObjectURL(stable);
+    const preview = $('goalEvPhotoPreview');
+    preview.innerHTML = `<img src="${url}" alt="미리보기" />`;
+    preview.classList.remove('hidden');
+  } catch { alert('사진을 읽지 못했어요. 다시 선택해 주세요.'); }
+});
+$('goalEvProgressOpts')?.addEventListener('click', (e) => {
+  const btn = e.target.closest('.goal-ev-prog-btn');
+  if (!btn) return;
+  GOAL_EV_SELECTED_PCT = Number(btn.dataset.pct);
+  $('goalEvProgressOpts').querySelectorAll('.goal-ev-prog-btn').forEach((b) => {
+    b.classList.toggle('is-selected', b === btn);
+  });
+});
+
+// ==========================================================
+// 타로 카드
+// ==========================================================
+
+const TAROT_DECK = [
+  { id: 0,  img: 'fool',           name: '바보',           symbol: '🌟', keywords: ['새 출발', '자유', '순수함'],        meaning: '지금 당신은 아직 결과를 모르는 길 앞에 서 있습니다. 그 불확실함이 두려움이 아니라 가능성임을 오늘 잠시 느껴보세요.', advice: '오늘 너무 계획하지 말고, 직감이 이끄는 한 가지를 그냥 해보세요.', revMeaning: '지나친 충동으로 결과를 생각하지 않고 뛰어들고 있을 수 있어요. 무모함이 문제를 만들 수 있습니다.', revAdvice: '오늘은 한 발 멈추고 결과를 충분히 생각한 후에 행동하세요.' },
+  { id: 1,  img: 'magician',       name: '마법사',          symbol: '🪄', keywords: ['의지', '실행력', '집중'],           meaning: '필요한 자원은 이미 당신 손안에 있습니다. 부족하다고 느끼는 것은 도구의 문제가 아니라 집중의 문제입니다.', advice: '오늘 딱 하나의 중요한 과제만 골라 온전히 집중하는 2시간을 확보하세요.', revMeaning: '재능이 있지만 방향 없이 분산되고 있어요. 여러 일을 벌이느라 아무것도 마무리되지 않고 있습니다.', revAdvice: '오늘 새로 시작하려는 것보다 완성하지 못한 것 하나를 먼저 마무리하세요.' },
+  { id: 2,  img: 'high-priestess', name: '여사제',          symbol: '🌙', keywords: ['직관', '내면', '침묵'],             meaning: '지금 소음이 많을수록 자신의 목소리는 묻히기 쉽습니다. 오늘 내면의 신호에 귀 기울이면 놓쳤던 답이 보일 수 있어요.', advice: '10분간 핸드폰 없이 조용히 앉아 지금 마음에 떠오르는 것을 적어보세요.', revMeaning: '내면의 신호를 외면하거나 너무 감정적으로 반응하고 있어요. 직관이 왜곡되어 있을 수 있습니다.', revAdvice: '판단을 잠시 보류하고 충분히 생각한 후에 결정하세요.' },
+  { id: 3,  img: 'empress',        name: '여황제',          symbol: '🌿', keywords: ['풍요', '돌봄', '성장'],             meaning: '당신 주변의 것들이 천천히 무르익고 있습니다. 서두르지 않아도 이미 좋은 방향으로 자라고 있어요.', advice: '오늘 스스로를 돌보는 작은 행동 하나 — 맛있는 것 먹기, 산책, 충분한 물 마시기.', revMeaning: '성장이 막혀 있거나 지나치게 남에게 의존하고 있습니다. 스스로 결정을 내려야 할 때예요.', revAdvice: '오늘 스스로 결정해야 하는 것을 남에게 미루지 마세요.' },
+  { id: 4,  img: 'emperor',        name: '황제',            symbol: '👑', keywords: ['질서', '안정', '책임'],             meaning: '흔들리지 않는 기반이 있어야 다른 사람도 기댈 수 있습니다. 오늘 당신이 중심을 잡고 있다는 것 자체가 힘입니다.', advice: '미루던 중요한 결정 하나를 오늘 안에 내리고 그것을 기록하세요.', revMeaning: '지나치게 강하게 밀어붙이거나 유연하지 못한 태도가 관계를 어렵게 하고 있어요.', revAdvice: '오늘은 한 발 물러서서 상대의 입장에서 상황을 바라보세요.' },
+  { id: 5,  img: 'hierophant',     name: '교황',            symbol: '🕊️', keywords: ['지혜', '조언', '전통'],            meaning: '오래된 방식 안에 아직 쓸모 있는 지혜가 있습니다. 새것만이 답이 아닐 수 있어요.', advice: '신뢰하는 어른이나 경험 많은 사람에게 의견을 구해보세요. 오늘이 좋은 때입니다.', revMeaning: '기존 방식을 맹목적으로 따르거나 권위에 지나치게 저항하고 있을 수 있어요.', revAdvice: '오늘 나만의 판단 기준이 옳다는 확신을 잠시 내려놓고 다른 시각을 열어보세요.' },
+  { id: 6,  img: 'lovers',         name: '연인',            symbol: '💞', keywords: ['선택', '관계', '가치관'],           meaning: '지금 눈앞의 선택은 단순한 취향의 문제가 아니라 당신이 무엇을 소중히 여기는지를 보여줍니다.', advice: '오늘 가까운 사람에게 먼저 연락을 취하거나, 미루던 감사의 말을 전하세요.', revMeaning: '중요한 선택 앞에서 자신의 가치관과 행동이 일치하지 않고 있습니다. 내면의 갈등이 있어요.', revAdvice: '오늘 지금 관계에서 진짜 원하는 것이 무엇인지 솔직하게 적어보세요.' },
+  { id: 7,  img: 'chariot',        name: '전차',            symbol: '⚡', keywords: ['추진력', '결단', '승리'],           meaning: '방향을 잡았다면 지금은 멈출 때가 아닙니다. 속도보다 방향이 중요했고, 이제는 그 방향으로 나아갈 시간입니다.', advice: '오늘 포기하고 싶었던 것 하나를 딱 15분만 더 해보세요. 그게 전환점이 될 수 있어요.', revMeaning: '너무 빠르게 달리느라 방향을 잃었거나, 감정을 억누르며 무리하고 있습니다.', revAdvice: '오늘은 속도를 줄이고 지금 가는 방향이 여전히 맞는지 확인하세요.' },
+  { id: 8,  img: 'strength',       name: '힘',              symbol: '🦁', keywords: ['용기', '인내', '온화함'],           meaning: '진짜 강함은 억압이 아니라 이해에서 옵니다. 오늘 감정을 다스리는 것이 어떤 일보다 어렵고 중요한 일일 수 있어요.', advice: '오늘 화가 나거나 지칠 때, 바로 반응하지 말고 숨 세 번 쉰 후 말하거나 행동하세요.', revMeaning: '내면의 두려움이나 분노가 판단을 흐리고 있어요. 감정에 지배당하고 있을 수 있습니다.', revAdvice: '오늘 나를 지치게 만드는 상황에서 한 발 물러날 용기를 내세요.' },
+  { id: 9,  img: 'hermit',         name: '은자',            symbol: '🏔️', keywords: ['고독', '성찰', '안내'],            meaning: '혼자 있는 시간이 낭비가 아니라 충전입니다. 지금 내면의 목소리를 듣지 않으면 외부의 소음에 방향을 잃기 쉬워요.', advice: '오늘 저녁 30분만 혼자만의 조용한 시간을 만들고, 오늘 하루를 솔직하게 되짚어보세요.', revMeaning: '지나친 고립이나 완고함이 당신을 외롭게 만들고 있어요. 세상과 단절되어 있을 수 있습니다.', revAdvice: '오늘 신뢰하는 사람에게 먼저 연락하거나 함께하는 시간을 만들어보세요.' },
+  { id: 10, img: 'wheel',          name: '운명의 수레바퀴',  symbol: '🎡', keywords: ['변화', '순환', '기회'],             meaning: '지금 어렵다면 곧 바뀝니다. 지금 잘 흘러간다면 변화에 대비하세요. 수레바퀴는 항상 돌고 있습니다.', advice: '오늘은 결과를 통제하려 하지 말고, 흐름을 관찰하며 타이밍을 읽는 연습을 하세요.', revMeaning: '변화에 저항하거나 불운의 흐름 속에 있습니다. 억지로 바꾸려 할수록 더 힘들어져요.', revAdvice: '오늘은 컨트롤하려 하지 말고 지금 상황을 있는 그대로 받아들이세요.' },
+  { id: 11, img: 'justice',        name: '정의',            symbol: '⚖️', keywords: ['균형', '공정', '책임'],            meaning: '지금 상황에서 당신이 내린 선택의 결과가 돌아오고 있습니다. 두려워 말고, 있는 그대로 받아들이세요.', advice: '오늘 억울하거나 불공평하게 느껴지는 것이 있다면, 감정 없이 사실만 정리해 적어보세요.', revMeaning: '상황을 왜곡하거나 책임을 회피하고 있을 수 있어요. 편견이 판단을 흐리고 있습니다.', revAdvice: '오늘 내가 모른 척하고 싶은 것이 있다면 정면으로 마주하세요.' },
+  { id: 12, img: 'hanged-man',     name: '매달린 자',        symbol: '🔄', keywords: ['관점 전환', '기다림', '내려놓음'],  meaning: '지금 멈춰있는 것처럼 보이지만, 사실은 다른 각도로 보고 있는 중입니다. 거꾸로 매달린 자리가 새로운 시각을 줍니다.', advice: '오늘 당신이 확신하는 것 하나에 "혹시 반대로 생각하면?" 이라고 물어보세요.', revMeaning: '기다림이 지혜가 아닌 무기력이 되고 있습니다. 지금은 행동이 필요한 시기예요.', revAdvice: '오늘 너무 오래 미루고 있던 결정 하나를 드디어 실행하세요.' },
+  { id: 13, img: 'death',          name: '죽음',            symbol: '🌹', keywords: ['변환', '끝과 시작', '해방'],        meaning: '무언가가 끝나고 있습니다. 그것은 상실이 아니라 다음 장을 위한 자리 만들기입니다. 집착을 내려놓을 때 새것이 들어옵니다.', advice: '오늘 이제 놓아도 되는 것 하나 — 관계, 습관, 감정 — 를 떠올리고 작별 인사를 해보세요.', revMeaning: '이미 끝난 것에 집착하며 새로운 시작을 가로막고 있어요. 변화를 두려워하고 있습니다.', revAdvice: '오늘 더 이상 필요 없는 것에 에너지를 쏟고 있지는 않은지 점검하세요.' },
+  { id: 14, img: 'temperance',     name: '절제',            symbol: '🌊', keywords: ['조화', '균형', '치유'],             meaning: '급하지 않아도 됩니다. 지금 가장 필요한 것은 양극단을 오가지 않고 중심을 잡는 것입니다.', advice: '오늘 과하게 하고 있는 것(일, 음식, SNS 등)을 절반으로 줄이고 그 시간에 쉬세요.', revMeaning: '한쪽으로 치우쳐 있거나 지나치게 빠르게 움직이고 있어요. 불균형이 몸과 마음에 영향을 주고 있습니다.', revAdvice: '오늘 가장 과하게 하고 있는 것 하나를 의식적으로 줄여보세요.' },
+  { id: 15, img: 'devil',          name: '악마',            symbol: '⛓️', keywords: ['집착', '두려움', '속박'],          meaning: '당신을 묶고 있는 것의 사슬은 사실 당신이 스스로 채운 것일 수 있어요. 직면하는 순간 그 힘은 절반으로 줄어듭니다.', advice: '오늘 회피하고 싶은 것을 딱 5분만 정면으로 마주하세요. 그게 시작입니다.', revMeaning: '집착이나 두려움에서 조금씩 벗어나고 있어요. 사슬이 느슨해지고 있는 중입니다.', revAdvice: '오늘 불필요한 관계나 습관 하나를 공식적으로 끊어내세요. 지금이 기회예요.' },
+  { id: 16, img: 'tower',          name: '탑',              symbol: '🌩️', keywords: ['붕괴', '각성', '해방'],            meaning: '갑작스러운 변화가 파괴처럼 느껴지지만, 사실 오래된 거짓 구조가 무너지는 중일 수 있습니다.', advice: '오늘 예상치 못한 일이 생겨도 패닉하지 말고, "이게 무엇을 바꿀 기회인가?" 물어보세요.', revMeaning: '이미 무너져야 할 것을 억지로 붙들고 있거나 내면에 혼란이 쌓이고 있어요.', revAdvice: '오늘 억지로 유지하고 있는 것이 무엇인지 스스로 솔직하게 물어보세요.' },
+  { id: 17, img: 'star',           name: '별',              symbol: '✨', keywords: ['희망', '치유', '영감'],             meaning: '어두운 밤일수록 별이 더 잘 보입니다. 지금 당신 안에 아직 꺼지지 않은 희망이 있어요.', advice: '오늘 오래 가슴에 묻어뒀던 꿈이나 소원을 종이에 적어보세요. 쓰는 것 자체가 힘이 됩니다.', revMeaning: '희망이 흔들리고 있어요. 지나치게 높은 기대가 실망을 만들고 있을 수 있습니다.', revAdvice: '오늘 기대를 조금 현실적으로 조정하고, 지금 당장 할 수 있는 것에 집중하세요.' },
+  { id: 18, img: 'moon',           name: '달',              symbol: '🌕', keywords: ['무의식', '불안', '환상'],           meaning: '지금 눈에 보이는 것이 전부가 아닙니다. 안개 속에서 움직이는 것이 답답하겠지만, 아직 전모가 드러나지 않은 것뿐이에요.', advice: '오늘 판단을 보류하고 더 많은 정보가 올 때까지 중요한 결정을 미뤄도 좋습니다.', revMeaning: '안개가 조금씩 걷히고 있어요. 두려움이 실제보다 과장되어 있었을 수 있습니다.', revAdvice: '오늘 오랫동안 불안했던 것의 실체를 다시 냉정하게 들여다보세요.' },
+  { id: 19, img: 'sun',            name: '태양',            symbol: '☀️', keywords: ['기쁨', '활력', '명확함'],           meaning: '오늘은 에너지가 있고 모든 것이 조금 더 선명하게 보이는 날입니다. 이 명료함을 활용하세요.', advice: '오늘 오래 미뤘던 중요한 대화나 결정을 하기 가장 좋은 날입니다. 지금 하세요.', revMeaning: '긍정적이지만 지나치게 낙관하거나 행동을 미루고 있을 수 있어요. 의욕이 실행으로 이어지지 않고 있어요.', revAdvice: '오늘 의욕이 실제 행동으로 이어지도록 아주 작은 것 하나라도 지금 실행하세요.' },
+  { id: 20, img: 'judgement',      name: '심판',            symbol: '📯', keywords: ['부활', '결산', '소명'],             meaning: '무언가가 당신을 부르고 있습니다. 과거의 자신을 평가할 때가 왔고, 이제 다음 단계로 나아갈 준비가 되었습니다.', advice: '오늘 한 가지 중요한 다짐을 하고, 믿을 수 있는 사람에게 소리 내어 말하거나 써서 공유하세요.', revMeaning: '중요한 변화 앞에서 스스로를 의심하거나 준비 부족을 핑계로 미루고 있습니다.', revAdvice: '오늘 충분히 준비됐다는 확인을 기다리지 말고 그냥 시작하는 연습을 하세요.' },
+  { id: 21, img: 'world',          name: '세계',            symbol: '🌍', keywords: ['완성', '통합', '성취'],             meaning: '한 사이클이 마무리되고 있습니다. 작든 크든 지금까지 걸어온 길을 인정받아야 할 때입니다.', advice: '오늘 스스로에게 "잘했다"고 소리 내어 말해보세요. 그리고 다음 여정의 첫 줄을 적어보세요.', revMeaning: '마무리 직전에 멈추거나 성취를 제대로 인정받지 못하고 있어요. 끝내지 못한 것이 발목을 잡고 있습니다.', revAdvice: '오늘 아직 완성하지 못한 것 하나를 완전히 마무리하는 것에만 집중하세요.' },
+];
+
+const TAROT_SPREADS = [
+  { id: 'daily',  label: '오늘의 운세',   emoji: '🌅', count: 3, positions: ['과거',      '현재',   '미래'] },
+  { id: 'health', label: '오늘의 건강',   emoji: '💚', count: 2, positions: ['몸 상태',    '마음 상태'] },
+  { id: 'wealth', label: '오늘의 재물운', emoji: '💰', count: 3, positions: ['현재 상황',  '장애물', '결과'] },
+  { id: 'love',   label: '연애운',        emoji: '💞', count: 3, positions: ['나의 마음',  '상대방', '관계 흐름'] },
+  { id: 'worry',  label: '지금의 고민',   emoji: '🤔', count: 3, positions: ['고민의 원인','핵심',   '조언'] },
+  { id: 'single', label: '한 장 운세',    emoji: '🃏', count: 1, positions: ['지금 이 순간'] },
+];
+
+// 별 캔버스 상태
+let _tarotStarRaf = null;
+const _tarotStars = [];
+let _tarotCurrentSpread = null;
+let _tarotPickedCards   = [];
+
+function _initTarotStars(canvas) {
+  _tarotStars.length = 0;
+  const W = canvas.width, H = canvas.height;
+  for (let i = 0; i < 50; i++) {
+    _tarotStars.push({ x: Math.random()*W, y: Math.random()*H, r: Math.random()*1.4+0.4, phase: Math.random()*Math.PI*2, speed: Math.random()*0.025+0.01 });
+  }
+}
+function _drawTarotStars(canvas, ctx, t) {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  for (const s of _tarotStars) {
+    const alpha = 0.3 + 0.5*(0.5+0.5*Math.sin(s.phase+t*s.speed));
+    ctx.beginPath(); ctx.arc(s.x, s.y, s.r, 0, Math.PI*2);
+    ctx.fillStyle = `rgba(220,180,255,${alpha.toFixed(3)})`; ctx.fill();
+  }
+}
+function _startTarotStarAnim() {
+  const canvas = $('tarotStarCanvas'); if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  canvas.width = window.innerWidth; canvas.height = window.innerHeight;
+  _initTarotStars(canvas);
+  let frame = 0;
+  function loop() { _drawTarotStars(canvas, ctx, frame++); _tarotStarRaf = requestAnimationFrame(loop); }
+  _tarotStarRaf = requestAnimationFrame(loop);
+}
+function _stopTarotStarAnim() {
+  if (_tarotStarRaf) { cancelAnimationFrame(_tarotStarRaf); _tarotStarRaf = null; }
+}
+
+function _prefersReducedMotion() {
+  return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+}
+
+function loadTarot() {
+  try {
+    const preview = $('tarotDeckPreview');
+    if (!preview) return;
+    preview.innerHTML = '';
+    [-8, 0, 8].forEach((deg, i) => {
+      const mini = document.createElement('div');
+      mini.className = 'tarot-mini';
+      mini.style.cssText = `transform:translate(-50%,-50%) rotate(${deg}deg) translateX(${[-6,0,6][i]}px);z-index:${i};`;
+      preview.appendChild(mini);
+    });
+    const card = $('tarotCard');
+    if (card) card.classList.remove('hidden');
+    $('tarotStartBtn').addEventListener('click', openTarotOverlay);
+  } catch (e) { console.warn('[tarot]', e); }
+}
+
+// 오늘 날짜 문자열 (YYYY-MM-DD)
+function _todayStr() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+
+function _saveDailyReading() {
+  try {
+    localStorage.setItem('tarot_daily_v1', JSON.stringify({
+      date: _todayStr(),
+      spreadId: _tarotCurrentSpread.id,
+      cards: _tarotPickedCards.map(({ card, reversed }) => ({ id: card.id, reversed })),
+    }));
+  } catch {}
+}
+
+function _loadDailyReading() {
+  try {
+    const j = JSON.parse(localStorage.getItem('tarot_daily_v1') || '{}');
+    if (j.date !== _todayStr()) return null;
+    const spread = TAROT_SPREADS.find((s) => s.id === j.spreadId);
+    if (!spread) return null;
+    const cards = (j.cards || []).map(({ id, reversed }) => {
+      const card = TAROT_DECK.find((d) => d.id === id);
+      return card ? { card, reversed } : null;
+    }).filter(Boolean);
+    if (cards.length !== spread.count) return null;
+    return { spread, cards };
+  } catch { return null; }
+}
+
+function openTarotOverlay() {
+  $('tarotOverlay').classList.remove('hidden');
+  document.body.style.overflow = 'hidden';
+  if (!_prefersReducedMotion()) _startTarotStarAnim();
+
+  const saved = _loadDailyReading();
+  if (saved) {
+    // 오늘 이미 뽑은 운세가 있으면 결과 바로 표시
+    _tarotCurrentSpread = saved.spread;
+    _tarotPickedCards = saved.cards;
+    _showPhase('reveal');
+    _buildSpreadReveal(true);
+  } else {
+    _tarotCurrentSpread = null;
+    _tarotPickedCards = [];
+    _showPhase('pick');
+    _buildSpreadGrid();
+  }
+}
+
+function closeTarotOverlay() {
+  const ov = $('tarotOverlay');
+  ov.classList.add('hidden');
+  ov.classList.remove('is-spread-mode');
+  document.body.style.overflow = '';
+  _stopTarotStarAnim();
+}
+
+function _showPhase(name) {
+  const ov = $('tarotOverlay');
+  const sb = $('tarotScrollBody');
+  if (name === 'reveal') {
+    ov.classList.add('is-spread-mode');
+  } else {
+    ov.classList.remove('is-spread-mode');
+  }
+  if (sb) sb.scrollTop = 0;
+  ['pick','shuffling','select','reveal'].forEach((p) => {
+    $(`tarotPhase${p.charAt(0).toUpperCase()+p.slice(1)}`).classList.toggle('hidden', p !== name);
+  });
+}
+
+function _buildSpreadGrid() {
+  const grid = $('tarotSpreadGrid');
+  grid.innerHTML = '';
+  TAROT_SPREADS.forEach((sp) => {
+    const btn = document.createElement('button');
+    btn.className = 'tarot-spread-btn';
+    btn.innerHTML = `<span class="tsb-emoji">${sp.emoji}</span><span class="tsb-label">${sp.label}</span><span class="tsb-count">${sp.count}장</span>`;
+    btn.addEventListener('click', () => _startSpread(sp.id));
+    grid.appendChild(btn);
+  });
+}
+
+function _startSpread(spreadId) {
+  _tarotCurrentSpread = TAROT_SPREADS.find((s) => s.id === spreadId);
+  _tarotPickedCards = [];
+  $('tarotShuffleHint').textContent = `${_tarotCurrentSpread.emoji} ${_tarotCurrentSpread.label} 카드를 섞고 있어요`;
+  _showPhase('shuffling');
+  _buildShuffleDeck();
+  const delay = _prefersReducedMotion() ? 800 : 2500;
+  setTimeout(() => { _updateSelectHint(); _showPhase('select'); _buildFan(); }, delay);
+}
+
+function _updateSelectHint() {
+  const sp = _tarotCurrentSpread;
+  const picked = _tarotPickedCards.length;
+  const label = sp.positions[picked] || '';
+  if (sp.count === 1) {
+    $('tarotSelectHint').textContent = '마음을 비우고 한 장을 선택하세요';
+  } else if (picked === sp.count - 1) {
+    $('tarotSelectHint').textContent = `마지막 — "${label}" 카드를 선택하세요`;
+  } else {
+    $('tarotSelectHint').textContent = `${picked + 1}번째 — "${label}" 카드를 선택하세요`;
+  }
+}
+
+function _buildShuffleDeck() {
+  const deck = $('tarotShuffleDeck'); deck.innerHTML = '';
+  for (let i = 0; i < 7; i++) {
+    const card = document.createElement('div');
+    card.className = 'ts-card';
+    card.style.setProperty('--r',     `${(Math.random()*30-15).toFixed(1)}deg`);
+    card.style.setProperty('--dx',    `${(Math.random()*60-30).toFixed(1)}px`);
+    card.style.setProperty('--delay', `${(i*0.18).toFixed(2)}s`);
+    deck.appendChild(card);
+  }
+}
+
+function _buildFan() {
+  const wrap = $('tarotFanWrap'); wrap.innerHTML = '';
+  const count = 7, spread = 36;
+  const shuffled = [...TAROT_DECK].sort(() => Math.random()-0.5);
+  for (let i = 0; i < count; i++) {
+    const card = document.createElement('div');
+    card.className = 'tf-card';
+    card.setAttribute('tabindex', '0');
+    card.setAttribute('role', 'button');
+    card.setAttribute('aria-label', `카드 ${i+1} 선택`);
+    const angle   = -spread/2 + (spread/(count-1))*i;
+    const xOffset = (i-(count-1)/2)*14;
+    const transform = `rotate(${angle}deg) translateX(${xOffset}px)`;
+    card.style.setProperty('--fan-transform', transform);
+    card.style.transform = transform;
+    const deckCard = shuffled[i];
+    card.addEventListener('click',   (e) => _onFanCardPick(e, card, deckCard));
+    card.addEventListener('keydown', (e) => { if (e.key==='Enter'||e.key===' ') { e.preventDefault(); _onFanCardPick(e, card, deckCard); } });
+    wrap.appendChild(card);
+  }
+}
+
+function _onFanCardPick(e, cardEl, deckCard) {
+  if (cardEl.classList.contains('selected') || cardEl.classList.contains('tf-disabled')) return;
+  cardEl.classList.add('selected');
+  const isReversed = Math.random() < 0.35;
+  _tarotPickedCards.push({ card: deckCard, reversed: isReversed });
+  if (_tarotPickedCards.length >= _tarotCurrentSpread.count) {
+    const delay = _prefersReducedMotion() ? 150 : 600;
+    setTimeout(() => { _showPhase('reveal'); _buildSpreadReveal(false); }, delay);
+  } else {
+    _updateSelectHint();
+  }
+}
+
+function _buildSpreadReveal(isReplay = false) {
+  const sp = _tarotCurrentSpread;
+  const layout  = $('tarotSpreadLayout');
+  const summary = $('tarotSpreadSummary');
+  const againBtn = $('tarotAgainBtn');
+
+  // 새 운세면 저장
+  if (!isReplay) _saveDailyReading();
+
+  $('tarotSpreadTitle').textContent = `${sp.emoji} ${sp.label}`;
+  layout.innerHTML = '';
+  layout.setAttribute('data-count', sp.count);
+  summary.classList.add('hidden');
+  summary.innerHTML = '';
+  againBtn.classList.add('hidden');
+
+  _tarotPickedCards.forEach(({ card, reversed }, idx) => {
+    const slot = document.createElement('div');
+    slot.className = 'tarot-spread-slot';
+
+    const posLabel = document.createElement('div');
+    posLabel.className = 'tarot-spread-pos';
+    posLabel.textContent = sp.positions[idx];
+
+    const scene = document.createElement('div');
+    scene.className = 'tarot-flip-scene';
+
+    const flipCard = document.createElement('div');
+    flipCard.className = 'tarot-flip-card tc-spread';
+
+    const back = document.createElement('div');
+    back.className = 'tarot-face tarot-back';
+
+    const front = document.createElement('div');
+    front.className = 'tarot-face tarot-front' + (reversed ? ' is-reversed' : '');
+
+    const kwHtml = card.keywords.map((k) => `<span class="tarot-front-kw">${escHtml(k)}</span>`).join('');
+    const imgHtml = card.img
+      ? `<img src="/assets/tarot/tarot-${card.img}.webp" alt="${escHtml(card.name)}" class="tarot-card-img" onerror="this.style.display='none';this.nextElementSibling.style.display='block'">`
+        + `<div class="tarot-front-symbol" style="display:none">${card.symbol}</div>`
+      : `<div class="tarot-front-symbol">${card.symbol}</div>`;
+
+    // 내용 전체를 .tf-inner로 감싸고, 역방향이면 CSS로 180도 회전
+    front.innerHTML = `
+      <div class="tf-inner">
+        ${imgHtml}
+        <div class="tarot-front-name">${escHtml(card.name)}</div>
+        <div class="tarot-front-kwrap">${kwHtml}</div>
+      </div>
+    `;
+
+    // 역방향 라벨 — 카드 아래에 별도 표시 (플립 완료 후 페이드인)
+    const oriLabel = document.createElement('div');
+    oriLabel.className = 'tarot-ori-label' + (reversed ? ' is-rev hidden' : ' hidden');
+    oriLabel.textContent = reversed ? '↕ 역방향' : '↑ 정방향';
+
+    flipCard.appendChild(back);
+    flipCard.appendChild(front);
+    scene.appendChild(flipCard);
+    slot.appendChild(posLabel);
+    slot.appendChild(scene);
+    slot.appendChild(oriLabel);
+    layout.appendChild(slot);
+
+    if (isReplay) {
+      // 이미 봤던 운세 — 즉시 앞면 표시
+      flipCard.classList.add('flipped');
+      oriLabel.classList.remove('hidden');
+    } else {
+      const flipDelay = _prefersReducedMotion() ? idx*80 : 600 + idx*1100;
+      setTimeout(() => {
+        requestAnimationFrame(() => requestAnimationFrame(() => {
+          flipCard.classList.add('flipped');
+          setTimeout(() => oriLabel.classList.remove('hidden'), _prefersReducedMotion() ? 50 : 900);
+        }));
+      }, flipDelay);
+    }
+  });
+
+  const summaryDelay = isReplay ? 80 : (_prefersReducedMotion() ? 300 : 600 + sp.count*1100 + 700);
+  setTimeout(() => {
+    _buildSpreadSummary();
+    summary.classList.remove('hidden');
+    setTimeout(() => {
+      // 오늘 이미 본 운세 — "닫기"만 표시, 재뽑기 없음
+      againBtn.textContent = isReplay ? '오늘 운세 닫기' : '닫기';
+      againBtn.classList.remove('hidden');
+    }, isReplay ? 0 : (_prefersReducedMotion() ? 100 : 400));
+  }, summaryDelay);
+}
+
+function _buildSpreadSummary() {
+  const sp = $('tarotSpreadSummary');
+  const revCount = _tarotPickedCards.filter((p) => p.reversed).length;
+  const total = _tarotPickedCards.length;
+  let tone;
+  if      (revCount === 0)     tone = '전반적으로 긍정적인 흐름이에요. 지금 방향을 믿고 나아가세요.';
+  else if (revCount === total) tone = '지금은 내면을 돌아볼 시간입니다. 외부보다 자신에게 집중하세요.';
+  else                         tone = '밝음과 그늘이 공존하는 시기예요. 균형을 유지하며 신중하게 움직이세요.';
+
+  const cardsHtml = _tarotPickedCards.map(({ card, reversed }, idx) => {
+    const meaning = reversed ? card.revMeaning : card.meaning;
+    const advice  = reversed ? card.revAdvice  : card.advice;
+    return `
+      <div class="tss-entry">
+        <div class="tss-header">${_tarotCurrentSpread.positions[idx]} &nbsp;·&nbsp; <strong>${escHtml(card.name)}</strong>${reversed ? ' <span class="tarot-rev-badge tss-rev">역방향</span>' : ''}</div>
+        <p class="tss-meaning">${escHtml(meaning)}</p>
+        <p class="tss-advice">▸ ${escHtml(advice)}</p>
+      </div>
+    `;
+  }).join('<hr class="tss-divider">');
+
+  sp.innerHTML = `<div class="tss-tone">${tone}</div>${cardsHtml}`;
+}
+
+$('tarotXBtn')?.addEventListener('click', closeTarotOverlay);
+$('tarotAgainBtn')?.addEventListener('click', closeTarotOverlay);
+$('tarotOverlay')?.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') closeTarotOverlay();
+});
 
 boot();

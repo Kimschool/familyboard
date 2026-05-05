@@ -1,6 +1,6 @@
 // ============================================================================
 // 고스톱 AI — 휴리스틱 의사결정 (브라우저 / Node 양쪽 호환 UMD)
-// - level: 1~20. 낮으면 랜덤 + 약한 휴리스틱, 높으면 결정론적 + 세트·고/스톱 EV
+// - level: 1~40. 낮으면 랜덤 + 약한 휴리스틱, 높으면 결정론적 + 세트·고/스톱 EV
 // - 모든 함수는 순수 (state/level → choice)
 // ============================================================================
 (function (global, factory) {
@@ -15,24 +15,67 @@
   const CHEONGDAN = new Set(['모란 청단', '국화 청단', '단풍 청단']);
   const CHODAN = new Set(['흑싸리 초단', '난초 초단', '홍싸리 초단']);
 
-  // 레벨별 의사결정 파라미터 (선형 보간, level 1~20)
-  function paramsFor(level) {
-    const t = Math.max(0, Math.min(1, (level - 1) / 19));
+  function clamp(n, a, b) { return Math.max(a, Math.min(b, n)); }
+
+  // 페르소나: 수치는 작게(±) — 레벨 t 와 곱해 강해질수록 "성격"이 드러남, 평균 밸런스는 base 곡선 유지
+  const PERSONAS = [
+    { id: 'bal', short: '균형', emoji: '⚖️', hint: '공격·수비 밸런스형. 성향 차이는 작게 느껴질 수 있어요.', d: {} },
+    { id: 'greed', short: '욕심', emoji: '💰', hint: '세트·고 쪽을 조금 더 탐내는 상대에요.', d: { goAggression: 0.04, setWeight: 0.04, defenseWeight: -0.03, randomness: -0.02 } },
+    { id: 'build', short: '끈기', emoji: '🎯', hint: '광·단·고도리 완성에 더 집요해요.', d: { setWeight: 0.05, matchPriority: 0.03, goAggression: -0.02 } },
+    { id: 'shark', short: '압박', emoji: '🦈', hint: '견제와 흐름 압박에 치우쳐요. 실수는 줄이는 쪽이에요.', d: { defenseWeight: 0.04, goAggression: 0.02, matchPriority: 0.02, randomness: -0.03 } },
+    { id: 'safe', short: '신중', emoji: '🐢', hint: '스톱·안전 쪽, 무리한 수는 덜 둡니다.', d: { goAggression: -0.04, randomness: 0.04, matchPriority: 0.02, think: 0.22 } },
+    { id: 'wild', short: '변수', emoji: '🎲', hint: '가끔 뜬금없는 수 — 예측이 조금 흐려요.', d: { randomness: 0.05, goAggression: 0.03, matchPriority: -0.02, think: -0.16 } },
+  ];
+
+  function personaIndex(level) {
+    const L = Math.max(1, Math.min(40, level | 0));
+    return (L - 1) % PERSONAS.length;
+  }
+
+  // 레벨별 베이스 + 페르소나 가산 (level 1~40, t: 0~1)
+  // t=0.487(Lv.20) 기준이 구 Lv.20과 유사하게, t=1(Lv.40)은 그보다 훨씬 강함
+  function baseParamsFor(level) {
+    const t = Math.max(0, Math.min(1, (level - 1) / 39));
     return {
-      // 랜덤성 — 낮은 레벨에서 약간의 무작위성 (가족이 이길 여지)
-      randomness: 0.55 * (1 - t),
-      // 매치 우선도 — 낮으면 가끔 매치 안 함, 높으면 항상 매치
-      matchPriority: 0.3 + 0.7 * t,
-      // 세트(광/단/고도리) 가중치
-      setWeight: 0.2 + 1.4 * t,
-      // 상대 견제 가중치 (상대가 거의 완성한 세트의 단서를 의도적으로 제거)
-      defenseWeight: 0.0 + 1.0 * t,
-      // 고/스톱 공격성 — 0:방어적(stop), 1:공격적(go)
-      goAggression: 0.3 + 0.55 * t,
-      // 사고 시간 (ms) — 높은 레벨일수록 잠시 더 길게 "깊이 생각"
-      thinkMinMs: 500 + 700 * t,
-      thinkMaxMs: 1100 + 1400 * t,
+      randomness: 0.55 * Math.max(0, 1 - t * 2.1), // Lv.20(t≈0.49)부터 0에 수렴
+      matchPriority: 0.3 + 1.4 * t,                // 0.3 → 1.7
+      setWeight: 0.2 + 3.0 * t,                    // 0.2 → 3.2
+      defenseWeight: 0.0 + 2.2 * t,                // 0.0 → 2.2
+      goAggression: 0.3 + 1.2 * t,                 // 0.3 → 1.5 (clamped to 1)
+      thinkMinMs: 500 + 1400 * t,                  // 500 → 1900
+      thinkMaxMs: 1100 + 2800 * t,                 // 1100 → 3900
     };
+  }
+
+  function paramsFor(level) {
+    const L = Math.max(1, Math.min(40, level | 0));
+    const t = Math.max(0, Math.min(1, (L - 1) / 39));
+    const base = baseParamsFor(L);
+    const per = PERSONAS[personaIndex(L)];
+    const d = per.d;
+    // 낮은 레벨에선 페르소나가 거의 보이지 않게 (밸런스·튜토리얼 느낌 유지)
+    const ps = 0.12 + 0.88 * t;
+    const r = (d.randomness || 0) * ps;
+    const m = (d.matchPriority || 0) * ps;
+    const s = (d.setWeight || 0) * ps;
+    const def = (d.defenseWeight || 0) * ps;
+    const g = (d.goAggression || 0) * ps;
+    const th = (d.think || 0) * ps;
+    return {
+      randomness: clamp(base.randomness + r, 0, 0.62),
+      matchPriority: clamp(base.matchPriority + m, 0.1, 1),
+      setWeight: clamp(base.setWeight + s, 0, 3.5),
+      defenseWeight: clamp(base.defenseWeight + def, 0, 2.5),
+      goAggression: clamp(base.goAggression + g, 0, 1),
+      thinkMinMs: Math.max(200, Math.round(base.thinkMinMs * (1 + th * 0.2))),
+      thinkMaxMs: Math.max(300, Math.round(base.thinkMaxMs * (1 + th * 0.2))),
+    };
+  }
+
+  function personaLabel(level) { return PERSONAS[personaIndex(Math.max(1, Math.min(40, level | 0)))].short; }
+
+  function personaMeta(level) {
+    return PERSONAS[personaIndex(Math.max(1, Math.min(40, level | 0)))];
   }
 
   function pickRandom(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
@@ -221,7 +264,7 @@
       if (v > bestVal) bestVal = v;
     });
     // 평균 trio 가치 ≥ 4 (피만 3장이면 3, 광·단 섞이면 12+) — 임계 보정
-    const threshold = 6 - 2 * (paramsFor(level).goAggression - 0.3); // level 높을수록 적극
+    const threshold = 6 - 2 * (p.goAggression - 0.3); // level 높을수록 적극
     // randomness 가미
     const accept = bestVal >= threshold || Math.random() < p.randomness * 0.3;
     return !!accept;
@@ -253,18 +296,26 @@
     return best.month;
   }
 
-  // 봇 닉네임 — 레벨별 분위기
+  // 봇 닉네임 — 티어 + 짧은 페르소나 (같은 레벨=같은 성격, 레벨마다 돌아감)
   function botNameFor(level) {
-    if (level <= 3)  return '🐣 새내기 봇 Lv.' + level;
-    if (level <= 7)  return '🤖 입문 봇 Lv.' + level;
-    if (level <= 11) return '🎴 노련한 봇 Lv.' + level;
-    if (level <= 15) return '🔥 고수 봇 Lv.' + level;
-    if (level <= 18) return '👹 명인 봇 Lv.' + level;
-    return '💀 마왕 Lv.' + level;
+    const L = Math.max(1, Math.min(40, level | 0));
+    let tier;
+    if (L <= 3)  tier = '🐣 새내기';
+    else if (L <= 7)  tier = '🤖 입문';
+    else if (L <= 11) tier = '🎴 노련';
+    else if (L <= 15) tier = '🔥 고수';
+    else if (L <= 20) tier = '👹 명인';
+    else if (L <= 27) tier = '💀 마왕';
+    else if (L <= 33) tier = '🌟 전설';
+    else tier = '👑 패왕';
+    return tier + ' · ' + personaLabel(L) + ' Lv.' + L;
   }
 
   return {
+    baseParamsFor: baseParamsFor,
     paramsFor: paramsFor,
+    personaLabel: personaLabel,
+    personaMeta: personaMeta,
     decideHandPlay: decideHandPlay,
     decideMatchChoice: decideMatchChoice,
     decideGoStop: decideGoStop,

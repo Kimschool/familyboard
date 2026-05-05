@@ -1,12 +1,13 @@
 // 고스톱 사운드 엔진 v3 (R26 / Sound S2 — 자산+합성 혼합 + 한국 전통 화투 톤 재설계)
 // - 5채널 Audio Bus (master / sfx / music / ui / voice)
 // - Web Audio synthesis 헬퍼 (sine/saw/square/triangle + ADSR + pitch sweep + biquad noise)
-// - NEW: AudioBuffer 자산 로더 — sounds/*.ogg 16종 사전 디코드 후 풀 재생
+// - NEW: AudioBuffer 자산 로더 — sounds/*.ogg (필수 16 + 선택 matchHit1) 사전 디코드 후 풀 재생
 // - Polyphony manager (category 별 동시 cap, oldest fade-out)
 // - 합성 + OGG 자산 혼합 라이브러리 (전 타격음/슬라이드/싹쓸이는 OGG, 톤·시그널·점수 jingle 은 합성)
 // - 기존 SFX API 호환: clack/ching/flip/myturn/slap/gong/fanfare/lose/score
 // - 신규(R12): tap/tick/tickFinal/emojiSend/emojiReceive/dialogOpen/shuffleBurst
 // - 신규(R26): shake/bomb/ttadak/jaBbuk/bbukMeok/sseul/chooseHint
+// - SFX go/stop/win/goStopPrompt: 맞고·고스톱 콜·승(합성+OGG 혼합, 상용 BGM/효과음 미사용)
 //
 // === R26 사운드 진단 (사용자 "어색하고 불만" 피드백 대응) ===
 // 1) 합성 사각파(square) tap/tick 의 고주파 (2.2kHz / 1.2kHz) 가 모바일 스피커에서 째지는 톤
@@ -30,7 +31,7 @@
   let masterVol = (function () { try { return Math.max(0, Math.min(1, Number(localStorage.getItem('gostopMasterVol') || '0.85'))); } catch { return 0.85; } })();
   let buses = null;            // { master, sfx, music, ui, voice } GainNode
 
-  // ===== 자산 로더 — sounds/*.ogg 16종 =====
+  // ===== 자산 로더 — sounds/*.ogg (16 + 선택 matchHit1) =====
   // 모바일/데스크탑 모두 OGG Vorbis 지원 (iOS Safari 14.1+ 도 OK)
   // fetch → arrayBuffer → decodeAudioData 로 사전 디코드. 풀 재생은 BufferSource 매번 new.
   const ASSET_LIST = [
@@ -39,6 +40,8 @@
     'cardSlide1','cardSlide2','cardSlide3',
     'highUp','pepSound1','pepSound2','pepSound3',
     'threeTone1','threeTone2','tone1',
+    // 선택: public/games/gostop/sounds/matchHit1.ogg — 패-패 매칭( clack ) 전용. 없으면 기존 cardPlace+합성
+    'matchHit1',
   ];
   const BUFFERS = Object.create(null);   // name → AudioBuffer
   let _preloadStarted = false;
@@ -76,6 +79,11 @@
     bbukMeok: 0.180,
     sseul: 0.350,
     chooseHint: 0.300,
+    // 맞고 톤 — 고/스톱/승/매칭
+    goCall: 0.320,
+    stopCall: 0.380,
+    winFan: 0.75,
+    goStopPrompt: 0.30,
   };
   function _gateKey(key) {
     const c = ctx; if (!c) return true;
@@ -277,21 +285,31 @@
       if (!_gateKey('tap')) return;
       synthOsc(700, 'triangle', 0.05, { vol: 0.18, bus: 'ui', attack: 0.001, decay: 0.012, release: 0.035 });
     },
-    // 카드 매치 "탁!" — OGG(있으면) + 짧은 셔브로 두 장이 맞닿는 두께 + 합성 폴백(화투끼리 착)
+    // 화투끼리 매칭 "탁" — matchHit1.ogg(있으면) 우선 → 그다음 cardPlace 풀 + 합성
     cardClack: function () {
       if (!_gateKey('cardClack')) return;
-      if (playBufPool(['cardPlace1', 'cardPlace2', 'cardPlace3', 'cardPlace4'], { vol: 0.78, bus: 'sfx' })) {
-        playBuf('cardShove1', { vol: 0.14, bus: 'sfx', when: 0.01, detune: -30 });
-        return;
+      if (playBuf('matchHit1', { vol: 0.78, bus: 'sfx' })) return;
+      if (playBufPool(['cardPlace1', 'cardPlace2', 'cardPlace3', 'cardPlace4'], { vol: 0.68, bus: 'sfx' })) {
+        playBuf('cardShove1', { vol: 0.16, bus: 'sfx', when: 0.01, detune: -25 });
+        playBuf('cardShove2', { vol: 0.1, bus: 'sfx', when: 0.02, detune: 12 });
+      } else {
+        if (playBuf('cardShove1', { vol: 0.5, bus: 'sfx', detune: 10 })) {
+          playBuf('cardShove2', { vol: 0.28, bus: 'sfx', when: 0.016, detune: -8 });
+        }
       }
-      if (playBuf('cardShove1', { vol: 0.55, bus: 'sfx', detune: 20 })) {
-        playBuf('cardShove2', { vol: 0.32, bus: 'sfx', when: 0.014, detune: -15 });
-        return;
-      }
-      // 폴백 — 이중 bandpass "착" + 아주 약한 저역 (잔망 붙이는 느낌)
-      synthNoise(0.022, { vol: 0.34, bus: 'sfx', filterType: 'bandpass', filterFreq: 340, filterQ: 0.9, attack: 0.0005, decay: 0.008, release: 0.018 });
-      synthNoise(0.03, { vol: 0.22, bus: 'sfx', filterType: 'bandpass', filterFreq: 220, filterQ: 1.1, when: 0.012, attack: 0.0005, decay: 0.01, release: 0.022 });
-      synthOsc(95, 'triangle', 0.04, { vol: 0.12, bus: 'sfx', attack: 0.0008, decay: 0.012, release: 0.024, when: 0.006 });
+      playBufPool(['cardSlide1', 'cardSlide2'], { vol: 0.1, bus: 'sfx', when: 0.003, detune: 50 });
+      [0, 0.012, 0.024].forEach(function (t, i) {
+        const fq = 260 + (i * 28) - (i > 0 ? 40 : 0);
+        synthNoise(0.018, {
+          vol: 0.32 - i * 0.06, bus: 'sfx', filterType: 'bandpass', filterFreq: fq, filterQ: 1.15,
+          when: t, attack: 0.0003, decay: 0.005, release: 0.012,
+        });
+        synthNoise(0.01, {
+          vol: 0.12 - i * 0.02, bus: 'sfx', filterType: 'lowpass', filterFreq: 700 + i * 100,
+          when: t + 0.002, attack: 0.0002, decay: 0.004, release: 0.01,
+        });
+      });
+      synthOsc(88 + Math.random() * 8, 'triangle', 0.03, { vol: 0.1, bus: 'sfx', attack: 0.0006, decay: 0.01, release: 0.018, when: 0.01 });
     },
     // 카드 슬라이드 — R26: cardSlide1~3 OGG 풀
     cardSlide: function () {
@@ -318,14 +336,74 @@
     // 임계 점수/승리 — R26: 펜타토닉 5-note 상행 + 베이스 sub
     fanfare: function () {
       if (!_gateKey('fanfare')) return;
-      // C5 D5 E5 G5 A5 — 한국 전통 5음
+      if (playBuf('threeTone1', { vol: 0.38, bus: 'sfx', detune: -40 })) {
+        playBuf('pepSound2', { vol: 0.24, bus: 'sfx', when: 0.08, detune: 60 });
+        return;
+      }
+      // C5 D5 E5 G5 A5 — 한국 전통 5음 + 음 머리에 아주 짧은 '딱' (장단 느낌)
       const notes = [523.25, 587.33, 659.25, 783.99, 880.00];
       notes.forEach(function (f, i) {
-        synthOsc(f, 'sine',     0.30, { vol: 0.24, bus: 'sfx', attack: 0.005, decay: 0.06, release: 0.22, when: i * 0.10 });
-        synthOsc(f / 2, 'sawtooth', 0.30, { vol: 0.08, bus: 'sfx', attack: 0.005, decay: 0.06, release: 0.22, when: i * 0.10 });
+        const w = i * 0.095;
+        synthOsc(f, 'sine', 0.32, { vol: 0.27, bus: 'sfx', attack: 0.004, decay: 0.055, release: 0.20, when: w });
+        synthOsc(f / 2, 'triangle', 0.32, { vol: 0.1, bus: 'sfx', attack: 0.004, decay: 0.055, release: 0.19, when: w });
+        synthNoise(0.02, { vol: 0.1, bus: 'sfx', filterType: 'bandpass', filterFreq: 1800, filterQ: 0.7, when: w, attack: 0.0005, decay: 0.008, release: 0.014 });
       });
-      // 마지막 A5 끝에 sub bass 한 방 — 결정적 마무리감
-      synthOsc(110, 'sine', 0.45, { vol: 0.18, bus: 'sfx', attack: 0.008, decay: 0.10, release: 0.35, when: 0.42 });
+      synthOsc(98, 'sine', 0.5, { vol: 0.2, bus: 'sfx', attack: 0.006, decay: 0.12, release: 0.38, when: 0.4 });
+    },
+    // '고' — 계속 (맞고장 상승, 경쾌한 3음 + 은은한 끝박)
+    goCall: function () {
+      if (!_gateKey('goCall')) return;
+      if (playBuf('threeTone2', { vol: 0.5, bus: 'sfx', detune: 80, playbackRate: 1.05 })) {
+        playBuf('highUp', { vol: 0.22, bus: 'sfx', when: 0.1, detune: -20 });
+        return;
+      }
+      const step = 0.09;
+      [392, 440, 523.25].forEach(function (f, i) {
+        synthOsc(f, 'triangle', 0.1, { vol: 0.32 - i * 0.04, bus: 'sfx', attack: 0.002, decay: 0.04, release: 0.06, when: i * step, pitchTo: f * 1.03 });
+        synthNoise(0.018, { vol: 0.1, bus: 'sfx', filterType: 'bandpass', filterFreq: 1200, when: i * step + 0.002, attack: 0.0002, decay: 0.006, release: 0.01 });
+      });
+      synthOsc(185, 'sine', 0.28, { vol: 0.2, bus: 'sfx', attack: 0.004, decay: 0.08, release: 0.2, when: 0.32 });
+    },
+    // '스톱' / 판 끊김 — 하강 + 한 방의 종(맞고 승냥/마감)
+    stopCall: function () {
+      if (!_gateKey('stopCall')) return;
+      if (playBuf('tone1', { vol: 0.45, bus: 'sfx', detune: -200, playbackRate: 0.9 })) {
+        playBuf('pepSound3', { vol: 0.2, bus: 'sfx', when: 0.2, detune: 0 });
+        return;
+      }
+      synthOsc(440, 'triangle', 0.2, { vol: 0.3, bus: 'sfx', attack: 0.005, decay: 0.06, release: 0.1, when: 0, pitchTo: 329.63 });
+      synthOsc(329.63, 'sine', 0.22, { vol: 0.22, bus: 'sfx', attack: 0.01, decay: 0.07, release: 0.14, when: 0.2, pitchTo: 220 });
+      synthNoise(0.04, { vol: 0.2, bus: 'sfx', filterType: 'lowpass', filterFreq: 500, when: 0, attack: 0.002, decay: 0.05, release: 0.1 });
+      synthOsc(880, 'sine', 0.5, { vol: 0.2, bus: 'voice', attack: 0.003, decay: 0.15, release: 0.35, when: 0.38 });
+      synthOsc(1318, 'sine', 0.4, { vol: 0.1, bus: 'voice', attack: 0.003, decay: 0.12, release: 0.3, when: 0.4 });
+    },
+    // 승리 — 상행 아르페지 + 베이스, OGG 있으면 얹기만
+    winFanfare: function () {
+      if (!_gateKey('winFan')) return;
+      if (playBuf('threeTone1', { vol: 0.45, bus: 'music' })) {
+        playBuf('pepSound1', { vol: 0.3, bus: 'music', when: 0.1, detune: 100 });
+        playBuf('pepSound2', { vol: 0.25, bus: 'music', when: 0.2, detune: 50 });
+        playBuf('highUp', { vol: 0.2, bus: 'sfx', when: 0.32, detune: 30 });
+        return;
+      }
+      const u = 0.08;
+      const up = [523.25, 587.33, 659.25, 698.46, 783.99, 880, 1046.5];
+      up.forEach(function (f, i) {
+        synthOsc(f, 'sine', 0.24, { vol: 0.28, bus: 'music', attack: 0.003, decay: 0.08, release: 0.16, when: i * u });
+        synthNoise(0.028, { vol: 0.1, bus: 'music', filterType: 'highpass', filterFreq: 2000, when: i * u, attack: 0.0003, decay: 0.01, release: 0.02 });
+      });
+      synthNoise(0.1, { vol: 0.2, bus: 'sfx', filterType: 'bandpass', filterFreq: 2200, when: 0.52, attack: 0.001, decay: 0.06, release: 0.12 });
+      synthOsc(65, 'sine', 0.85, { vol: 0.32, bus: 'sfx', attack: 0.01, decay: 0.16, release: 0.58, when: 0.55, pitchTo: 48 });
+    },
+    // 고/스톱 고르기 패널 — 긴장감(짧은 3도 + 베이스)
+    goStopPrompt: function () {
+      if (!_gateKey('goStopPrompt')) return;
+      if (playBuf('tone1', { vol: 0.35, bus: 'ui', detune: 60 })) {
+        return;
+      }
+      synthOsc(523.25, 'triangle', 0.12, { vol: 0.22, bus: 'ui', attack: 0.004, decay: 0.05, release: 0.08 });
+      synthOsc(659.25, 'triangle', 0.1, { vol: 0.2, bus: 'ui', attack: 0.004, decay: 0.05, release: 0.08, when: 0.1 });
+      synthOsc(196, 'sine', 0.2, { vol: 0.1, bus: 'sfx', attack: 0.02, decay: 0.08, release: 0.12, when: 0.05 });
     },
     // 뻑/N고 — R26: sub-bass kick + gong 3-layer 강화 + 짧은 air 트랜지언트
     gong: function () {
@@ -484,6 +562,11 @@
     bbukMeok:   function () { SYNTH.bbukMeok(); },
     sseul:      function () { SYNTH.sseul(); },
     chooseHint: function () { SYNTH.chooseHint(); },
+    // 맞고/고스톱 콜 — go(), stop(), win(), goStopPrompt()
+    go:          function () { SYNTH.goCall(); },
+    stop:        function () { SYNTH.stopCall(); },
+    win:         function () { SYNTH.winFanfare(); },
+    goStopPrompt: function () { SYNTH.goStopPrompt(); },
   };
 
   function setMuted(m) {

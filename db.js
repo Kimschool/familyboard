@@ -334,6 +334,55 @@ async function ensureSchema() {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   `);
 
+  // ---------- 목표 ----------
+  await p.query(`
+    CREATE TABLE IF NOT EXISTS goals (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      family_id INT NOT NULL,
+      user_id INT NOT NULL,
+      year SMALLINT NOT NULL,
+      title VARCHAR(200) NOT NULL,
+      category ENUM('year','quarter','month') NOT NULL DEFAULT 'year',
+      quarter TINYINT NULL,
+      month TINYINT NULL,
+      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      INDEX idx_family_year (family_id, year),
+      INDEX idx_user (user_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  `);
+  // 기존 goals 테이블에 category/quarter/month 컬럼 추가 (모든 MySQL/MariaDB 버전 호환)
+  const [goalCols] = await p.query(
+    `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'goals' AND COLUMN_NAME = 'category'`
+  );
+  if (!goalCols.length) {
+    await p.query(`ALTER TABLE goals ADD COLUMN category ENUM('year','quarter','month') NOT NULL DEFAULT 'year'`);
+    await p.query(`ALTER TABLE goals ADD COLUMN quarter TINYINT NULL`);
+    await p.query(`ALTER TABLE goals ADD COLUMN month TINYINT NULL`);
+  }
+  await p.query(`
+    CREATE TABLE IF NOT EXISTS goal_evidences (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      goal_id INT NOT NULL,
+      user_id INT NOT NULL,
+      image_url VARCHAR(500) NULL,
+      caption VARCHAR(300) NULL,
+      progress TINYINT NOT NULL DEFAULT 0,
+      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      INDEX idx_goal_time (goal_id, created_at)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  `);
+  await p.query(`
+    CREATE TABLE IF NOT EXISTS goal_cheers (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      goal_id INT NOT NULL,
+      from_user_id INT NOT NULL,
+      emoji VARCHAR(10) NOT NULL DEFAULT '👏',
+      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE KEY uq_goal_user_emoji (goal_id, from_user_id, emoji),
+      INDEX idx_goal (goal_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  `);
+
   // ---------- 가족 놀이: 고스톱 결과 ----------
   await p.query(`
     CREATE TABLE IF NOT EXISTS gostop_games (
@@ -489,6 +538,7 @@ async function ensureSchema() {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
   `);
   await runOnceMigrations();
+  await ensureColumn('gallery_photos', 'album_id', 'VARCHAR(36) NULL');
 
   // 레거시 sessions 컬럼 (user_key) 감지 시 재생성
   const [sc] = await p.query(

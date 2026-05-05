@@ -56,6 +56,9 @@ const GALLERY_DIR = path.join(DATA_DIR, 'gallery');
 try { fs.mkdirSync(GALLERY_DIR, { recursive: true }); } catch (e) { console.warn('[gallery] mkdir:', e.message); }
 console.log('[gallery] 저장 경로:', GALLERY_DIR);
 
+const GOALS_DIR = path.join(DATA_DIR, 'goals');
+try { fs.mkdirSync(GOALS_DIR, { recursive: true }); } catch (e) { console.warn('[goals] mkdir:', e.message); }
+
 /** 빈 값·문자열 "null" 을 DB NULL / JSON null 로 통일 */
 function normalizePhoneOut(val) {
   if (val == null) return null;
@@ -181,6 +184,45 @@ function safeUnlinkGalleryFile(url) {
   const r = resolveSafeGalleryPath(url);
   if (!r) return;
   if (!/^g-\d+-[a-z0-9]+\.jpg$/i.test(r.basename)) return;
+  fs.unlink(r.fullPath, () => {});
+}
+
+// ---------- 목표 증거 업로드 ----------
+function makeGoalsDestination(req, _file, cb) {
+  try {
+    const dir = path.join(GOALS_DIR, familySubDir(req));
+    fs.mkdirSync(dir, { recursive: true });
+    cb(null, dir);
+  } catch (e) { cb(e); }
+}
+const goalsUpload = multer({
+  storage: multer.diskStorage({
+    destination: makeGoalsDestination,
+    filename: (_req, _file, cb) => {
+      cb(null, `ev-${Date.now()}-${Math.random().toString(36).slice(2, 11)}.jpg`);
+    },
+  }),
+  limits: { fileSize: Math.ceil(3.1 * 1024 * 1024) },
+  fileFilter: (_req, file, cb) => {
+    const ok = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'].includes(file.mimetype);
+    cb(ok ? null : new Error('invalid-image-type'), ok);
+  },
+});
+function resolveSafeGoalsPath(url) {
+  if (!url || typeof url !== 'string' || !url.startsWith('/uploads/goals/')) return null;
+  const rel = url.slice('/uploads/goals/'.length);
+  if (!rel || rel.includes('..')) return null;
+  const parts = rel.split('/').filter(Boolean);
+  if (!parts.length) return null;
+  const baseDir = path.resolve(GOALS_DIR);
+  const fp = path.resolve(baseDir, ...parts);
+  if (fp !== baseDir && !fp.startsWith(baseDir + path.sep)) return null;
+  return { fullPath: fp, basename: parts[parts.length - 1] };
+}
+function safeUnlinkGoalsFile(url) {
+  const r = resolveSafeGoalsPath(url);
+  if (!r) return;
+  if (!/^ev-\d+-[a-z0-9]+\.jpg$/i.test(r.basename)) return;
   fs.unlink(r.fullPath, () => {});
 }
 
@@ -1281,7 +1323,7 @@ app.get('/api/gallery', requireAuth, async (req, res) => {
     const args = before > 0 ? [req.user.family_id, before] : [req.user.family_id];
     const where = before > 0 ? 'WHERE g.family_id = ? AND g.id < ?' : 'WHERE g.family_id = ?';
     const [rows] = await getPool().query(
-      `SELECT g.id, g.url, g.caption, g.created_at, g.uploader_id,
+      `SELECT g.id, g.url, g.caption, g.created_at, g.uploader_id, g.album_id,
               u.display_name AS uploader_name, u.icon AS uploader_icon, u.photo_url AS uploader_photo,
               (SELECT COUNT(*) FROM gallery_likes l WHERE l.photo_id = g.id) AS like_count,
               (SELECT COUNT(*) FROM gallery_comments c WHERE c.photo_id = g.id) AS comment_count,
@@ -1302,6 +1344,7 @@ app.get('/api/gallery', requireAuth, async (req, res) => {
       uploaderName: r.uploader_name,
       uploaderIcon: r.uploader_icon,
       uploaderPhoto: r.uploader_photo,
+      albumId: r.album_id || null,
       likeCount: Number(r.like_count) || 0,
       commentCount: Number(r.comment_count) || 0,
       liked: !!Number(r.liked),
@@ -1328,12 +1371,13 @@ app.post(
   async (req, res) => {
     try {
       const caption = (req.body?.caption || '').toString().trim().slice(0, 300) || null;
+      const albumId = (req.body?.album_id || '').toString().trim().slice(0, 36) || null;
       const url = `/uploads/gallery/${familySubDir(req)}/${req.file.filename}`;
       const [r] = await getPool().query(
-        'INSERT INTO gallery_photos (family_id, uploader_id, url, caption) VALUES (?, ?, ?, ?)',
-        [req.user.family_id, req.user.id, url, caption]
+        'INSERT INTO gallery_photos (family_id, uploader_id, url, caption, album_id) VALUES (?, ?, ?, ?, ?)',
+        [req.user.family_id, req.user.id, url, caption, albumId]
       );
-      res.json({ ok: true, id: r.insertId, url, caption });
+      res.json({ ok: true, id: r.insertId, url, caption, albumId });
     } catch (e) {
       fs.unlink(req.file.path, () => {});
       res.status(500).json({ error: 'internal', message: e.message });
@@ -1903,12 +1947,19 @@ app.post('/api/ladder/games/:id/ready', requireAuth, (req, res) => {
   if (!me) return res.status(404).json({ error: 'not-joined' });
   me.ready = !!req.body?.ready;
   game.lastActivityAt = Date.now();
-  // 모든 슬롯이 차고(N=count) + 모두 준비완료여야 자동 시작
-  if (game.participants.length === game.count &&
-      game.participants.length >= 2 &&
-      game.participants.every(p => p.ready)) {
-    ladderStartCountdown(game);
-  }
+  res.json(ladderSerialize(game));
+});
+
+app.post('/api/ladder/games/:id/start', requireAuth, (req, res) => {
+  const game = LADDER_GAMES.get(Number(req.params.id));
+  if (!game || game.familyId !== req.user.family_id) return res.status(404).json({ error: 'not-found' });
+  if (game.status !== 'lobby') return res.status(409).json({ error: 'locked' });
+  if (game.hostId !== req.user.id) return res.status(403).json({ error: 'not-host', message: '방을 만든 사람만 시작할 수 있어요' });
+  if (game.participants.length !== game.count) return res.status(409).json({ error: 'slots-not-full', message: '모든 자리가 채워져야 시작할 수 있어요' });
+  if (game.participants.length < 2) return res.status(409).json({ error: 'too-few', message: '2명 이상이 필요해요' });
+  if (!game.participants.every(p => p.ready)) return res.status(409).json({ error: 'not-all-ready', message: '모두 준비해야 시작할 수 있어요' });
+  ladderStartCountdown(game);
+  game.lastActivityAt = Date.now();
   res.json(ladderSerialize(game));
 });
 
@@ -3433,7 +3484,6 @@ function zodiacOf(year) {
   if (!year) return null;
   return ZODIAC[((year % 12) + 12) % 12];
 }
-// 펫 전용 운세 풀 — 일반 띠 운세 대신 펫에게는 여기서 골라 보여줌
 const PET_FORTUNE = [
   '오늘은 간식을 평소보다 한 입 더 받게 될 거예요',
   '지나가는 새를 많이 보게 되는 행운이 생길지도',
@@ -3452,19 +3502,373 @@ const PET_FORTUNE = [
   '귀여움을 한껏 발휘하면 좋은 일이 생겨요',
 ];
 
+// 각 항목: { g: 등급, t: 운세 텍스트 }
+// 등급 분포(21개): 대길×2 중길×5 소길×7 평×4 주의×3
 const FORTUNE = {
-  '쥐':  ['꼼꼼함이 빛을 발하는 하루','작은 정보 하나가 큰 도움이 돼요','돈 관리에 좋은 흐름','가족과의 대화가 기분을 올려줘요','서두르지 않으면 좋은 결과가 있어요','새로운 시도가 재미있을 거예요','조용한 휴식이 필요한 날'],
-  '소':  ['한 걸음씩 나아가는 힘이 있어요','꾸준함이 복을 불러와요','무리하지 말고 쉬어 가세요','든든한 한 끼가 마음을 채워줘요','오랜 친구에게 연락해 보세요','작은 성취에 기뻐하는 하루','마음을 비우면 편해져요'],
-  '호랑이':['당당한 기운이 주변에 전해져요','도전해 보는 마음이 좋아요','말보다 행동이 통하는 날','자신감이 복을 부르는 흐름','산책이 컨디션을 살려줘요','가족의 응원이 힘이 돼요','오늘은 욕심을 조금 줄이세요'],
-  '토끼':['부드러움이 큰 힘이 돼요','주변을 보살피면 복이 돌아와요','가벼운 운동이 기분을 좋게 해요','따뜻한 차 한 잔이 좋아요','작은 행운이 찾아와요','기분 좋은 소식을 듣는 날','쉼표가 필요한 하루'],
-  '용':  ['좋은 흐름을 타는 하루','하고자 하는 일에 힘이 실려요','사람들이 도움을 줘요','작은 꿈이 또렷해져요','건강을 살피면 더 좋아요','기분 전환이 필요한 날','마음이 넉넉해지는 하루'],
-  '뱀':  ['예민한 감각이 잘 맞아요','생각을 정리하기 좋은 날','지혜로운 판단이 빛나요','서두를 일이 없어요','가까운 사람과 따뜻한 시간','작은 소식 하나가 반가워요','편안한 휴식이 약이 돼요'],
-  '말':  ['활력이 넘치는 하루','움직일수록 좋은 에너지','새 소식이 찾아와요','친구와의 만남이 즐거워요','무리하지 않으면 더 좋아요','기분 좋은 산책을 추천해요','가볍게 비우는 하루'],
-  '양':  ['따뜻한 마음이 전해져요','가족에게 좋은 일이 있어요','조용한 즐거움이 있는 날','작은 배려가 큰 기쁨이 돼요','맛있는 음식이 생각나는 날','기분이 편안해지는 흐름','몸을 아끼는 하루'],
-  '원숭이':['재치 있는 판단이 통하는 날','새 아이디어가 떠올라요','주변을 즐겁게 만드는 힘','작은 변화가 기분을 새롭게 해요','가벼운 대화가 재미있어요','욕심보다는 여유','마음에 꽃이 피는 하루'],
-  '닭':  ['부지런함이 복을 불러요','꼼꼼한 일처리가 빛나요','아침 일찍의 기분이 좋아요','사람들의 칭찬을 듣는 날','가족과의 식사가 행복해요','마음을 크게 가지면 좋아요','편히 쉬는 시간이 필요해요'],
-  '개':  ['신의 있는 모습이 인정받아요','든든한 하루','가족이 큰 힘이 돼요','작은 여행이 떠오르는 날','몸 상태를 살피면 좋아요','따뜻한 한마디가 힘이 돼요','조용히 보내는 저녁'],
-  '돼지':['여유 속에 행복이 있어요','좋은 인연이 가까이 있어요','맛있는 것이 위안이 돼요','기분 좋은 소식을 듣는 날','소소한 복이 많은 하루','무리하지 않아도 괜찮아요','따뜻한 휴식이 필요해요'],
+  '쥐': [
+    {g:'대길',t:'꼼꼼한 눈썰미가 큰 행운을 낚아채는 날! 오랫동안 기다리던 일이 오늘 풀릴 수 있어요. 적극적으로 나서보세요.'},
+    {g:'대길',t:'재물운과 인복이 동시에 활짝 열리는 하루. 뜻밖의 곳에서 반가운 소식이 날아올 수 있으니 연락처를 확인해 두세요.'},
+    {g:'중길',t:'작은 정보 하나가 오늘 큰 도움이 될 거예요. 주변의 이야기를 귀 기울여 들으면 뜻밖의 힌트를 얻을 수 있어요.'},
+    {g:'중길',t:'돈 관리에 좋은 흐름이에요. 오늘 작은 지출이라도 기록해 두면 연말에 뿌듯한 결과가 기다리고 있을 거예요.'},
+    {g:'중길',t:'새로운 시도가 예상보다 재미있는 결과를 가져올 날이에요. 망설이지 말고 첫걸음을 내딛어 보세요.'},
+    {g:'중길',t:'기분 좋은 소식이 오늘 하루 안에 찾아올 거예요. 스마트폰을 자주 확인해 두면 좋겠어요.'},
+    {g:'중길',t:'사람들 사이에서 당신의 꼼꼼함이 빛을 발하는 날이에요. 주변이 자연스럽게 당신에게 의지하게 될 거예요.'},
+    {g:'소길',t:'가족과 나누는 짧은 대화 한 마디가 하루의 기분을 한껏 올려줄 거예요. 먼저 안부 메시지를 보내 보세요.'},
+    {g:'소길',t:'서두르지 않고 차근차근 접근하면 의외로 좋은 결과가 나와요. 오늘은 속도보다 방향이 중요한 날이에요.'},
+    {g:'소길',t:'작지만 확실한 행운이 하루를 포근하게 감싸줄 거예요. 기대하지 않은 곳에서 작은 선물이 올 수도 있어요.'},
+    {g:'소길',t:'오늘 건넨 친절한 말 한마디가 새로운 인연의 씨앗이 될 수 있어요. 상대방의 이름을 불러주는 것만으로도 관계가 따뜻해져요.'},
+    {g:'소길',t:'꼼꼼함이 빛나는 하루예요. 지금 하고 있는 일에 집중하면 깔끔한 마무리가 가능해요.'},
+    {g:'소길',t:'지출은 조금 줄이고 저축은 조금 늘리면 딱 좋은 날이에요. 작은 절약이 큰 여유를 만들어요.'},
+    {g:'소길',t:'오랜 친구나 지인에게 먼저 연락해 보세요. 뜻밖에 좋은 정보나 즐거운 약속이 생길 수 있어요.'},
+    {g:'평',  t:'조용히 자신의 페이스를 유지하는 것이 오늘의 정답이에요. 특별한 무언가를 억지로 만들려 하지 않아도 돼요.'},
+    {g:'평',  t:'평범해 보이지만 알고 보면 안정적인 흐름이에요. 쌓아온 것들이 조용히 자리를 잡고 있는 중이에요.'},
+    {g:'평',  t:'오늘은 에너지를 보충하는 날로 삼으면 좋겠어요. 좋아하는 음식을 먹거나 잠깐 낮잠을 자보세요.'},
+    {g:'평',  t:'새로운 것을 시작하기보다 기존의 것을 정리하고 점검하기 좋은 날이에요.'},
+    {g:'주의',t:'오늘은 중요한 결정보다 정보 수집에 집중하세요. 섣부른 판단이 나중에 발목을 잡을 수 있어요.'},
+    {g:'주의',t:'충동적인 소비나 결정은 오늘 하루만큼은 잠시 미루는 게 좋겠어요. 내일 다시 생각해도 늦지 않아요.'},
+    {g:'주의',t:'에너지가 분산될 수 있는 날이에요. 한 가지 일에 집중하고, 여러 일을 동시에 벌이는 것은 자제하세요.'},
+  ],
+  '소': [
+    {g:'대길',t:'묵묵히 쌓아온 노력이 오늘 드디어 빛을 발하는 날! 주변 사람들의 응원과 칭찬이 쏟아질 거예요. 자신을 믿고 당당하게 나서세요.'},
+    {g:'대길',t:'예상치 못한 곳에서 기쁜 소식이 찾아오는 특별한 하루예요. 오늘 받는 연락이나 만남이 삶에 좋은 변화를 가져다줄 수 있어요.'},
+    {g:'중길',t:'한 걸음씩 묵직하게 나아가는 힘이 오늘 특히 잘 통하는 날이에요. 꾸준함이 가장 강력한 무기라는 걸 오늘 다시 느끼게 될 거예요.'},
+    {g:'중길',t:'든든한 한 끼 식사가 마음까지 풍족하게 채워주는 날이에요. 좋아하는 음식을 여유 있게 즐겨보세요.'},
+    {g:'중길',t:'오래 연락 못 한 친구에게 먼저 손을 내밀어 보세요. 반가운 재회가 새로운 에너지를 불어넣어 줄 거예요.'},
+    {g:'중길',t:'성실한 모습이 오늘따라 주변 사람들의 눈에 잘 띄는 날이에요. 평소처럼 최선을 다하는 것만으로 충분해요.'},
+    {g:'중길',t:'계획한 일들이 예상 시간 안에 잘 마무리되는 날이에요. 효율적인 하루가 될 거예요.'},
+    {g:'소길',t:'무리하지 않고 나를 돌보는 하루를 보내도 괜찮아요. 오늘 쉬는 것이 내일의 더 큰 활력이 돼요.'},
+    {g:'소길',t:'작은 성취를 이뤄낼 때마다 스스로 칭찬해 주세요. 그 기쁨이 쌓이면 더 큰 복이 되어 돌아와요.'},
+    {g:'소길',t:'가족이 건네는 따뜻한 말 한마디가 오늘 특히 힘이 되는 날이에요. 먼저 다가가 마음을 나눠보세요.'},
+    {g:'소길',t:'마음속에 쌓인 것을 내려놓으면 몸이 가벼워지는 날이에요. 잠깐 산책하거나 깊게 숨을 쉬어보세요.'},
+    {g:'소길',t:'소소한 집안일이나 정리정돈이 의외로 큰 만족감을 주는 날이에요. 깨끗해진 공간이 마음까지 정리시켜줘요.'},
+    {g:'소길',t:'지금 하고 있는 일이 느리게 느껴지더라도 멈추지 마세요. 소의 걸음은 느려도 결국 목적지에 가장 먼저 도착해요.'},
+    {g:'소길',t:'오늘 먹는 것에 조금 더 신경 써보세요. 균형 잡힌 식사가 체력과 기분을 동시에 끌어올려 줄 거예요.'},
+    {g:'평',  t:'변화보다 안정을 선택하는 게 오늘의 현명한 선택이에요. 지금 자리에서 충실히 하루를 보내면 그걸로 충분해요.'},
+    {g:'평',  t:'천천히 지금 이 순간을 즐기는 하루예요. 무언가 서두를 필요가 없어요.'},
+    {g:'평',  t:'특별한 이벤트 없이 조용한 하루지만, 이런 평온한 날이 사실 가장 소중한 날이에요.'},
+    {g:'평',  t:'오늘은 일보다 휴식에 점수를 주는 날이에요. 적당히 쉬고 내일을 위해 에너지를 아껴두세요.'},
+    {g:'주의',t:'무리한 계획이나 과도한 목표는 오늘만큼은 잠시 접어두세요. 현실적인 일에 집중하면 훨씬 잘 풀려요.'},
+    {g:'주의',t:'에너지가 예상보다 많이 소모되는 날이에요. 불필요한 약속이나 만남은 줄이고 충분히 쉬세요.'},
+    {g:'주의',t:'누군가의 부탁을 거절하기 어려운 날이에요. 하지만 무리한 부탁은 정중히 거절하는 것이 서로에게 좋아요.'},
+  ],
+  '호랑이': [
+    {g:'대길',t:'당당한 기운이 오늘 주변 모든 것을 이끄는 날! 두려움 없이 앞장서면 사람들이 자연스럽게 따라와요. 오늘만큼은 크게 도전해 보세요.'},
+    {g:'대길',t:'용기 있는 행동 하나가 큰 행운의 문을 열어주는 날이에요. 망설이던 그 일, 오늘이 바로 시작하기에 최고의 타이밍이에요.'},
+    {g:'중길',t:'도전하는 마음이 예상보다 좋은 결과를 만들어 내는 날이에요. 실패를 두려워하기보다 배움의 기회로 삼으면 더 멀리 가요.'},
+    {g:'중길',t:'말보다 행동이 더 잘 통하는 날이에요. 설명하는 것보다 직접 보여주는 게 훨씬 효과적이에요.'},
+    {g:'중길',t:'자신감 있는 태도가 주변에 좋은 기운을 전파하는 날이에요. 당신의 열정이 주변 사람들에게도 불꽃을 지펴줄 거예요.'},
+    {g:'중길',t:'가족이나 가까운 사람들의 응원이 오늘 특히 날개를 달아줄 거예요. 소중한 사람들에게 감사함을 전해보세요.'},
+    {g:'중길',t:'오늘은 리더십이 빛나는 날이에요. 팀이나 모임에서 먼저 의견을 제시하면 좋은 반응을 얻을 거예요.'},
+    {g:'소길',t:'가벼운 산책이나 운동이 오늘 컨디션을 확 살려줄 거예요. 몸을 움직일수록 아이디어도 활발해져요.'},
+    {g:'소길',t:'활력 넘치는 하루가 기다리고 있어요. 오늘은 특히 무언가를 시작하기 좋은 에너지가 있어요.'},
+    {g:'소길',t:'진심 어린 말 한마디가 관계를 한층 더 깊고 따뜻하게 만들어 줄 거예요. 생각보다 빨리 마음이 통할 거예요.'},
+    {g:'소길',t:'오늘 겪는 경험이 나중에 소중한 자산이 될 거예요. 어떤 상황이든 배울 점을 찾아보는 시각을 가져보세요.'},
+    {g:'소길',t:'부지런히 움직인 만큼 저녁에는 뿌듯한 성취감이 기다리고 있을 거예요.'},
+    {g:'소길',t:'오늘은 계획대로 움직이면 예상보다 빠르게 일이 마무리돼요. 아침에 할 일 목록을 먼저 정리해 보세요.'},
+    {g:'소길',t:'건강한 식사와 충분한 수분 섭취가 오늘 에너지의 핵심이에요. 몸이 좋아야 마음도 좋아요.'},
+    {g:'평',  t:'욕심을 조금 내려놓으면 마음이 한결 평화로워지는 날이에요. 지금 있는 것들에 잠시 감사해 보세요.'},
+    {g:'평',  t:'쉬어가는 것도 앞으로 나아가는 힘의 일부예요. 오늘은 재충전의 날로 삼는 것이 현명해요.'},
+    {g:'평',  t:'잠시 멈추고 지금까지의 여정을 돌아보면 의외로 많은 것을 이뤄왔다는 걸 발견할 거예요.'},
+    {g:'평',  t:'급하게 결정할 일이 있다면 내일로 미루는 것도 괜찮아요. 호랑이도 한 번쯤은 쉬어가요.'},
+    {g:'주의',t:'충동적인 행동은 오늘만큼은 한 박자 쉬고 결정하세요. 순간의 감정이 나중에 후회가 될 수 있어요.'},
+    {g:'주의',t:'무리한 승부나 경쟁보다 안전하고 안정적인 선택이 오늘은 더 좋은 결과를 가져와요.'},
+    {g:'주의',t:'고집을 내려놓고 상대방의 의견도 들어보는 자세가 필요한 날이에요. 유연함이 오늘의 강점이 돼요.'},
+  ],
+  '토끼': [
+    {g:'대길',t:'부드럽고 따뜻한 기운이 모든 것을 순조롭게 만드는 날! 인간관계에서 큰 기쁨이 찾아올 거예요. 당신의 매력이 오늘 최고로 빛나요.'},
+    {g:'대길',t:'좋은 인연과 행운이 동시에 달려오는 최고의 날이에요. 새로운 만남이나 오래된 인연이 삶에 반짝이는 변화를 가져다줄 거예요.'},
+    {g:'중길',t:'주변을 세심하게 보살피는 마음이 오늘 복이 되어 돌아올 거예요. 작은 친절이 큰 인연으로 이어질 수 있어요.'},
+    {g:'중길',t:'따뜻한 차 한 잔처럼 기분 좋게 흘러가는 하루예요. 서두르지 않아도 해야 할 일이 자연스럽게 마무리돼요.'},
+    {g:'중길',t:'가벼운 스트레칭이나 산책이 기분을 환하게 밝혀줄 거예요. 몸을 풀면 마음도 가벼워지는 날이에요.'},
+    {g:'중길',t:'기분 좋은 소식이 하루 중 불쑥 찾아올 거예요. 작은 것에도 감사하는 마음이 복을 더 불러요.'},
+    {g:'중길',t:'감수성이 풍부해지는 날이에요. 글이나 그림, 음악 같은 창의적인 활동이 오늘 특히 잘 풀릴 거예요.'},
+    {g:'소길',t:'작은 행운이 하루 곳곳에 숨어 있는 날이에요. 자세히 들여다보면 일상에서 발견하는 작은 기쁨들이 많아요.'},
+    {g:'소길',t:'오늘 베풀면 더 크게 돌아오는 날이에요. 작은 나눔이 인연을 깊게 만들고 기분도 좋게 해줘요.'},
+    {g:'소길',t:'예술적 감각이 평소보다 예리하게 살아있는 날이에요. 뭔가를 만들거나 꾸미는 일이 잘 풀릴 거예요.'},
+    {g:'소길',t:'상상하던 일이 조금씩 현실에 가까워지는 느낌이 드는 날이에요. 꾸준히 나아가면 반드시 이뤄져요.'},
+    {g:'소길',t:'조용한 환경에서 집중하면 평소보다 더 좋은 결과가 나와요. 혼자만의 시간을 충분히 활용해 보세요.'},
+    {g:'소길',t:'누군가의 이야기를 진심으로 들어주는 것만으로도 오늘은 충분한 하루예요. 공감의 힘이 빛나는 날이에요.'},
+    {g:'소길',t:'오늘 먹는 것 하나하나가 특별하게 맛있게 느껴질 거예요. 천천히 음미하며 먹으면 더 행복해요.'},
+    {g:'평',  t:'쉼표가 필요한 날이에요. 억지로 뭔가를 하려 하지 말고, 오늘은 그냥 있는 그대로 쉬어도 좋아요.'},
+    {g:'평',  t:'흐름에 맡겨두면 자연스럽게 풀리는 날이에요. 과도하게 계획하거나 조급해하지 않아도 돼요.'},
+    {g:'평',  t:'지금 있는 자리가 사실 꽤 괜찮은 자리예요. 비교보다 자기 자신에게 집중하는 날이에요.'},
+    {g:'평',  t:'소소한 일상을 즐기는 것이 오늘의 가장 좋은 선택이에요. 크지 않아도 행복한 하루가 될 거예요.'},
+    {g:'주의',t:'감정 기복이 커질 수 있는 날이에요. 중요한 결정은 마음이 안정된 뒤로 미루는 게 좋겠어요.'},
+    {g:'주의',t:'오늘은 무리한 약속보다 내 시간과 에너지를 먼저 챙기세요. 거절도 배려의 한 형태예요.'},
+    {g:'주의',t:'사람들 사이에서 오해가 생기기 쉬운 날이에요. 말보다 글로 남기고, 확인하는 습관을 들여보세요.'},
+  ],
+  '용': [
+    {g:'대길',t:'하늘이 직접 돕는 날! 크게 생각하고 크게 행동하면 그만큼 큰 결과가 따라와요. 오늘 시작하는 일은 반드시 빛날 거예요.'},
+    {g:'대길',t:'운이 폭발적으로 상승하는 하루예요. 오랫동안 준비해 온 중요한 일을 오늘 시작하거나 결정하면 큰 성과가 기다려요.'},
+    {g:'중길',t:'지금 타고 있는 흐름이 예상보다 강하고 좋아요. 멈추지 말고 계속 나아가면 더 좋은 것들이 따라올 거예요.'},
+    {g:'중길',t:'하고자 하는 일에 강한 추진력이 생기는 날이에요. 망설임 없이 실행에 옮기면 예상을 넘어서는 결과가 나올 거예요.'},
+    {g:'중길',t:'예상치 못한 곳에서 도움의 손길이 뻗어오는 날이에요. 혼자 해결하려 하지 말고 주변 사람들을 믿어보세요.'},
+    {g:'중길',t:'마음속에 품어온 꿈이 한층 더 선명하게 그려지는 날이에요. 구체적인 계획을 세워보면 현실이 조금 더 가까워질 거예요.'},
+    {g:'중길',t:'리더로서의 기질이 빛나는 날이에요. 무리를 이끄는 역할이 어울리고, 사람들도 당신을 신뢰해요.'},
+    {g:'소길',t:'건강 상태를 한 번 점검해 보면 좋은 날이에요. 좋은 컨디션이 유지될수록 하고 싶은 일도 잘 풀려요.'},
+    {g:'소길',t:'마음이 넉넉하고 여유로운 하루예요. 주변 사람들에게 여유를 나눠주면 더 좋은 기운이 돌아올 거예요.'},
+    {g:'소길',t:'가족과 나누는 대화에서 의외의 힘과 위안을 얻게 되는 날이에요. 저녁에 함께 시간을 보내보세요.'},
+    {g:'소길',t:'평소보다 집중력이 높아지는 날이에요. 오랫동안 미뤄두었던 일을 처리하기 딱 좋은 타이밍이에요.'},
+    {g:'소길',t:'작은 목표를 세우고 달성하는 반복이 오늘 큰 만족감을 줄 거예요. 체크리스트를 활용해 보세요.'},
+    {g:'소길',t:'뭔가를 배우거나 새로운 정보를 습득하기 좋은 날이에요. 호기심이 생기는 것을 적극적으로 탐구해 보세요.'},
+    {g:'소길',t:'창의적인 아이디어가 자연스럽게 떠오르는 날이에요. 메모해 두면 나중에 큰 도움이 될 거예요.'},
+    {g:'평',  t:'기분 전환이 필요한 날이에요. 익숙한 루틴에서 조금 벗어나 가볍게 변화를 줘보면 좋겠어요.'},
+    {g:'평',  t:'오늘은 쉬면서 에너지를 비축하는 날로 삼는 게 좋아요. 내일의 큰 도약을 위한 충전이에요.'},
+    {g:'평',  t:'거창한 계획보다 오늘 할 수 있는 작은 한 가지에 집중해 보세요. 완성의 쾌감이 의욕을 끌어올려 줘요.'},
+    {g:'평',  t:'오늘 하루는 조용히 자신을 돌아보는 시간으로 보내도 충분해요.'},
+    {g:'주의',t:'자만은 금물이에요. 겸손한 태도를 유지하면 오히려 더 큰 기회가 따라올 거예요.'},
+    {g:'주의',t:'서두르면 실수가 생길 수 있는 날이에요. 하나하나 확인하면서 진행하는 습관이 오늘 빛을 발해요.'},
+    {g:'주의',t:'무리한 욕심이 오히려 일을 복잡하게 만들 수 있어요. 한 번에 하나씩, 차례대로 처리해 보세요.'},
+  ],
+  '뱀': [
+    {g:'대길',t:'예리한 직감이 활짝 깨어나는 날! 평소에 스쳐 지나치던 기회를 오늘은 정확히 잡아낼 수 있어요. 육감을 믿고 과감히 행동해 보세요.'},
+    {g:'대길',t:'깊은 지혜가 큰 행운으로 연결되는 최고의 하루예요. 오랫동안 고민하던 문제가 오늘 드디어 풀릴 실마리를 찾게 될 거예요.'},
+    {g:'중길',t:'평소에 갈고닦아 온 감각이 오늘 정확하게 들어맞는 날이에요. 직관을 따라가면 좋은 결과가 기다려요.'},
+    {g:'중길',t:'머릿속을 가득 채운 생각들을 정리하기 아주 좋은 날이에요. 종이에 써보면 의외로 빠르게 정리가 돼요.'},
+    {g:'중길',t:'논리적이고 지혜로운 판단이 주변 사람들의 신뢰를 얻는 날이에요. 당신의 의견이 오늘 큰 영향력을 발휘해요.'},
+    {g:'중길',t:'가까운 사람과 천천히 대화를 나누는 시간이 기다리고 있어요. 깊이 있는 이야기가 관계를 더욱 탄탄하게 해줄 거예요.'},
+    {g:'중길',t:'책이나 영상을 통해 새로운 지식을 흡수하기 좋은 날이에요. 습득한 정보가 곧 실질적인 도움이 될 거예요.'},
+    {g:'소길',t:'작지만 반가운 소식 하나가 기분을 한층 밝게 만들어 줄 거예요. 작은 것도 소중히 여기는 마음이 복을 불러요.'},
+    {g:'소길',t:'오늘은 서두를 필요가 없어요. 여유 있는 페이스로 움직이면 오히려 더 많은 것을 이루게 될 거예요.'},
+    {g:'소길',t:'직관이 잘 맞는 날이니 첫 느낌을 믿어보세요. 너무 많이 분석하면 오히려 길을 잃을 수 있어요.'},
+    {g:'소길',t:'혼자만의 조용한 시간이 창의적인 아이디어를 키워주는 날이에요. 방해받지 않는 환경을 만들어 보세요.'},
+    {g:'소길',t:'세밀한 것에 주의를 기울이면 다른 사람이 놓친 것을 발견하게 되는 날이에요. 꼼꼼함이 강점이에요.'},
+    {g:'소길',t:'오늘은 말보다 관찰이 더 많은 것을 알려줄 거예요. 주변을 주의 깊게 살펴보세요.'},
+    {g:'소길',t:'좋아하는 것에 집중하는 시간이 스트레스를 풀어주고 새로운 영감을 가져다줄 거예요.'},
+    {g:'평',  t:'몸과 마음의 충전이 필요한 날이에요. 무리하지 않고 오늘은 편안하게 보내는 것이 현명해요.'},
+    {g:'평',  t:'지금 있는 자리에서 충실하게 하루를 보내는 것으로 충분한 날이에요.'},
+    {g:'평',  t:'새로운 것을 시작하기보다 기존의 계획을 차분히 실행하는 데 집중하는 날이에요.'},
+    {g:'평',  t:'오늘은 에너지를 아끼며 내일을 위한 준비를 하는 날로 삼으면 좋겠어요.'},
+    {g:'주의',t:'말을 아끼고 신중하게 행동하는 것이 오늘 특히 중요해요. 침묵이 때로는 가장 강력한 대답이에요.'},
+    {g:'주의',t:'오해가 생기기 쉬운 날이에요. 중요한 내용은 다시 한번 확인하고, 소통을 명확히 해두세요.'},
+    {g:'주의',t:'지나치게 의심하거나 분석하면 기회를 놓칠 수 있어요. 어느 정도는 상대방을 믿고 나아가 보세요.'},
+  ],
+  '말': [
+    {g:'대길',t:'활력이 폭발적으로 솟구치는 날! 달리면 달릴수록 행운이 뒤따라와요. 오늘은 망설임 없이 앞으로 질주해 보세요.'},
+    {g:'대길',t:'에너지와 행운이 동시에 넘치는 역대급 하루예요. 중요한 만남이나 발표, 도전을 오늘로 잡았다면 최고의 선택이에요.'},
+    {g:'중길',t:'움직이면 움직일수록 좋은 에너지가 샘솟는 날이에요. 가만히 있는 것보다 몸을 쓰는 게 훨씬 좋은 결과를 만들어요.'},
+    {g:'중길',t:'반가운 새 소식이 기쁨을 가져다주는 날이에요. 오늘 받은 정보나 연락이 좋은 방향으로 이어질 거예요.'},
+    {g:'중길',t:'친구나 지인과의 만남이 즐겁고 유익한 날이에요. 가벼운 약속이라도 기꺼이 응해보세요.'},
+    {g:'중길',t:'기분 좋은 산책이나 외출이 하루 전체의 분위기를 바꿔줄 거예요. 바깥 공기가 머리를 맑게 해줄 거예요.'},
+    {g:'중길',t:'적극적으로 자신의 의견을 표현하면 좋은 반응을 얻는 날이에요. 오늘만큼은 눈치 보지 말고 말해보세요.'},
+    {g:'소길',t:'적당히 활동하고 적당히 쉬는 밸런스가 오늘의 핵심이에요. 과하지 않게 즐기는 하루가 될 거예요.'},
+    {g:'소길',t:'가벼운 마음으로 시작하면 예상보다 잘 풀리는 날이에요. 무겁게 생각하지 말고 일단 해봐요.'},
+    {g:'소길',t:'작은 변화 하나가 기분을 상쾌하게 바꿔주는 날이에요. 헤어스타일을 바꾸거나 새 옷을 입어보는 것도 좋아요.'},
+    {g:'소길',t:'오늘 새롭게 만나는 사람이 뜻밖의 귀인이 될 수 있어요. 낯선 사람에게도 밝게 인사해 보세요.'},
+    {g:'소길',t:'음악을 들으며 하루를 시작하면 기분이 몇 배 좋아지는 날이에요. 좋아하는 노래를 틀어보세요.'},
+    {g:'소길',t:'계획한 일과 즉흥적인 즐거움을 적절히 섞으면 완벽한 하루가 될 거예요.'},
+    {g:'소길',t:'몸이 원하는 것을 들어주는 날이에요. 피곤하면 쉬고, 배고프면 잘 먹고, 가고 싶으면 가세요.'},
+    {g:'평',  t:'달리던 속도를 조금 줄이고 주변을 둘러보는 날이에요. 지나친 것들을 가볍게 비우면 좋겠어요.'},
+    {g:'평',  t:'무리하지 않아도 충분한 하루예요. 오늘은 그냥 있는 것만으로도 충분히 잘 하고 있는 거예요.'},
+    {g:'평',  t:'주변 소음에서 벗어나 조용히 자신의 내면에 집중하는 시간을 가져보세요.'},
+    {g:'평',  t:'오늘은 방향을 재정비하고 앞으로 나아갈 계획을 차분히 세우는 날로 삼으면 좋겠어요.'},
+    {g:'주의',t:'과속은 금물이에요. 빠른 것보다 안전하고 확실한 방법을 선택하는 것이 오늘은 더 현명해요.'},
+    {g:'주의',t:'감정이 앞서면 실수가 생기기 쉬운 날이에요. 흥분하거나 충동적인 반응은 잠시 내려놓으세요.'},
+    {g:'주의',t:'에너지가 넘치더라도 모든 곳에 쏟아붓지 마세요. 중요한 것에만 집중하는 선택과 집중이 필요한 날이에요.'},
+  ],
+  '양': [
+    {g:'대길',t:'따뜻하고 순수한 마음이 기적 같은 하루를 만드는 날! 진심을 담아 행동하면 주변이 감동받을 거예요. 베풀수록 더 큰 복이 와요.'},
+    {g:'대길',t:'베풀면 배로 돌아오는 복이 가득한 하루예요. 오늘 누군가를 도운 일이 나중에 예상치 못한 형태로 크게 돌아올 거예요.'},
+    {g:'중길',t:'가족이나 가까운 사람들에게 좋은 일이 생기는 날이에요. 함께 기뻐하고 축하해 주면 그 기쁨이 배가 될 거예요.'},
+    {g:'중길',t:'조용한 가운데 소소한 즐거움이 넘치는 날이에요. 억지로 바쁘게 있지 않아도 충분히 행복한 하루예요.'},
+    {g:'중길',t:'오늘 건네는 작은 배려가 상대방에게 큰 기쁨이 되는 날이에요. 사소한 것에서 감동을 주는 것이 당신의 재능이에요.'},
+    {g:'중길',t:'맛있는 음식이 에너지를 채워주고 기분까지 좋게 만들어 주는 날이에요. 좋아하는 음식을 즐겨보세요.'},
+    {g:'중길',t:'창의적인 감성이 풍부하게 흘러넘치는 날이에요. 음악, 그림, 글쓰기 등 무언가를 표현해 보세요.'},
+    {g:'소길',t:'마음이 편안하고 기분이 안정된 좋은 흐름이 이어지는 날이에요. 이 기분을 유지하며 하루를 보내 보세요.'},
+    {g:'소길',t:'예술적인 감성이 예리하게 깨어있는 날이에요. 주변의 아름다운 것들이 더 선명하게 보일 거예요.'},
+    {g:'소길',t:'오늘 당신이 건네는 위로와 공감이 누군가에게 큰 힘이 될 거예요. 먼저 다가가 물어봐 주세요.'},
+    {g:'소길',t:'소소한 행복들이 하루 내내 산발적으로 찾아오는 날이에요. 작은 것들을 놓치지 말고 음미해 보세요.'},
+    {g:'소길',t:'혼자만의 조용한 시간이 충전의 시간이 되는 날이에요. 좋아하는 것을 즐기며 에너지를 채워보세요.'},
+    {g:'소길',t:'오늘 심은 작은 친절이 나중에 꽃이 되어 돌아와요. 당장 보상이 없어도 괜찮아요.'},
+    {g:'소길',t:'따뜻한 음료 한 잔과 함께 잠시 멈추는 시간을 가져보세요. 작은 여유가 하루를 풍요롭게 해줘요.'},
+    {g:'평',  t:'오늘은 몸을 아끼며 조용히 보내는 것이 좋겠어요. 무리하면 나중에 더 힘들 수 있어요.'},
+    {g:'평',  t:'있는 그대로의 오늘을 즐기는 날이에요. 욕심 없이 현재에 충실하면 그것만으로도 충분해요.'},
+    {g:'평',  t:'비교보다 자기 자신의 속도로 가는 것이 오늘은 가장 현명한 선택이에요.'},
+    {g:'평',  t:'오늘은 감정에 솔직하되 표현은 부드럽게 하는 연습을 해보세요. 관계가 더 부드러워질 거예요.'},
+    {g:'주의',t:'감수성이 예민해지는 날이에요. 상처받기 쉬우니 마음의 방어막을 조금 높여두세요.'},
+    {g:'주의',t:'과한 걱정이 오히려 에너지를 소모해요. 지금 이 순간에 집중하고 미래는 미래에게 맡겨보세요.'},
+    {g:'주의',t:'타인의 감정에 지나치게 휘둘리지 않도록 주의하세요. 당신의 평화가 가장 중요해요.'},
+  ],
+  '원숭이': [
+    {g:'대길',t:'재치와 기지가 번뜩이며 대박을 터뜨리는 날! 순간적으로 떠오르는 아이디어가 황금이 되는 날이에요. 망설이지 말고 바로 실행해 보세요.'},
+    {g:'대길',t:'영리한 판단과 재빠른 행동이 큰 행운으로 이어지는 최고의 하루예요. 주변 상황을 빠르게 파악해서 기회를 낚아채 보세요.'},
+    {g:'중길',t:'재치 있는 한마디가 분위기를 반전시키고 좋은 결과를 만드는 날이에요. 오늘 당신의 입담이 빛을 발해요.'},
+    {g:'중길',t:'새로운 아이디어가 연속으로 떠오르는 날이에요. 모두 메모해 두면 나중에 큰 도움이 될 거예요.'},
+    {g:'중길',t:'가벼운 대화가 예상 밖의 좋은 결과로 이어지는 날이에요. 스몰토크도 오늘은 무시하지 마세요.'},
+    {g:'중길',t:'익숙한 것에 작은 변화를 주면 기분이 완전히 새로워지는 날이에요. 루틴을 살짝 바꿔보세요.'},
+    {g:'중길',t:'멀티태스킹이 오늘은 특히 잘 통하는 날이에요. 여러 가지를 동시에 처리하는 능력이 빛을 발해요.'},
+    {g:'소길',t:'유머와 위트로 주변을 즐겁게 만드는 에너지가 넘치는 날이에요. 오늘 당신 주변에 웃음이 끊이지 않을 거예요.'},
+    {g:'소길',t:'욕심보다 여유 있는 태도가 오히려 더 좋은 결과를 가져오는 날이에요. 가볍게 가면 더 멀리 가요.'},
+    {g:'소길',t:'마음속에 꽃이 피어나는 것 같은 따뜻하고 기분 좋은 하루예요. 이 기분을 소중히 간직해 보세요.'},
+    {g:'소길',t:'배우는 즐거움이 있는 날이에요. 어떤 것이든 새롭게 익히려는 호기심이 오늘 특히 좋은 자산이에요.'},
+    {g:'소길',t:'임기응변 능력이 오늘 유독 빛나는 날이에요. 예상치 못한 상황에서도 유연하게 대처할 수 있을 거예요.'},
+    {g:'소길',t:'주변 사람들과 정보나 아이디어를 나누면 혼자서는 생각 못 한 해결책이 나오는 날이에요.'},
+    {g:'소길',t:'오늘 시도해 보고 싶었던 것을 가볍게 실험해 보세요. 결과보다 시도 자체가 의미 있는 날이에요.'},
+    {g:'평',  t:'지금 가진 것에 감사하는 시간을 가져보면 마음이 풍요로워지는 날이에요.'},
+    {g:'평',  t:'이것저것 벌이는 것보다 한 가지에 집중하는 것이 오늘 더 효율적이에요.'},
+    {g:'평',  t:'에너지가 여러 방향으로 분산되지 않도록 오늘 할 일의 우선순위를 먼저 정해보세요.'},
+    {g:'평',  t:'오늘은 즉흥보다 계획이 더 잘 통하는 날이에요. 잠깐 생각하고 움직이면 실수가 줄어요.'},
+    {g:'주의',t:'지나친 장난이나 가벼운 말이 오해를 낳을 수 있는 날이에요. 상황을 잘 읽고 유머를 조절해 보세요.'},
+    {g:'주의',t:'너무 빠르게 판단하지 말고 충분한 정보를 수집한 뒤 결정하는 것이 오늘은 중요해요.'},
+    {g:'주의',t:'여러 일을 동시에 시작했다가 하나도 마무리 못 하는 상황이 생길 수 있어요. 선택과 집중이 필요해요.'},
+  ],
+  '닭': [
+    {g:'대길',t:'부지런히 움직인 만큼 황금이 들어오는 날! 아침부터 모든 것이 톱니바퀴처럼 맞아 돌아가는 최고의 하루예요.'},
+    {g:'대길',t:'꼼꼼하게 준비한 것이 큰 성과로 정확히 돌아오는 날이에요. 그동안의 노력이 오늘 빛나게 인정받을 거예요.'},
+    {g:'중길',t:'세심한 일처리가 주변 사람들의 신뢰를 얻는 날이에요. 작은 것 하나하나를 정성껏 마무리해 보세요.'},
+    {g:'중길',t:'오늘 하루는 주변 사람들에게 칭찬과 인정을 받게 될 거예요. 평소의 성실함이 오늘 빛을 발해요.'},
+    {g:'중길',t:'가족과 함께하는 식사 시간이 오늘 특히 행복하고 에너지를 주는 시간이 될 거예요.'},
+    {g:'중길',t:'아침 일찍 시작하면 하루 전체가 상쾌하게 흘러가는 날이에요. 기상 시간을 조금만 앞당겨 보세요.'},
+    {g:'중길',t:'꼼꼼하게 계획을 세우고 실행하면 예상보다 훨씬 좋은 결과가 나오는 날이에요.'},
+    {g:'소길',t:'마음을 넉넉하게 갖는 것이 오늘 더 좋은 결과를 만들어요. 완벽함보다 유연함을 발휘해 보세요.'},
+    {g:'소길',t:'묵묵히 성실하게 움직인 것들이 조금씩 빛나기 시작하는 날이에요. 아직 결과가 안 보여도 괜찮아요.'},
+    {g:'소길',t:'작은 정성이 쌓여 좋은 결과를 만들어 가는 날이에요. 오늘의 한 걸음이 내일의 큰 도약이 될 거예요.'},
+    {g:'소길',t:'오늘 성실하게 해낸 일들이 훗날 큰 자산이 될 거예요. 지금 당장 보이지 않아도 가치 있는 하루예요.'},
+    {g:'소길',t:'오늘은 하고 싶은 일보다 해야 할 일을 먼저 끝내면 저녁이 훨씬 여유로워질 거예요.'},
+    {g:'소길',t:'주변 정리 정돈이 오늘 특히 잘 되는 날이에요. 깨끗하게 정리된 공간이 집중력을 높여줄 거예요.'},
+    {g:'소길',t:'건강한 식습관과 규칙적인 생활이 오늘 특히 좋은 기운을 불러올 거예요.'},
+    {g:'평',  t:'오늘은 무리하지 않고 충분히 쉬는 것이 내일을 위한 현명한 선택이에요.'},
+    {g:'평',  t:'완벽하지 않아도 충분히 잘하고 있어요. 오늘은 스스로를 조금 더 너그럽게 봐주세요.'},
+    {g:'평',  t:'지금 해야 할 일을 차근차근 처리하면 하루가 안정적으로 흘러갈 거예요.'},
+    {g:'평',  t:'특별한 일 없이 평온하게 흘러가는 날이에요. 이런 평화로운 하루가 사실 가장 소중해요.'},
+    {g:'주의',t:'지나친 완벽주의가 스트레스를 만들 수 있는 날이에요. 80점이면 충분한 날도 있어요.'},
+    {g:'주의',t:'다른 사람을 너무 강하게 비판하면 오히려 관계가 멀어질 수 있어요. 오늘은 특히 부드럽게 표현해 보세요.'},
+    {g:'주의',t:'작은 실수에 너무 자책하지 마세요. 실수는 누구나 하고, 빠르게 수습하는 것이 더 중요해요.'},
+  ],
+  '개': [
+    {g:'대길',t:'신의와 성실함이 가장 큰 행운을 불러오는 날! 진심으로 대한 사람들이 오늘 당신에게 멋진 선물을 가져다줄 거예요.'},
+    {g:'대길',t:'든든한 기운이 오늘 모든 어려움을 가뿐히 해결해 주는 특별한 하루예요. 믿음직스러운 모습이 주변 모두의 신뢰를 얻을 거예요.'},
+    {g:'중길',t:'진심 어린 모습이 주변 사람들에게 인정받는 날이에요. 오늘 하는 일에 마음을 담으면 그것이 고스란히 전해질 거예요.'},
+    {g:'중길',t:'가족이나 가까운 사람들이 오늘 특히 큰 힘이 되어주는 날이에요. 그들의 존재에 감사함을 꼭 표현해 보세요.'},
+    {g:'중길',t:'오늘 건네는 따뜻한 말 한마디가 누군가의 하루를 구해줄 수 있어요. 주변을 살피는 마음이 빛나는 날이에요.'},
+    {g:'중길',t:'성실하게 움직인 하루가 나중에 큰 복이 되어 돌아오는 날이에요. 묵묵히 자기 자리를 지켜보세요.'},
+    {g:'중길',t:'오늘 맺어지는 인연이나 강화되는 관계가 앞으로 오랫동안 소중한 버팀목이 될 거예요.'},
+    {g:'소길',t:'가볍게 떠나는 짧은 외출이나 작은 여행이 마음을 환기시켜 줄 거예요. 새로운 풍경이 기분을 새롭게 해줄 거예요.'},
+    {g:'소길',t:'건강 상태를 살피는 것이 오늘 특히 중요한 날이에요. 몸이 보내는 신호에 귀를 기울여 보세요.'},
+    {g:'소길',t:'진심을 담아 대화하면 상대방과 마음이 통하는 경험을 하게 되는 날이에요.'},
+    {g:'소길',t:'오늘 만나는 인연이 내일의 기쁨이 되는 날이에요. 모든 만남에 최선을 다해 대해 보세요.'},
+    {g:'소길',t:'오래된 것을 돌보고 보살피는 것이 오늘 특히 빛나는 행동이에요. 사람이든 물건이든 오래 함께한 것들을 소중히 해주세요.'},
+    {g:'소길',t:'믿음직스러운 모습이 주변에 안정감을 주는 날이에요. 당신이 있어 모두가 편안함을 느낄 거예요.'},
+    {g:'소길',t:'반려동물이나 자연과 함께하는 시간이 오늘 특히 힐링이 되는 날이에요.'},
+    {g:'평',  t:'조용하고 평온한 저녁이 오늘 가장 좋은 선물이에요. 하루를 차분하게 마무리해 보세요.'},
+    {g:'평',  t:'서두르지 않아도 충분한 하루예요. 오늘은 느리게 가는 것이 오히려 맞는 날이에요.'},
+    {g:'평',  t:'익숙한 공간에서 익숙한 사람들과 보내는 평범한 하루가 사실 가장 행복한 날이에요.'},
+    {g:'평',  t:'오늘은 새로운 것을 추가하기보다 이미 있는 것들을 잘 돌보는 날이에요.'},
+    {g:'주의',t:'지나친 걱정이 실제로 에너지를 낭비하는 날이에요. 통제할 수 없는 일은 내려놓고 지금 할 수 있는 것에 집중하세요.'},
+    {g:'주의',t:'혼자 모든 것을 짊어지려 하지 마세요. 주변에 도움을 요청하는 것도 용기 있는 행동이에요.'},
+    {g:'주의',t:'타인의 감정 변화에 너무 예민하게 반응하지 않도록 주의하세요. 모든 것이 당신 때문이 아닐 수 있어요.'},
+  ],
+  '돼지': [
+    {g:'대길',t:'여유와 복이 한꺼번에 쏟아지는 날! 입이 떡 벌어질 만큼 좋은 일이 오늘 일어날 수 있어요. 활짝 열린 마음으로 받아들여 보세요.'},
+    {g:'대길',t:'좋은 인연과 뜻밖의 재물이 동시에 들어오는 최고의 하루예요. 오늘 만나는 사람, 받는 연락 모두 주의 깊게 살펴보세요.'},
+    {g:'중길',t:'좋은 인연이 생각보다 아주 가까이 있는 날이에요. 주변을 한 번 더 따뜻하게 바라보세요.'},
+    {g:'중길',t:'기분 좋은 소식이 하루 중 불쑥 찾아오는 날이에요. 소식을 들었을 때 진심으로 기뻐하면 그 기쁨이 더 커질 거예요.'},
+    {g:'중길',t:'맛있는 음식이 오늘 하루의 큰 위안이 되어주는 날이에요. 좋아하는 음식을 충분히 즐겨보세요.'},
+    {g:'중길',t:'소소한 행운이 하루 내내 꾸준히 찾아오는 날이에요. 사소한 것도 놓치지 말고 감사하는 마음을 가져보세요.'},
+    {g:'중길',t:'넉넉한 마음으로 주변을 대하면 그것이 더 큰 복이 되어 돌아오는 날이에요.'},
+    {g:'소길',t:'여유로운 마음 속에 진짜 행복이 숨어있는 날이에요. 바쁘게 움직이는 것보다 천천히 즐기는 하루가 더 소중해요.'},
+    {g:'소길',t:'무리하지 않아도 충분히 잘 굴러가는 날이에요. 힘 빼고 자연스럽게 흘러가 보세요.'},
+    {g:'소길',t:'따뜻한 마음을 나누면 주변에 좋은 기운이 도는 날이에요. 먼저 웃음을 건네보세요.'},
+    {g:'소길',t:'자기 자신을 소중히 대하는 것이 오늘 특히 중요한 날이에요. 나를 잘 돌봐야 남도 잘 돌볼 수 있어요.'},
+    {g:'소길',t:'맛있는 것을 먹고 좋아하는 일을 하는 것이 오늘의 최고 처방이에요. 소소하지만 확실한 행복을 챙겨보세요.'},
+    {g:'소길',t:'사람들과 함께하는 시간이 오늘 특히 즐겁고 에너지를 주는 날이에요. 좋아하는 사람들과 시간을 만들어 보세요.'},
+    {g:'소길',t:'오늘은 많이 웃을 수 있는 날이에요. 웃음이 많아질수록 복도 많아진다는 것을 기억하세요.'},
+    {g:'평',  t:'따뜻하게 쉬는 것이 오늘의 최고 보약이에요. 무리하지 않고 편안하게 보내세요.'},
+    {g:'평',  t:'지금 이 순간이 사실 행복이라는 것을 새삼 느끼게 되는 날이에요.'},
+    {g:'평',  t:'욕심보다 현재에 만족하는 것이 오늘의 진정한 행복이에요. 있는 것들에 감사해 보세요.'},
+    {g:'평',  t:'특별한 것 없이도 충분히 좋은 하루예요. 그냥 오늘을 그대로 즐겨보세요.'},
+    {g:'주의',t:'과식이나 과소비가 후회로 이어질 수 있는 날이에요. 맛있어도, 갖고 싶어도 오늘만큼은 조금 참아보세요.'},
+    {g:'주의',t:'게으름이 습관이 되지 않도록 오늘 작은 것이라도 하나 실행해 보세요. 시작이 반이에요.'},
+    {g:'주의',t:'중요한 일을 미루다 나중에 몰아치는 상황이 생길 수 있어요. 오늘 조금이라도 미리 해두면 나중이 편해요.'},
+  ],
+};
+
+// 올해의 띠별 운세 — birth_year % 5 로 인덱스 선택
+const YEAR_FORTUNE = {
+  '쥐': [
+    {g:'대길',t:'재물·건강·인복 삼박자가 완벽히 맞는 해. 용기 있는 도전에 하늘이 응답해요'},
+    {g:'중길',t:'노력한 만큼 인정받는 한 해. 새로운 인맥이 미래의 문을 열어줘요'},
+    {g:'소길',t:'소소한 행운이 매달 이어지는 해. 가족과의 시간이 가장 큰 보물이에요'},
+    {g:'평',  t:'변화 없는 안정 속에 내실을 다지는 해. 조급함을 내려놓으면 충분해요'},
+    {g:'주의',t:'건강 관리와 지출 점검이 필요한 해. 하반기부터 서서히 좋아져요'},
+  ],
+  '소': [
+    {g:'대길',t:'꾸준한 노력이 큰 결실을 맺는 해. 주변 모두가 당신을 응원해요'},
+    {g:'중길',t:'성실함이 인정받고 새 기회가 열리는 해. 건강도 좋은 흐름이에요'},
+    {g:'소길',t:'작은 성취가 쌓여 연말에 뿌듯함을 주는 해. 가족 화목이 최고의 복이에요'},
+    {g:'평',  t:'무리 없이 평탄하게 흘러가는 해. 지금 자리에 충실하면 돼요'},
+    {g:'주의',t:'체력 소모가 클 수 있는 해. 규칙적인 생활이 가장 좋은 예방이에요'},
+  ],
+  '호랑이': [
+    {g:'대길',t:'용기와 행동력이 큰 성과를 만드는 해. 두려움 없이 나아가세요'},
+    {g:'중길',t:'도전이 빛나고 인정받는 한 해. 새로운 분야에서 재능이 발휘돼요'},
+    {g:'소길',t:'활력 넘치는 해지만 무리는 금물. 작은 도전들이 모여 큰 성장이 돼요'},
+    {g:'평',  t:'욕심을 내려놓고 여유를 찾는 해. 가족과의 시간을 늘리면 좋아요'},
+    {g:'주의',t:'과한 자신감이 실수를 부를 수 있는 해. 신중함을 잃지 마세요'},
+  ],
+  '토끼': [
+    {g:'대길',t:'모든 인연이 행운으로 이어지는 해. 부드러움이 세상을 움직여요'},
+    {g:'중길',t:'감성과 창의력이 빛나는 한 해. 새로운 취미가 삶을 풍요롭게 해요'},
+    {g:'소길',t:'따뜻한 관계가 행복을 채우는 해. 작은 배려들이 복을 불러와요'},
+    {g:'평',  t:'내면을 돌보고 쉬어가는 한 해. 무리한 변화보다 안정을 선택하세요'},
+    {g:'주의',t:'감정 기복에 주의가 필요한 해. 마음 챙김이 올 한 해의 열쇠예요'},
+  ],
+  '용': [
+    {g:'대길',t:'모든 꿈이 현실이 되는 대운의 해! 크게 꿈꾸고 크게 행동하세요'},
+    {g:'중길',t:'리더십이 빛나고 큰 성과를 이루는 해. 주변의 지지를 받아요'},
+    {g:'소길',t:'포부를 현실적으로 조정하면 좋은 성과가 있어요. 건강도 챙기세요'},
+    {g:'평',  t:'큰 도약보다 내실을 다지는 해. 기반이 단단해지는 한 해예요'},
+    {g:'주의',t:'과욕이 화를 부를 수 있는 해. 겸손함을 잃지 않으면 무사해요'},
+  ],
+  '뱀': [
+    {g:'대길',t:'직관과 지혜가 황금을 부르는 해. 내 감각을 믿고 나아가세요'},
+    {g:'중길',t:'깊이 있는 통찰로 인정받는 한 해. 조용한 성과가 쌓여가요'},
+    {g:'소길',t:'신중한 판단이 안정된 결과를 가져와요. 꾸준함이 빛을 발해요'},
+    {g:'평',  t:'생각이 많아지는 해. 행동으로 옮기는 용기가 필요해요'},
+    {g:'주의',t:'의심이 과해지기 쉬운 해. 믿음과 소통이 올 한 해의 과제예요'},
+  ],
+  '말': [
+    {g:'대길',t:'달리는 만큼 행운이 따르는 최고의 해! 열정을 마음껏 펼치세요'},
+    {g:'중길',t:'활발한 활동이 좋은 기회를 만드는 해. 건강하고 에너지 넘쳐요'},
+    {g:'소길',t:'바쁘지만 보람 있는 한 해. 중간중간 쉬어가면 더 멀리 가요'},
+    {g:'평',  t:'속도를 줄이고 방향을 점검하는 해. 내실이 다져지는 시간이에요'},
+    {g:'주의',t:'무리한 질주가 탈을 낼 수 있는 해. 페이스 조절이 중요해요'},
+  ],
+  '양': [
+    {g:'대길',t:'따뜻한 마음이 복을 불러오는 해. 가족과 사랑이 넘쳐나요'},
+    {g:'중길',t:'예술적 재능이 인정받는 한 해. 감성이 풍부해지고 창의력이 빛나요'},
+    {g:'소길',t:'소박하지만 따뜻한 행복이 가득한 해. 주변 인연들이 힘이 돼요'},
+    {g:'평',  t:'감정을 잘 다스리며 평온한 흐름을 유지하는 해. 건강 챙기세요'},
+    {g:'주의',t:'지나친 걱정이 에너지를 소모하는 해. 긍정적인 시각을 가지세요'},
+  ],
+  '원숭이': [
+    {g:'대길',t:'재치와 영리함이 대박을 만드는 해. 아이디어 하나가 인생을 바꿔요'},
+    {g:'중길',t:'창의력이 빛나고 새로운 기회가 많은 해. 사람들이 당신을 따르게 돼요'},
+    {g:'소길',t:'다양한 시도 속에 숨은 보석을 찾는 해. 집중력을 높이면 더 좋아요'},
+    {g:'평',  t:'에너지 분산에 주의하며 한 가지에 집중하는 해. 내실을 다지세요'},
+    {g:'주의',t:'경솔한 판단이 문제를 일으킬 수 있는 해. 신중함이 필요해요'},
+  ],
+  '닭': [
+    {g:'대길',t:'부지런함이 황금을 부르는 해. 꼼꼼한 노력이 빛나는 전성기예요'},
+    {g:'중길',t:'성실함이 인정받고 승진·성과가 따르는 해. 건강도 좋아요'},
+    {g:'소길',t:'꾸준한 노력이 안정된 결과를 가져오는 해. 작은 성취를 즐기세요'},
+    {g:'평',  t:'현재 자리에서 최선을 다하는 한 해. 변화보다 안정이 좋아요'},
+    {g:'주의',t:'완벽주의가 스트레스를 줄 수 있는 해. 충분함을 인정하는 연습을 하세요'},
+  ],
+  '개': [
+    {g:'대길',t:'성실과 신의가 최고의 행운을 부르는 해. 가족과 동료 모두 당신 편이에요'},
+    {g:'중길',t:'신뢰가 새로운 기회를 만드는 한 해. 인간관계가 풍요로워져요'},
+    {g:'소길',t:'묵묵한 노력이 인정받는 해. 가족의 화목이 가장 큰 보람이에요'},
+    {g:'평',  t:'지금 있는 자리를 소중히 하는 한 해. 큰 변화보다 충실함이 중요해요'},
+    {g:'주의',t:'지나친 희생이 나를 지치게 할 수 있는 해. 나를 먼저 돌보세요'},
+  ],
+  '돼지': [
+    {g:'대길',t:'복이 넘치고 재물이 들어오는 풍요로운 해. 베풀수록 더 많이 돌아와요'},
+    {g:'중길',t:'좋은 인연과 기쁜 소식이 이어지는 한 해. 낙천적 태도가 복을 불러요'},
+    {g:'소길',t:'소소한 즐거움이 가득한 해. 작은 행복을 발견하는 눈이 생겨요'},
+    {g:'평',  t:'여유롭게 내실을 다지는 한 해. 무리하지 않아도 충분해요'},
+    {g:'주의',t:'낭비와 과욕에 주의가 필요한 해. 저축과 건강 관리를 우선하세요'},
+  ],
 };
 function dayOfYear(d = new Date()) {
   return Math.floor((d - new Date(d.getFullYear(), 0, 0)) / 86400000);
@@ -3484,15 +3888,21 @@ app.get('/api/zodiac', requireAuth, async (req, res) => {
       const fortune = PET_FORTUNE[(doy + u.id) % PET_FORTUNE.length];
       return {
         name: u.display_name, icon: u.icon, photoUrl: u.photo_url,
-        year: u.birth_year, zodiac: '펫', fortune, isPet: true,
+        year: u.birth_year, zodiac: '펫', grade: '평', fortune, isPet: true,
       };
     }
     const z = zodiacOf(u.birth_year);
     const pool = FORTUNE[z] || [];
-    const fortune = pool.length ? pool[(doy + u.id) % pool.length] : '좋은 하루 되세요';
+    const entry = pool.length ? pool[(doy + u.id) % pool.length] : {g:'평', t:'좋은 하루 되세요'};
+    const yearPool = YEAR_FORTUNE[z] || [];
+    const yIdx = yearPool.length ? (((u.birth_year || 0) % yearPool.length) + yearPool.length) % yearPool.length : 0;
+    const yearEntry = yearPool[yIdx] || {g:'평', t:'올해도 건강하고 행복하세요'};
     return {
       name: u.display_name, icon: u.icon, photoUrl: u.photo_url,
-      year: u.birth_year, zodiac: z, fortune, isPet: false,
+      year: u.birth_year, zodiac: z,
+      grade: entry.g, fortune: entry.t,
+      yearGrade: yearEntry.g, yearText: yearEntry.t,
+      isPet: false,
     };
   }));
 });
@@ -3736,6 +4146,256 @@ function daysUntil(m, d) {
   return Math.round((target - todayMid) / 86400000);
 }
 
+// ---------- 올해의 목표 API ----------
+app.get('/api/goals', requireAuth, async (req, res) => {
+  try {
+    const year = Number(req.query.year) || new Date().getFullYear();
+    const cat = ['year','quarter','month'].includes(req.query.category) ? req.query.category : 'year';
+    const qtr = Number(req.query.quarter) || null;
+    const mon = Number(req.query.month) || null;
+    const args1 = [req.user.family_id, year, cat];
+    let extraWhere = '';
+    if (cat === 'quarter' && qtr) { extraWhere = 'AND g.quarter = ?'; args1.push(qtr); }
+    if (cat === 'month' && mon)   { extraWhere = 'AND g.month = ?';   args1.push(mon); }
+    const args2 = [req.user.family_id, year, cat, ...args1.slice(3)];
+    const [[goals], [cheers]] = await Promise.all([
+      getPool().query(
+        `SELECT g.id, g.user_id, g.title, g.year, g.category, g.quarter, g.month, g.created_at,
+                u.display_name, u.icon, u.photo_url,
+                (SELECT progress FROM goal_evidences e WHERE e.goal_id = g.id ORDER BY e.created_at DESC LIMIT 1) AS progress,
+                (SELECT COUNT(*) FROM goal_evidences e WHERE e.goal_id = g.id) AS evidence_count,
+                (SELECT COUNT(*) FROM goal_cheers c WHERE c.goal_id = g.id) AS cheer_count
+           FROM goals g
+           JOIN users u ON u.id = g.user_id
+          WHERE g.family_id = ? AND g.year = ? AND COALESCE(g.category, 'year') = ? ${extraWhere}
+          ORDER BY g.user_id, g.created_at`,
+        args1
+      ),
+      getPool().query(
+        `SELECT c.goal_id, c.from_user_id, c.emoji
+           FROM goal_cheers c
+           JOIN goals g ON g.id = c.goal_id
+          WHERE g.family_id = ? AND g.year = ? AND COALESCE(g.category, 'year') = ? ${extraWhere}`,
+        args2
+      ),
+    ]);
+    const cheerMap = {};
+    for (const c of cheers) {
+      if (!cheerMap[c.goal_id]) cheerMap[c.goal_id] = [];
+      cheerMap[c.goal_id].push({ fromUserId: c.from_user_id, emoji: c.emoji });
+    }
+    res.json(goals.map((g) => ({
+      id: g.id,
+      userId: g.user_id,
+      displayName: g.display_name,
+      icon: g.icon,
+      photoUrl: g.photo_url,
+      title: g.title,
+      year: g.year,
+      progress: Number(g.progress) || 0,
+      evidenceCount: Number(g.evidence_count) || 0,
+      cheerCount: Number(g.cheer_count) || 0,
+      cheers: cheerMap[g.id] || [],
+      createdAt: g.created_at,
+    })));
+  } catch (e) { res.status(500).json({ error: 'internal', message: e.message }); }
+});
+
+app.post('/api/goals', requireAuth, async (req, res) => {
+  try {
+    const title = (req.body?.title || '').toString().trim().slice(0, 200);
+    if (!title) return res.status(400).json({ error: 'no-title' });
+    const year = Number(req.body?.year) || new Date().getFullYear();
+    const cat = ['year','quarter','month'].includes(req.body?.category) ? req.body.category : 'year';
+    const qtr = cat === 'quarter' ? (Number(req.body?.quarter) || null) : null;
+    const mon = cat === 'month'   ? (Number(req.body?.month)   || null) : null;
+    const [r] = await getPool().query(
+      'INSERT INTO goals (family_id, user_id, year, title, category, quarter, month) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      [req.user.family_id, req.user.id, year, title, cat, qtr, mon]
+    );
+    res.json({ ok: true, id: r.insertId });
+  } catch (e) { res.status(500).json({ error: 'internal', message: e.message }); }
+});
+
+app.patch('/api/goals/:id', requireAuth, async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id)) return res.status(400).json({ error: 'bad-id' });
+    const title = (req.body.title || '').trim().slice(0, 200);
+    if (!title) return res.status(400).json({ error: 'title-required' });
+    const [rows] = await getPool().query(
+      'SELECT id, user_id FROM goals WHERE id = ? AND family_id = ? LIMIT 1',
+      [id, req.user.family_id]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'not-found' });
+    if (rows[0].user_id !== req.user.id && req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'forbidden' });
+    }
+    await getPool().query('UPDATE goals SET title = ? WHERE id = ?', [title, id]);
+    res.json({ ok: true, title });
+  } catch (e) { res.status(500).json({ error: 'internal', message: e.message }); }
+});
+
+app.delete('/api/goals/:id', requireAuth, async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id)) return res.status(400).json({ error: 'bad-id' });
+    const [rows] = await getPool().query(
+      'SELECT id, user_id FROM goals WHERE id = ? AND family_id = ? LIMIT 1',
+      [id, req.user.family_id]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'not-found' });
+    if (rows[0].user_id !== req.user.id && req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'forbidden' });
+    }
+    const [evs] = await getPool().query('SELECT image_url FROM goal_evidences WHERE goal_id = ?', [id]);
+    const conn = await getPool().getConnection();
+    try {
+      await conn.beginTransaction();
+      await conn.query('DELETE FROM goal_cheers WHERE goal_id = ?', [id]);
+      await conn.query('DELETE FROM goal_evidences WHERE goal_id = ?', [id]);
+      await conn.query('DELETE FROM goals WHERE id = ?', [id]);
+      await conn.commit();
+    } catch (e) {
+      await conn.rollback();
+      throw e;
+    } finally {
+      conn.release();
+    }
+    for (const ev of evs) safeUnlinkGoalsFile(ev.image_url);
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: 'internal', message: e.message }); }
+});
+
+app.get('/api/goals/:id/evidences', requireAuth, async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id)) return res.status(400).json({ error: 'bad-id' });
+    const [goal] = await getPool().query(
+      'SELECT id FROM goals WHERE id = ? AND family_id = ? LIMIT 1',
+      [id, req.user.family_id]
+    );
+    if (!goal.length) return res.status(404).json({ error: 'not-found' });
+    const [evs] = await getPool().query(
+      `SELECT e.id, e.user_id, e.image_url, e.caption, e.progress, e.created_at,
+              u.display_name, u.icon, u.photo_url AS uploader_photo
+         FROM goal_evidences e
+         JOIN users u ON u.id = e.user_id
+        WHERE e.goal_id = ?
+        ORDER BY e.created_at DESC`,
+      [id]
+    );
+    res.json(evs.map((e) => ({
+      id: e.id,
+      userId: e.user_id,
+      displayName: e.display_name,
+      icon: e.icon,
+      uploaderPhoto: e.uploader_photo,
+      imageUrl: e.image_url,
+      caption: e.caption,
+      progress: e.progress,
+      createdAt: e.created_at,
+      canDelete: e.user_id === req.user.id || req.user.role === 'admin',
+    })));
+  } catch (e) { res.status(500).json({ error: 'internal', message: e.message }); }
+});
+
+app.post(
+  '/api/goals/:id/evidences',
+  requireAuth,
+  (req, res, next) => {
+    goalsUpload.single('photo')(req, res, (err) => {
+      if (err) {
+        const msg = err.message === 'invalid-image-type' ? '이미지 파일만 올릴 수 있어요'
+          : err.code === 'LIMIT_FILE_SIZE' ? '파일이 너무 커요 (3MB 이하)'
+          : (err.message || '업로드 실패');
+        return res.status(400).json({ error: 'upload-failed', message: msg });
+      }
+      next();
+    });
+  },
+  async (req, res) => {
+    try {
+      const goalId = Number(req.params.id);
+      if (!Number.isInteger(goalId)) return res.status(400).json({ error: 'bad-id' });
+      const [goal] = await getPool().query(
+        'SELECT id FROM goals WHERE id = ? AND family_id = ? LIMIT 1',
+        [goalId, req.user.family_id]
+      );
+      if (!goal.length) {
+        if (req.file) fs.unlink(req.file.path, () => {});
+        return res.status(404).json({ error: 'not-found' });
+      }
+      const progress = [0, 25, 50, 75, 100].includes(Number(req.body?.progress))
+        ? Number(req.body.progress) : 0;
+      const caption = (req.body?.caption || '').toString().trim().slice(0, 300) || null;
+      const imageUrl = req.file
+        ? `/uploads/goals/${familySubDir(req)}/${req.file.filename}`
+        : null;
+      const [r] = await getPool().query(
+        'INSERT INTO goal_evidences (goal_id, user_id, image_url, caption, progress) VALUES (?, ?, ?, ?, ?)',
+        [goalId, req.user.id, imageUrl, caption, progress]
+      );
+      res.json({ ok: true, id: r.insertId, imageUrl, caption, progress });
+    } catch (e) {
+      if (req.file) fs.unlink(req.file.path, () => {});
+      res.status(500).json({ error: 'internal', message: e.message });
+    }
+  }
+);
+
+app.delete('/api/goals/:goalId/evidences/:evId', requireAuth, async (req, res) => {
+  try {
+    const goalId = Number(req.params.goalId);
+    const evId = Number(req.params.evId);
+    if (!Number.isInteger(goalId) || !Number.isInteger(evId)) return res.status(400).json({ error: 'bad-id' });
+    const [rows] = await getPool().query(
+      `SELECT e.id, e.user_id, e.image_url FROM goal_evidences e
+         JOIN goals g ON g.id = e.goal_id
+        WHERE e.id = ? AND e.goal_id = ? AND g.family_id = ? LIMIT 1`,
+      [evId, goalId, req.user.family_id]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'not-found' });
+    if (rows[0].user_id !== req.user.id && req.user.role !== 'admin') return res.status(403).json({ error: 'forbidden' });
+    safeUnlinkGoalsFile(rows[0].image_url);
+    await getPool().query('DELETE FROM goal_evidences WHERE id = ?', [evId]);
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: 'internal', message: e.message }); }
+});
+
+app.post('/api/goals/:id/cheers', requireAuth, async (req, res) => {
+  try {
+    const goalId = Number(req.params.id);
+    if (!Number.isInteger(goalId)) return res.status(400).json({ error: 'bad-id' });
+    const emoji = (req.body?.emoji || '👏').toString().trim().slice(0, 10) || '👏';
+    const [goal] = await getPool().query(
+      'SELECT id FROM goals WHERE id = ? AND family_id = ? LIMIT 1',
+      [goalId, req.user.family_id]
+    );
+    if (!goal.length) return res.status(404).json({ error: 'not-found' });
+    await getPool().query(
+      'INSERT IGNORE INTO goal_cheers (goal_id, from_user_id, emoji) VALUES (?, ?, ?)',
+      [goalId, req.user.id, emoji]
+    );
+    const [[{ cnt }]] = await getPool().query('SELECT COUNT(*) AS cnt FROM goal_cheers WHERE goal_id = ?', [goalId]);
+    res.json({ ok: true, cheerCount: Number(cnt) });
+  } catch (e) { res.status(500).json({ error: 'internal', message: e.message }); }
+});
+
+app.delete('/api/goals/:id/cheers', requireAuth, async (req, res) => {
+  try {
+    const goalId = Number(req.params.id);
+    if (!Number.isInteger(goalId)) return res.status(400).json({ error: 'bad-id' });
+    const emoji = (req.query?.emoji || '👏').toString().trim().slice(0, 10) || '👏';
+    await getPool().query(
+      'DELETE FROM goal_cheers WHERE goal_id = ? AND from_user_id = ? AND emoji = ?',
+      [goalId, req.user.id, emoji]
+    );
+    const [[{ cnt }]] = await getPool().query('SELECT COUNT(*) AS cnt FROM goal_cheers WHERE goal_id = ?', [goalId]);
+    res.json({ ok: true, cheerCount: Number(cnt) });
+  } catch (e) { res.status(500).json({ error: 'internal', message: e.message }); }
+});
+
 // ---------- 정적 서빙 ----------
 app.use('/uploads/profiles', express.static(PROFILE_PHOTOS_DIR, {
   maxAge: '0',
@@ -3752,6 +4412,12 @@ app.use('/uploads/gallery', express.static(GALLERY_DIR, {
   fallthrough: true,
 }));
 app.use('/uploads/chat', express.static(CHAT_DIR, {
+  maxAge: '7d',
+  immutable: true,
+  index: false,
+  fallthrough: true,
+}));
+app.use('/uploads/goals', express.static(GOALS_DIR, {
   maxAge: '7d',
   immutable: true,
   index: false,

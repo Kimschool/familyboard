@@ -589,6 +589,40 @@ console.log('[17] computeFinalScore 곱셈');
 }
 
 // ------------------------------------------------------------
+// 18) 버그 회귀: 덱 없는 상태 + 폭탄 후 scores 반영 (flipStock → afterFlip 경유)
+// ------------------------------------------------------------
+console.log('[18] 회귀: stock=0 + 폭탄 후 scores 올바르게 갱신');
+{
+  // P0 광3(3점) 기반으로 폭탄 사용 후 덱 없어서 종료 시 bomb×2 반영돼야 함.
+  const s = engine.createGame({ players, playerCount: 2, seed: 1 });
+  s.hands[0] = [
+    { id: 101, month: 5, type: 'animal', doubleJunk: false, label: '난초 열끗' },
+    { id: 102, month: 5, type: 'ribbon', doubleJunk: false, label: '난초 초단' },
+    { id: 103, month: 5, type: 'junk',   doubleJunk: false, label: '난초 피' },
+  ];
+  s.hands[1] = [];
+  s.captured[0] = {
+    light: [
+      { id: 1,  month: 1, type: 'light', doubleJunk: false, label: '송학 광' },
+      { id: 9,  month: 3, type: 'light', doubleJunk: false, label: '벚꽃 광' },
+      { id: 29, month: 8, type: 'light', doubleJunk: false, label: '공산 광' },
+    ],
+    animal: [], ribbon: [], junk: [],
+  };
+  s.scores[0] = 3;
+  s.board = [{ id: 200, month: 5, type: 'junk', doubleJunk: false, label: '난초 피2' }];
+  s.stock = []; // 덱 비어있음
+  s.phase = 'play-hand'; s.turn = 0;
+
+  const r1 = engine.playBomb(s, 0, 5);
+  eq(r1.state.phase, 'flip-stock', '폭탄 후 flip-stock');
+  const r2 = engine.flipStock(r1.state, null);
+  // afterFlip 경유: 광3(3) × bomb(×2) = 6점
+  ok(r2.state.scores[0] === 6, 'stock=0+폭탄 후 scores[0]=6 (bomb×2 반영)');
+  ok(!r2.state.finished || r2.state.phase === 'choose-go-stop', 'choose-go-stop 또는 종료(정상 분기)');
+}
+
+// ------------------------------------------------------------
 console.log('\n========================================');
 console.log(`  PASSED: ${passed}    FAILED: ${failed}`);
 console.log('========================================');

@@ -1,4 +1,30 @@
 // 고스톱 로비 — 방 생성/입장/실시간 목록 (전역 스크립트)
+
+// ===== 로비 탭 전환 =====
+(function setupLobbyTabs() {
+  document.querySelectorAll('.g-lobby-tab').forEach(function (tab) {
+    tab.addEventListener('click', function () {
+      document.querySelectorAll('.g-lobby-tab').forEach(function (t) {
+        t.classList.remove('is-active');
+        t.setAttribute('aria-selected', 'false');
+      });
+      this.classList.add('is-active');
+      this.setAttribute('aria-selected', 'true');
+      var target = this.dataset.tab;
+      var battle = document.getElementById('lobbyTabBattle');
+      var tools = document.getElementById('lobbyTabTools');
+      if (target === 'battle') {
+        if (battle) battle.hidden = false;
+        if (tools) tools.hidden = true;
+      } else {
+        if (battle) battle.hidden = true;
+        if (tools) tools.hidden = false;
+        if (window.GostopTarot) window.GostopTarot.init(document.getElementById('tarotSection'));
+      }
+    });
+  });
+})();
+
 (function () {
   'use strict';
   const $ = function (id) { return document.getElementById(id); };
@@ -22,11 +48,37 @@
   let SELECTED_WS = 3;
   let CURRENT_ROOM = null;
 
+  function syncPickerAria() {
+    document.querySelectorAll('.g-pc-btn').forEach(function (x) {
+      x.setAttribute('aria-pressed', x.classList.contains('is-selected') ? 'true' : 'false');
+    });
+    document.querySelectorAll('.g-ws-btn').forEach(function (x) {
+      x.setAttribute('aria-pressed', x.classList.contains('is-selected') ? 'true' : 'false');
+    });
+  }
+  syncPickerAria();
+
+  function setLobbyConn(msg, isBad) {
+    const el = $('lobbyConnStatus');
+    if (!el) return;
+    if (!msg) {
+      el.hidden = true;
+      el.textContent = '';
+      el.classList.remove('is-bad', 'is-ok');
+      return;
+    }
+    el.hidden = false;
+    el.textContent = msg;
+    el.classList.toggle('is-bad', !!isBad);
+    el.classList.toggle('is-ok', !isBad);
+  }
+
   document.querySelectorAll('.g-pc-btn').forEach(function (b) {
     b.addEventListener('click', function () {
       document.querySelectorAll('.g-pc-btn').forEach(function (x) { x.classList.remove('is-selected'); });
       b.classList.add('is-selected');
       SELECTED_PC = Number(b.dataset.pc);
+      syncPickerAria();
     });
   });
   document.querySelectorAll('.g-ws-btn').forEach(function (b) {
@@ -34,39 +86,79 @@
       document.querySelectorAll('.g-ws-btn').forEach(function (x) { x.classList.remove('is-selected'); });
       b.classList.add('is-selected');
       SELECTED_WS = Number(b.dataset.ws);
+      syncPickerAria();
     });
   });
 
   $('btnCreate').addEventListener('click', function () {
+    const btn = $('btnCreate');
+    const prevLabel = btn.textContent;
+    btn.disabled = true;
+    btn.setAttribute('aria-busy', 'true');
+    btn.textContent = '만드는 중…';
     socket.emit('room:create', { playerCount: SELECTED_PC, winScoreMin: SELECTED_WS }, function (res) {
+      btn.disabled = false;
+      btn.removeAttribute('aria-busy');
+      btn.textContent = prevLabel;
       if (!res || !res.ok) return alert('방 생성 실패');
       enterRoom(res.room);
     });
   });
 
   // 도움말 시트 토글
-  $('btnHelp') && $('btnHelp').addEventListener('click', function () {
+  function openHelpSheet() {
+    if (typeof window.GostopOpenHelp === 'function') {
+      window.GostopOpenHelp();
+    } else {
+      const dlg = $('helpSheet');
+      if (!dlg) return;
+      dlg.classList.remove('hidden');
+      dlg.style.display = 'flex';
+      dlg.setAttribute('aria-hidden', 'false');
+      setTimeout(function () { const c = $('btnHelpClose'); if (c) c.focus({ preventScroll: true }); }, 0);
+    }
+  }
+  $('btnHelp') && $('btnHelp').addEventListener('click', openHelpSheet);
+  function closeHelpSheet() {
     const dlg = $('helpSheet');
-    dlg.classList.remove('hidden');
-    dlg.style.display = 'flex';
-  });
-  $('btnHelpClose') && $('btnHelpClose').addEventListener('click', function () {
-    const dlg = $('helpSheet');
+    if (!dlg) return;
     dlg.classList.add('hidden');
     dlg.style.display = 'none';
-  });
+    dlg.setAttribute('aria-hidden', 'true');
+    const b = $('btnHelp');
+    if (b) b.focus({ preventScroll: true });
+  }
+  window.GostopCloseHelp = closeHelpSheet;
+  $('btnHelpClose') && $('btnHelpClose').addEventListener('click', closeHelpSheet);
   $('helpSheet') && $('helpSheet').addEventListener('click', function (e) {
-    if (e.target.id === 'helpSheet') {
-      const dlg = $('helpSheet');
-      dlg.classList.add('hidden');
-      dlg.style.display = 'none';
-    }
+    if (e.target.id === 'helpSheet') closeHelpSheet();
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key !== 'Escape') return;
+    const dlg = $('helpSheet');
+    if (!dlg || dlg.classList.contains('hidden') || dlg.style.display === 'none') return;
+    e.preventDefault();
+    closeHelpSheet();
   });
 
-  $('btnJoin').addEventListener('click', function () {
-    const code = ($('joinCode').value || '').trim().toUpperCase();
-    if (!code) return;
-    socket.emit('room:join', { roomId: code }, function (res) {
+  function refreshRoomList() {
+    socket.emit('room:list', null, function (res) {
+      if (!res || !res.ok) return;
+      renderRoomList(res.rooms);
+    });
+  }
+  socket.on('rooms:update', renderRoomList);
+
+  function roomHostName(r) {
+    const pl = r.players || [];
+    for (var i = 0; i < pl.length; i++) {
+      if (pl[i].userId === r.hostId) return pl[i].name;
+    }
+    return '—';
+  }
+
+  function joinRoomById(roomId) {
+    socket.emit('room:join', { roomId: roomId }, function (res) {
       if (!res || !res.ok) {
         const msg = {
           'not-found': '그 코드의 방을 찾을 수 없어요',
@@ -78,41 +170,70 @@
       }
       enterRoom(res.room);
     });
-  });
-
-  function refreshRoomList() {
-    socket.emit('room:list', null, function (res) {
-      if (!res || !res.ok) return;
-      renderRoomList(res.rooms);
-    });
   }
-  socket.on('rooms:update', renderRoomList);
 
   function renderRoomList(rooms) {
     const ul = $('roomList');
     const empty = $('roomEmpty');
     ul.innerHTML = '';
-    if (!rooms || !rooms.length) { empty.style.display = 'block'; return; }
+    if (!rooms || !rooms.length) {
+      empty.style.display = 'block';
+      empty.textContent = '아직 열려 있는 방이 없어요. 위에서 방을 만들 수 있어요.';
+      return;
+    }
     empty.style.display = 'none';
+    const me = window.GostopMe;
     rooms.forEach(function (r) {
       const li = document.createElement('li');
+      const ws = (r.rules && r.rules.winScoreMin != null) ? r.rules.winScoreMin : 3;
+      const hostN = roomHostName(r);
+      const plist = r.players || [];
+      var im = false;
+      if (me) {
+        for (var j = 0; j < plist.length; j++) {
+          if (plist[j].userId === me.id) { im = true; break; }
+        }
+      }
+      if (im) li.classList.add('is-me-in-room');
+      li.setAttribute('role', 'button');
+      li.setAttribute('tabindex', '0');
+      li.setAttribute('aria-label',
+        r.id + ' 방, ' + r.playerCount + '인, ' + ws + '점 승리, 방장 ' + hostN + ', ' + (r.players || []).length + '명 참가. 눌러 입장');
+      const names = (r.players || []).map(function (p) { return escapeHtml(p.name); }).join(', ') || '—';
       li.innerHTML =
-        '<span class="g-rl-code">' + r.id + '</span>' +
-        '<span>' + r.playerCount + '인 · ' + r.players.length + '명 참여</span>' +
-        '<span class="g-rl-meta">' + r.players.map(function (p) { return escapeHtml(p.name); }).join(', ') + '</span>';
-      li.onclick = function () {
-        socket.emit('room:join', { roomId: r.id }, function (res) {
-          if (!res || !res.ok) return alert('입장 실패');
-          enterRoom(res.room);
-        });
+        '<div class="g-rl-left">' +
+          '<span class="g-rl-code">' + r.id + '</span>' +
+          '<div class="g-rl-line2">' +
+            '<span class="g-rl-pill">' + r.playerCount + '인</span>' +
+            '<span class="g-rl-dot">·</span>' +
+            '<span class="g-rl-pill">' + ws + '점</span>' +
+            '<span class="g-rl-dot">·</span>' +
+            '<span class="g-rl-host">' + escapeHtml(hostN) + '</span>' +
+          '</div>' +
+        '</div>' +
+        '<div class="g-rl-right">' +
+          (im ? '<span class="g-rl-joined">참가 중</span>' : '') +
+          '<span class="g-rl-meta">' + names + '</span>' +
+        '</div>';
+      li.onclick = function () { joinRoomById(r.id); };
+      li.onkeydown = function (e) {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          joinRoomById(r.id);
+        }
       };
       ul.appendChild(li);
     });
   }
 
+  function buildJoinUrl(code) {
+    return window.location.origin + '/games/gostop/?join=' + encodeURIComponent(code) + '&mode=multi';
+  }
+
   function enterRoom(room) {
     CURRENT_ROOM = room;
     window.GostopCurrentRoom = room;
+    try { document.title = '고스톱 방 ' + room.id + ' — familyboard'; } catch (_) {}
     $('lobby').classList.add('hidden');
     $('room').classList.remove('hidden');
     $('game').classList.add('hidden');
@@ -125,7 +246,26 @@
     const ws = (room.rules && room.rules.winScoreMin) || 3;
     $('roomTitle').textContent = room.playerCount + '인 방 · ' + ws + '점 승리';
     $('roomCode').textContent = room.id;
-    $('bigCode').textContent = room.id;
+    const bc = $('bigCode');
+    if (bc) {
+      bc.textContent = room.id;
+      bc.setAttribute('aria-label', '방 코드 ' + room.id + ' 복사하려면 탭');
+    }
+    const jurl = buildJoinUrl(room.id);
+    const joinEl = $('roomJoinUrl');
+    if (joinEl) {
+      joinEl.textContent = jurl;
+      joinEl.setAttribute('aria-label', '초대 링크 전체, 복사하려면 탭');
+    }
+    const sh = $('btnShareRoom');
+    if (sh) {
+      sh.hidden = !navigator.share;
+      sh.onclick = function () {
+        if (!navigator.share) return;
+        navigator.share({ title: '고스톱 방', text: '같이 고스톱 할래? 코드: ' + room.id, url: jurl })
+          .catch(function () {});
+      };
+    }
     $('roomCount').textContent = '(' + room.players.length + '/' + room.playerCount + ')';
     const ul = $('playerList');
     ul.innerHTML = '';
@@ -141,17 +281,38 @@
           '<span class="g-pl-name">' + escapeHtml(p.name) + '</span>' +
           (p.userId === room.hostId ? '<span class="g-pl-host">방장</span>' : '');
       } else {
-        li.innerHTML = '<span class="g-pl-avatar">·</span><span class="g-pl-waiting">빈 자리</span>';
+        li.innerHTML = '<span class="g-pl-avatar" aria-hidden="true">·</span><span class="g-pl-waiting">빈 자리 (초대 링크로 들어올 수 있어요)</span>';
       }
       ul.appendChild(li);
     }
     const me = window.GostopMe;
     const isHost = me && room.hostId === me.id;
     const ready = room.players.length >= room.playerCount;
-    $('btnStart').classList.toggle('hidden', !isHost);
-    $('btnStart').disabled = !ready;
-    $('btnStart').textContent = ready ? '게임 시작' : ((room.playerCount - room.players.length) + '명 더 필요해요');
-    $('waitingMsg').style.display = isHost ? 'none' : 'block';
+    const needN = room.playerCount - room.players.length;
+    const st = $('btnStart');
+    if (st) {
+      st.classList.toggle('hidden', !isHost);
+      st.disabled = !ready;
+      st.textContent = ready ? '게임 시작' : (needN + '명 더 필요해요');
+      st.setAttribute('aria-disabled', (!ready) ? 'true' : 'false');
+      st.title = ready
+        ? '모인 인원으로 바로 대전을 시작해요'
+        : ('아직 ' + needN + '명의 자리가 비어 있어요');
+    }
+    const wm = $('waitingMsg');
+    if (wm) {
+      if (isHost) {
+        wm.textContent = needN > 0
+          ? (needN + '명을 더 기다리고 있어요. (아래 링크로 가족을 부르세요.)')
+          : '모든 인원이 모였어요! 게임 시작을 누르세요.';
+        wm.style.display = 'block';
+      } else {
+        wm.textContent = needN > 0
+          ? (needN + '명이 더 들어와야 방장이 시작할 수 있어요.')
+          : '방장이 곧 게임을 시작해요. 잠시만 기다려 주세요.';
+        wm.style.display = 'block';
+      }
+    }
   }
 
   socket.on('room:update', function (room) {
@@ -185,16 +346,36 @@
   $('btnLeave').addEventListener('click', function () {
     socket.emit('room:leave', null, function () {
       CURRENT_ROOM = null;
+      try { document.title = '고스톱 (테스트) — familyboard'; } catch (_) {}
       $('room').classList.add('hidden');
       $('lobby').classList.remove('hidden');
       refreshRoomList();
     });
   });
   $('btnStart').addEventListener('click', function () {
+    const st = $('btnStart');
+    if (st) {
+      st.disabled = true;
+      st.setAttribute('aria-busy', 'true');
+      st.textContent = '시작하는 중…';
+    }
     socket.emit('game:start', null, function (res) {
-      if (!res || !res.ok) alert('시작 실패: ' + (res && res.error));
+      if (st) st.removeAttribute('aria-busy');
+      if (!res || !res.ok) {
+        alert('시작 실패: ' + (res && res.error));
+        if (CURRENT_ROOM) renderRoom(CURRENT_ROOM);
+        return;
+      }
     });
   });
+  if ($('btnRefreshRooms')) {
+    $('btnRefreshRooms').addEventListener('click', function () {
+      const b = $('btnRefreshRooms');
+      if (b) b.classList.add('is-spin');
+      refreshRoomList();
+      setTimeout(function () { if (b) b.classList.remove('is-spin'); }, 600);
+    });
+  }
   // 방 코드 복사 — 클립보드 + bigCode 도 클릭 시 복사
   function copyRoomCode() {
     const code = ($('bigCode') && $('bigCode').textContent || '').trim();
@@ -234,10 +415,53 @@
     }
   }
   if ($('btnCopyCode')) $('btnCopyCode').addEventListener('click', copyRoomCode);
-  if ($('bigCode')) $('bigCode').addEventListener('click', copyRoomCode);
+  if ($('bigCode')) {
+    $('bigCode').addEventListener('click', copyRoomCode);
+    $('bigCode').addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); copyRoomCode(); }
+    });
+  }
+  function copyJoinUrl() {
+    const u = ($('roomJoinUrl') && $('roomJoinUrl').textContent || '').trim();
+    if (!u || u === '—') return;
+    const showJ = function () {
+      const btn = $('btnCopyJoinUrl');
+      if (btn) {
+        const o = btn.textContent;
+        btn.textContent = '✓ 링크 복사됨';
+        btn.disabled = true;
+        setTimeout(function () { btn.textContent = o; btn.disabled = false; }, 1400);
+      }
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(u).then(showJ).catch(function () {
+        try {
+          const ta = document.createElement('textarea');
+          ta.value = u; document.body.appendChild(ta);
+          ta.select(); document.execCommand('copy'); document.body.removeChild(ta);
+          showJ();
+        } catch {}
+      });
+    } else {
+      try {
+        const ta = document.createElement('textarea');
+        ta.value = u; document.body.appendChild(ta);
+        ta.select(); document.execCommand('copy'); document.body.removeChild(ta);
+        showJ();
+      } catch {}
+    }
+  }
+  if ($('btnCopyJoinUrl')) $('btnCopyJoinUrl').addEventListener('click', copyJoinUrl);
+  if ($('roomJoinUrl')) {
+    $('roomJoinUrl').addEventListener('click', copyJoinUrl);
+    $('roomJoinUrl').addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); copyJoinUrl(); }
+    });
+  }
   $('btnQuit').addEventListener('click', function () {
     socket.emit('room:leave', null, function () {
       CURRENT_ROOM = null;
+      try { document.title = '고스톱 (테스트) — familyboard'; } catch (_) {}
       $('game').classList.add('hidden');
       // 싱글모드에서 나가기 → 싱글 화면으로 / 멀티모드에서 나가기 → 로비
       if (window._gostopSingleActive || window._gostopSingleResult) {
@@ -256,19 +480,30 @@
   });
 
   socket.on('connect', function () {
+    setLobbyConn('');
     // 서버가 handshake 때 내 user 정보를 별도 이벤트로 보내줌
     socket.emit('me', null, function (res) {
       if (res && res.user) {
         window.GostopMe = res.user;
-        // race fix — me ack 가 늦게 도착했어도 현재 room 화면이면 host 판정 다시
         if (CURRENT_ROOM) renderRoom(CURRENT_ROOM);
       }
     });
     refreshRoomList();
     loadRanking();
-    // URL 파라미터 자동 처리: /games/gostop/?autoCreate=1&pc=N 또는 ?join=CODE
     handleAutoIntent();
   });
+  socket.on('disconnect', function (reason) {
+    setLobbyConn('서버와 잠시 연결이 끊겼어요. 자동으로 다시 붙는 중…', true);
+  });
+  try {
+    if (socket.io && typeof socket.io.on === 'function') {
+      socket.io.on('reconnect', function () {
+        setLobbyConn('다시 연결됐어요. 방 목록을 불러올게요.', false);
+        setTimeout(function () { setLobbyConn(''); }, 3200);
+        refreshRoomList();
+      });
+    }
+  } catch (_) {}
 
   function handleAutoIntent() {
     try {
@@ -432,42 +667,81 @@
   });
 
   // ===== 싱글모드 =====
-  const SINGLE_KEY = 'gostop_single_progress_v2';
-  // 레벨별 점당 (₩) — 1단계 10원에서 점진 상승
-  function pointValue(level) { return 10 + (level - 1) * 10; }   // 10, 20, 30, ..., 200
-  // 레벨별 시작 소지금 — 봇이 가진 금액 = 시작 소지금 (이걸 가져오면 클리어)
-  // 점당이 오를수록 소지금도 늘어남 (한 판에 평균 3점 × pointValue 계산하면 적당)
+  const SINGLE_KEY = 'gostop_single_progress_v4';
+  const SINGLE_KEY_V3 = 'gostop_single_progress_v3';
+  // 레벨별 점당(₩) — 1단계 100원, 단계마다 5배 (지수 상승)
+  function pointValue(level) {
+    const L = Math.max(1, Math.min(40, level | 0));
+    return Math.round(100 * Math.pow(5, L - 1));
+  }
+  // 레벨별 시작(나·봇) 소지금 — 점당 × 300 (1단계 3만 원, 이후 5배씩)
   function startingMoney(level) {
-    return pointValue(level) * 30;  // Lv1: 300, Lv5: 1,500, Lv10: 3,000, Lv20: 6,000
+    return pointValue(level) * 300;
+  }
+  // v3 → v4 마이그레이션: 전적·레벨은 유지, 소지금은 새 공식으로 재계산
+  function migrateSingleFromV3() {
+    try {
+      if (localStorage.getItem(SINGLE_KEY)) return;
+      const leg = localStorage.getItem(SINGLE_KEY_V3);
+      const j = leg ? JSON.parse(leg) : {};
+      const level = Math.max(1, Math.min(40, Number(j.level) || 1));
+      const p = {
+        level: level,
+        wins: Number(j.wins) || 0,
+        losses: Number(j.losses) || 0,
+        cleared: Array.isArray(j.cleared) ? j.cleared : [],
+        myMoney: startingMoney(level), // 새 공식으로 초기화
+      };
+      localStorage.setItem(SINGLE_KEY, JSON.stringify(p));
+    } catch { /* empty */ }
   }
   function loadSingleProgress() {
     try {
+      migrateSingleFromV3();
       const j = JSON.parse(localStorage.getItem(SINGLE_KEY) || '{}');
       const cleared = Array.isArray(j.cleared) ? j.cleared : [];
-      const level = Number(j.level) || 1;
+      const level = Math.max(1, Math.min(40, Number(j.level) || 1));
       const myMoney = (j.myMoney != null) ? Number(j.myMoney) : startingMoney(level);
       return {
         level: level,
         wins: Number(j.wins) || 0,
         losses: Number(j.losses) || 0,
-        cleared: cleared,    // 깬 레벨 목록
-        myMoney: myMoney,    // 누적 소지금
+        cleared: cleared,
+        myMoney: myMoney,
       };
     } catch { return { level: 1, wins: 0, losses: 0, cleared: [], myMoney: startingMoney(1) }; }
   }
+  window.GostopEcon = { pointValue: pointValue, startingMoney: startingMoney, singleStorageKey: SINGLE_KEY };
   function saveSingleProgress(p) {
     try { localStorage.setItem(SINGLE_KEY, JSON.stringify(p)); } catch {}
   }
   function fmtMoney(n) {
     return Number(n || 0).toLocaleString('ko-KR') + '원';
   }
+  function singleTierLine(level) {
+    const L = Math.max(1, Math.min(40, level | 0));
+    if (L <= 3)  return '티어: 새내기(1~3) — 실수가 많고 연습에 좋은 구간';
+    if (L <= 7)  return '티어: 입문(4~7) — 맞춤·먹기가 꽤 정확해집니다';
+    if (L <= 11) return '티어: 노련(8~11) — 세트·견제가 눈에 띕니다';
+    if (L <= 15) return '티어: 고수(12~15) — 고/스톱·압박이 거칩니다';
+    if (L <= 20) return '티어: 명인(16~20) — 한두 실수가 크게 느껴질 수 있어요';
+    if (L <= 27) return '티어: 마왕(21~27) — 거의 망설임 없이 최선 수를 둡니다';
+    if (L <= 33) return '티어: 전설(28~33) — 수비·세트 계산이 매우 정밀해요';
+    return '티어: 패왕(34~40) — 완전 결정론적, 최고 난이도';
+  }
   function botNameFor(level) {
-    if (level <= 3) return '🐣 새내기 봇 Lv.' + level;
-    if (level <= 7) return '🤖 입문 봇 Lv.' + level;
-    if (level <= 11) return '🎴 노련한 봇 Lv.' + level;
-    if (level <= 15) return '🔥 고수 봇 Lv.' + level;
-    if (level <= 18) return '👹 명인 봇 Lv.' + level;
-    return '💀 마왕 Lv.' + level;
+    if (typeof GostopAI !== 'undefined' && GostopAI && typeof GostopAI.botNameFor === 'function') {
+      return GostopAI.botNameFor(level);
+    }
+    const L = Math.max(1, Math.min(40, +level || 1));
+    if (L <= 3) return '🐣 새내기 봇 Lv.' + L;
+    if (L <= 7) return '🤖 입문 봇 Lv.' + L;
+    if (L <= 11) return '🎴 노련한 봇 Lv.' + L;
+    if (L <= 15) return '🔥 고수 봇 Lv.' + L;
+    if (L <= 20) return '👹 명인 봇 Lv.' + L;
+    if (L <= 27) return '💀 마왕 Lv.' + L;
+    if (L <= 33) return '🌟 전설 봇 Lv.' + L;
+    return '👑 패왕 Lv.' + L;
   }
   function showSinglePlay() {
     $('lobby').classList.add('hidden');
@@ -476,6 +750,32 @@
   }
   // 외부(game.js)에서 게임 후 다시 싱글 화면 갱신용
   window.GostopRefreshSingle = renderSinglePlay;
+
+  function aiPhotoUrl(level) {
+    return 'assets/ai-photo-' + level + '.png';
+  }
+
+  function makeAiImgHtml(level, fallbackEmoji) {
+    return '<img src="' + aiPhotoUrl(level) + '" alt="AI" style="width:100%;height:100%;object-fit:contain;display:block;"' +
+      ' onerror="this.outerHTML=\'' + (fallbackEmoji || '🤖') + '\'">';
+  }
+
+  function loadTarotCard(level) {
+    const wrap = $('singleTarotWrap');
+    const img = $('singleTarotImg');
+    if (!wrap || !img) return;
+    const url = 'assets/tarot-' + level + '.png';
+    const probe = new Image();
+    probe.onload = function () {
+      img.src = url;
+      wrap.style.display = '';
+    };
+    probe.onerror = function () {
+      wrap.style.display = 'none';
+    };
+    probe.src = url;
+  }
+
   function renderSinglePlay() {
     const prog = loadSingleProgress();
     const lv = prog.level;
@@ -485,15 +785,45 @@
     $('singleNowName').textContent = botNameFor(lv);
     $('singleRecord').textContent =
       '전적: ' + prog.wins + '승 ' + prog.losses + '패  ·  내 소지금 ' + fmtMoney(prog.myMoney) +
-      '  ·  Lv.' + lv + ' 판돈 ' + pv + '원/점 (봇 보유 ' + fmtMoney(botMoney) + ')';
+      '  ·  Lv.' + lv + ' 점당 ' + fmtMoney(pv) + ' · 봇 상금 ' + fmtMoney(botMoney);
     document.body.setAttribute('data-ai-level', String(lv));
+    loadTarotCard(lv);
+    const av = $('singleAiAvatar');
+    const pill = $('singleAiPill');
+    const tline = $('singleAiTier');
+    const hint = $('singleAiHint');
+    const econ = $('singleEconLine');
+    if (GostopAI && typeof GostopAI.personaMeta === 'function') {
+      const meta = GostopAI.personaMeta(lv);
+      if (av) {
+        av.innerHTML = makeAiImgHtml(lv, meta.emoji || '🤖');
+        av.setAttribute('data-persona', meta.id || 'bal');
+        av.setAttribute('aria-label', (meta.short || '봇') + ' 타입');
+      }
+      if (pill) pill.textContent = (meta.short || '균형') + ' · 이번 상대';
+      if (hint) hint.textContent = meta.hint || '';
+    } else {
+      if (av) {
+        av.innerHTML = makeAiImgHtml(lv, '🤖');
+        av.setAttribute('data-persona', 'bal');
+      }
+      if (pill) pill.textContent = 'AI · 이번 상대';
+      if (hint) hint.textContent = '단계가 오를수록 봇은 수가 점차 단단해집니다.';
+    }
+    if (tline) tline.textContent = singleTierLine(lv);
+    if (econ) {
+      econ.textContent =
+        '이 단계 시작(나·봇) ' + fmtMoney(startingMoney(lv)) + ' · 점당 ' + fmtMoney(pv) +
+        ' · 이기면 (내 점×점당)을 가져가되, 봇이 가진 금액을 넘길 수 없어요. 지면 (봇 점×점당)을 잃고, 낼 돈이 없으면 잃는 만큼만요. ' +
+        '다음 단계로 갈수록 점당·소지금이 5배씩 커집니다.';
+    }
     const grid = $('singleLevelGrid');
     if (grid) {
       grid.innerHTML = '';
       const maxOpen = (prog.cleared.length >= 0)
         ? (prog.cleared.length + 1) // 깬 단계 수 + 1단계까지 열림
         : 1;
-      for (let i = 1; i <= 20; i++) {
+      for (let i = 1; i <= 40; i++) {
         const b = document.createElement('button');
         b.type = 'button';
         const isCleared = prog.cleared.indexOf(i) >= 0;
@@ -504,7 +834,7 @@
           + (isCleared ? ' is-cleared' : '')
           + (!isOpen ? ' is-locked' : '');
         b.textContent = isOpen ? String(i) : '🔒';
-        b.title = botNameFor(i) + ' · 판돈 ' + pointValue(i) + '원/점';
+        b.title = botNameFor(i) + ' · 점당 ' + fmtMoney(pointValue(i));
         b.disabled = !isOpen;
         b.onclick = function () {
           if (b.disabled) return;
@@ -530,7 +860,7 @@
   });
   $('btnSingleReset') && $('btnSingleReset').addEventListener('click', function () {
     if (!confirm('진행 기록을 초기화할까요? Lv.1부터 다시 시작합니다.')) return;
-    saveSingleProgress({ level: 1, wins: 0, losses: 0 });
+    saveSingleProgress({ level: 1, wins: 0, losses: 0, cleared: [], myMoney: startingMoney(1) });
     renderSinglePlay();
   });
 
@@ -559,7 +889,7 @@
         prog.wins += 1;
         // 레벨 클리어 — cleared 목록에 추가하고 다음 레벨 자동 진입
         if (prog.cleared.indexOf(lv) < 0) prog.cleared.push(lv);
-        if (lv < 20) prog.level = lv + 1;
+        if (lv < 40) prog.level = lv + 1;
       } else if (view.winner === botIdx) {
         // 봇이 이김 — 내 소지금 차감
         delta = -Math.min(botScore * pv, prog.myMoney);

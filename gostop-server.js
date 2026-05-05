@@ -204,6 +204,7 @@ function attachGostopServer(httpServer) {
           playerCount: room.playerCount,
           seed: Date.now(),
           rules: room.rules || {},
+          firstTurn: room.lastWinnerIdx ?? 0,
         });
         room.cumScores = room.cumScores || {};
         room.gameHistory = room.gameHistory || [];
@@ -330,6 +331,7 @@ function attachGostopServer(httpServer) {
           playerCount: room.playerCount,
           seed: Date.now(),
           rules: room.rules || {},
+          firstTurn: room.lastWinnerIdx ?? 0,
         });
         room.gameResultRecorded = false;
         io.to(`room:${room.id}`).emit('game:started', { room: serializeRoom(room) });
@@ -343,7 +345,7 @@ function attachGostopServer(httpServer) {
     // ===== 싱글모드: 1:1 vs AI 봇 시작 =====
     socket.on('single:start', (payload, ack) => {
       try {
-        const level = Math.max(1, Math.min(20, Number(payload?.level) || 1));
+        const level = Math.max(1, Math.min(40, Number(payload?.level) || 1));
         // 기존 방 정리
         const prevId = socket.data.roomId;
         if (prevId) {
@@ -377,6 +379,7 @@ function attachGostopServer(httpServer) {
           playerCount: 2,
           seed: Date.now(),
           rules: room.rules,
+          firstTurn: room.lastWinnerIdx ?? 0,
         });
         room.cumScores = {};
         room.gameHistory = [];
@@ -474,13 +477,15 @@ function attachGostopServer(httpServer) {
           }
         }
         const cardId = ai.decideHandPlay(game, playerIdx, level);
-        if (cardId == null) return;
+        // cardId null = 손패 없음 (게임 종료 직전). broadcastGameView 후 schedule 해야 함.
+        if (cardId == null) { broadcastGameView(room); scheduleBotIfNeeded(room); return; }
         const result = engine.playHandCard(game, playerIdx, cardId, null);
         room.game = result.state;
       } else if (game.phase === 'choose-hand-match') {
         const candidates = (game.pending && game.pending.choices) ? game.pending.choices.slice() : [];
         const pick = ai.decideMatchChoice(game, playerIdx, candidates, level);
-        if (pick == null) return;
+        // pick null = 후보 없음 (비정상 상태). schedule 은 유지해 복구 시도.
+        if (pick == null) { scheduleBotIfNeeded(room); return; }
         const result = engine.resolveHandMatch(game, pick);
         room.game = result.state;
       } else if (game.phase === 'flip-stock') {
@@ -489,7 +494,7 @@ function attachGostopServer(httpServer) {
       } else if (game.phase === 'choose-flip-match') {
         const candidates = (game.pending && game.pending.choices) ? game.pending.choices.slice() : [];
         const pick = ai.decideMatchChoice(game, playerIdx, candidates, level);
-        if (pick == null) return;
+        if (pick == null) { scheduleBotIfNeeded(room); return; }
         const result = engine.resolveFlipMatch(game, pick);
         room.game = result.state;
       } else if (game.phase === 'choose-go-stop') {
@@ -502,6 +507,8 @@ function attachGostopServer(httpServer) {
       scheduleBotIfNeeded(room);
     } catch (e) {
       console.warn('[gostop] bot action failed:', e.message);
+      // 예외 발생 시에도 다음 봇 행동을 재스케줄해 게임이 영구 중단되지 않게 함
+      scheduleBotIfNeeded(room);
     }
   }
 
@@ -539,6 +546,7 @@ function attachGostopServer(httpServer) {
       room.gameHistory = room.gameHistory || [];
       const w = game.winner;
       if (w != null) {
+        room.lastWinnerIdx = w;
         const winnerUserId = game.players[w].userId;
         const winPts = game.scores[w] || 0;
         room.cumScores[winnerUserId] = (room.cumScores[winnerUserId] || 0) + winPts;

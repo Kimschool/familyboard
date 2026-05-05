@@ -2909,54 +2909,82 @@ body.tod-night .hero-weather { color: rgba(242,242,247,.8); }
 /* ========== 생일 폭죽 ========== */
 .confetti {
   position: fixed;
-  top: -40px;
+  top: -48px;
   z-index: 9998;
   pointer-events: none;
-  animation: confetti-fall 4s linear forwards;
+  animation: confetti-fall ease-in forwards;
   user-select: none;
+  --drift: 0px;
 }
 @keyframes confetti-fall {
-  0%   { transform: translateY(0) rotate(0); opacity: 1; }
-  90%  { opacity: 1; }
-  100% { transform: translateY(110vh) rotate(720deg); opacity: 0; }
+  0%   { transform: translateY(0)     translateX(0)                    rotate(0deg)   scale(1);   opacity: 1; }
+  40%  { transform: translateY(40vh)  translateX(calc(var(--drift)*.5)) rotate(280deg) scale(.9);  opacity: 1; }
+  85%  { transform: translateY(90vh)  translateX(var(--drift))          rotate(560deg) scale(.75); opacity: 1; }
+  95%  { opacity: .7; }
+  100% { transform: translateY(115vh) translateX(calc(var(--drift)*1.2)) rotate(720deg) scale(.6); opacity: 0; }
 }
 
-/* ========== 생일 배너 ========== */
-.banner {
-  display: flex;
-  gap: 16px;
-  align-items: center;
-  background: linear-gradient(135deg, #FFE9EC 0%, #FFF5E1 100%);
-  color: #3A2A2A;
+/* 생일 배너: 가족 탭에서만 표시 */
+body[data-active-tab]:not([data-active-tab="family"]) #birthdayBanner { display: none !important; }
+
+/* ========== 생일 축하 카드 ========== */
+.bday-hero {
   border-radius: var(--r-md);
-  padding: 18px 20px;
   margin-bottom: 14px;
-  box-shadow: var(--shadow-sm);
-  position: relative;
   overflow: hidden;
+  cursor: pointer;
+  background: linear-gradient(135deg, #FF6B6B 0%, #FF8E53 55%, #FFC93C 100%);
+  box-shadow: 0 4px 20px rgba(255,100,80,.35);
+  animation: bday-pulse 3s ease-in-out infinite;
 }
-.banner::before {
-  content: '';
-  position: absolute;
-  top: -30px; right: -20px;
-  width: 120px; height: 120px;
-  background: radial-gradient(circle, rgba(255,255,255,.6), transparent 70%);
-  pointer-events: none;
+@keyframes bday-pulse {
+  0%, 100% { box-shadow: 0 4px 20px rgba(255,100,80,.35); }
+  50%       { box-shadow: 0 6px 32px rgba(255,100,80,.55); }
 }
-.banner.today {
-  background: linear-gradient(135deg, #FFB3BA 0%, #FFD9A8 50%, #FFE97F 100%);
-  animation: banner-pulse 3s ease-in-out infinite;
+.bday-balloon-row {
+  text-align: center;
+  font-size: 22px;
+  letter-spacing: 4px;
+  padding: 12px 12px 0;
+  animation: balloons-sway 2.2s ease-in-out infinite alternate;
+  display: block;
 }
-@keyframes banner-pulse {
-  0%, 100% { box-shadow: var(--shadow-sm); }
-  50% { box-shadow: 0 4px 20px rgba(255,100,100,.25); }
+@keyframes balloons-sway {
+  from { transform: translateY(0) rotate(-1deg); }
+  to   { transform: translateY(-6px) rotate(1deg); }
 }
-.banner-emoji { font-size: 48px; line-height: 1; flex-shrink: 0; }
-.banner.today .banner-emoji { font-size: 56px; }
-.banner-body { flex: 1; min-width: 0; }
-.banner-title { margin: 0; font-weight: 700; font-size: 19px; line-height: 1.25; }
-.banner.today .banner-title { font-size: 22px; }
-.banner-sub   { margin: 4px 0 0; color: #6B5A5A; font-size: 15px; line-height: 1.4; }
+.bday-center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 20px 22px;
+  text-align: center;
+}
+.bday-av {
+  width: 76px; height: 76px;
+  border-radius: 50%;
+  overflow: hidden;
+  border: 3px solid rgba(255,255,255,.8);
+  box-shadow: 0 2px 14px rgba(0,0,0,.18);
+  flex-shrink: 0;
+}
+.bday-av img, .bday-av .inline-av { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }
+.bday-name {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 800;
+  color: #fff;
+  text-shadow: 0 1px 4px rgba(0,0,0,.18);
+  line-height: 1.3;
+  word-break: keep-all;
+}
+.bday-sub {
+  margin: 0;
+  font-size: 14px;
+  color: rgba(255,255,255,.88);
+  line-height: 1.4;
+}
 
 /* ========== 카드 공통 ========== */
 .card {
@@ -3216,6 +3244,60 @@ body.tod-night .hero-weather { color: rgba(242,242,247,.8); }
   border-radius: 50%;
   box-shadow: 0 0 0 1px rgba(0,0,0,.05);
   display: inline-block;
+}
+
+/* ----- 오늘 운세 좋은 사람 테두리 glow ----- */
+@keyframes zodiac-glow-pulse {
+  0%, 100% { box-shadow: 0 0 0 2px rgba(255,185,0,.35), 0 0 10px rgba(255,185,0,.15); }
+  50%       { box-shadow: 0 0 0 2px rgba(255,185,0,.75), 0 0 18px rgba(255,185,0,.3); }
+}
+.zodiac-lucky-glow {
+  border-radius: 14px;
+  animation: zodiac-glow-pulse 2.2s ease-in-out infinite;
+}
+.zodiac-lucky-glow-strong {
+  animation-duration: 1.6s;
+  box-shadow: 0 0 0 2.5px rgba(255,160,0,.55), 0 0 14px rgba(255,160,0,.25);
+}
+
+/* ----- 올해의 운세 섹션 ----- */
+.zodiac-year-wrap {
+  margin-top: 16px;
+  border-top: 1px solid var(--line);
+  padding-top: 4px;
+}
+.zodiac-year-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  background: none;
+  border: none;
+  padding: 10px 0;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+}
+.zodiac-year-chev {
+  font-size: 11px;
+  color: var(--sub);
+  transition: transform .2s;
+}
+.zodiac-year-list { list-style: none; padding: 0; margin: 0 0 4px; }
+.zodiac-year-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+}
+.zodiac-year-item:last-child { border-bottom: none; }
+.zodiac-year-text {
+  font-size: 13px;
+  color: var(--sub);
+  line-height: 1.55;
+  margin-top: 2px;
 }
 
 /* ========== 환율 ========== */
@@ -3875,41 +3957,6 @@ select {
   letter-spacing: -0.5px;
 }
 
-/* ========== 카드 숨기기 (일반 모드에선 감춤) ========== */
-#app [data-card-id].user-hidden { display: none !important; }
-
-/* ========== 카드 순서·표시 편집 모드 ========== */
-body.reorder-mode #app [data-card-id] {
-  outline: 2px dashed rgba(10,132,255,.4);
-  outline-offset: -2px;
-  position: relative;
-}
-body.reorder-mode #app [data-card-id].dim-hidden {
-  outline-color: rgba(255,59,48,.4);
-  opacity: .5;
-}
-.reorder-actions {
-  position: absolute;
-  top: 6px; right: 6px;
-  display: flex; gap: 4px;
-  z-index: 5;
-}
-.reo-btn {
-  width: 40px; height: 40px;
-  border: none;
-  border-radius: 50%;
-  background: var(--primary);
-  color: #fff;
-  font-size: 20px;
-  font-weight: 800;
-  cursor: pointer;
-  box-shadow: 0 2px 6px rgba(0,0,0,.15);
-}
-.reo-btn.reo-toggle { background: var(--good); font-size: 16px; }
-.reo-btn.reo-toggle.off { background: var(--bad); }
-.reo-btn:active { transform: scale(.92); }
-body.reorder-mode #app .card { padding-top: 28px; }
-body.reorder-mode #app #birthdayBanner { padding-top: 28px; }
 
 /* ========== 생일 축하 메시지 시트 ========== */
 .bday-head {
@@ -3978,6 +4025,47 @@ body.reorder-mode #app #birthdayBanner { padding-top: 28px; }
 .help-item > div { flex: 1; min-width: 0; }
 .help-item b { font-size: 16px; color: var(--text); display: block; margin-bottom: 4px; }
 .help-item p { margin: 0; font-size: 14px; color: var(--sub); line-height: 1.55; word-break: keep-all; }
+
+/* ========== 업데이트 내역 ========== */
+.ver-badge {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--primary, #5C6AC4);
+  background: rgba(92,106,196,.12);
+  border-radius: 6px;
+  padding: 1px 6px;
+  margin-left: 6px;
+  vertical-align: middle;
+}
+.ver-new-dot {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 800;
+  color: #fff;
+  background: #FF3B30;
+  border-radius: 8px;
+  padding: 1px 5px;
+  margin-left: 4px;
+  vertical-align: middle;
+  animation: badge-pop .3s cubic-bezier(.22,.61,.36,1.4) both;
+}
+@keyframes badge-pop { from { transform: scale(0); } to { transform: scale(1); } }
+.changelog-sheet { max-height: 80vh; overflow-y: auto; }
+.changelog-list { margin-bottom: 4px; }
+.cl-entry { padding: 14px 0; border-bottom: 1px solid var(--line); }
+.cl-entry:last-child { border-bottom: none; }
+.cl-header { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.cl-version { font-size: 15px; font-weight: 800; color: var(--primary, #5C6AC4); }
+.cl-date { font-size: 12px; color: var(--sub); }
+.cl-items { margin: 0; padding-left: 18px; }
+.cl-items li { font-size: 14px; color: var(--text); line-height: 1.7; word-break: keep-all; }
+.cl-dont-show-row {
+  display: flex; align-items: center; gap: 8px;
+  margin-top: 16px; cursor: pointer;
+  font-size: 14px; color: var(--sub);
+}
+.cl-dont-show-chk { width: 17px; height: 17px; cursor: pointer; accent-color: var(--primary, #5C6AC4); }
 
 /* ========== 프로필 시트 ========== */
 .sheet-backdrop {
@@ -4901,6 +4989,36 @@ li.memo-important .memo-text { font-weight: 700; }
   display: block;
   object-fit: contain;
 }
+.gup-multi-strip {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding: 6px 0;
+  margin-bottom: 4px;
+}
+.gup-mini-thumb {
+  flex: 0 0 72px;
+  height: 72px;
+  border-radius: 8px;
+  object-fit: cover;
+  border: 2px solid transparent;
+}
+.gup-mini-thumb.active { border-color: var(--accent, #007aff); }
+.gallery-album-badge {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  background: rgba(0,0,0,0.55);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 20px;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  pointer-events: none;
+}
 .gup-caption {
   width: 100%;
   min-height: 56px;
@@ -5297,12 +5415,12 @@ li.memo-important .memo-text { font-weight: 700; }
 
 /* ========== 채팅 임베드 (탭 본문에 직접 들어감) ========== */
 /* 채팅 탭에서는 hero / 푸터 / 설치배너 숨겨 풀스크린 메신저 느낌 */
-body[data-active-tab="chat"]:not(.reorder-mode) #app .hero,
-body[data-active-tab="chat"]:not(.reorder-mode) #app > .foot,
-body[data-active-tab="chat"]:not(.reorder-mode) .install-banner {
+body[data-active-tab="chat"] #app .hero,
+body[data-active-tab="chat"] #app > .foot,
+body[data-active-tab="chat"] .install-banner {
   display: none !important;
 }
-body[data-active-tab="chat"]:not(.reorder-mode) {
+body[data-active-tab="chat"] {
   height: 100dvh;
   overflow: hidden;
 }
@@ -5825,6 +5943,7 @@ html[data-scheme="hc"] .chat-bubble { background: var(--card); }
 .lightbox-action:hover { background: rgba(255,255,255,.26); }
 .lightbox-action:active { transform: scale(.95); }
 .lightbox-action.saved { background: rgba(40,200,90,.5); pointer-events: none; }
+.lightbox-dl-btn { top: 18px; left: auto; right: 18px; }
 
 /* ========== 사다리타기 ========== */
 .ladder-sheet { padding-bottom: 80px !important; position: relative; }
@@ -6277,6 +6396,19 @@ html[data-scheme="hc"] .chat-bubble { background: var(--card); }
 .ladder-shuffle-btn:active,
 .ladder-reveal-btn:active,
 .ladder-share-btn:active { transform: scale(.97); }
+.ladder-shuffle-btn:disabled,
+.ladder-reveal-btn:disabled { opacity: .45; cursor: not-allowed; }
+.ladder-shuffle-btn:disabled:active,
+.ladder-reveal-btn:disabled:active { transform: none; }
+.ladder-lobby-start-btn:not(:disabled) {
+  background: #34C759;
+  box-shadow: 0 4px 14px rgba(52, 199, 89, 0.35);
+  animation: ladderStartPulse 1.6s infinite ease-in-out;
+}
+@keyframes ladderStartPulse {
+  0%, 100% { box-shadow: 0 4px 14px rgba(52, 199, 89, 0.35); }
+  50%      { box-shadow: 0 6px 22px rgba(52, 199, 89, 0.6); }
+}
 .ladder-action-row { flex-wrap: wrap; }
 .ladder-action-row > button { flex: 1 1 calc(50% - 4px); min-width: 130px; }
 
@@ -6448,7 +6580,6 @@ html[data-scheme="hc"] .chat-bubble { background: var(--card); }
 }
 .gostop-fab:hover { transform: translateY(-2px); box-shadow: 0 10px 24px rgba(217, 74, 44, .5); }
 .gostop-fab:active { transform: scale(.92); }
-body.reorder-mode .gostop-fab { display: none; }
 
 .quick-memo-cats {
   display: flex;
@@ -6666,7 +6797,7 @@ body[data-active-tab="chat"]   #app [data-card-id][data-in-tab]:not([data-in-tab
 body[data-active-tab="tools"]  #app [data-card-id][data-in-tab]:not([data-in-tab="tools"])  { display: none !important; }
 
 /* 채팅 탭에서는 계정 카드/푸터 등 부가 요소도 숨겨 채팅만 보이게 */
-body[data-active-tab="chat"]:not(.reorder-mode) #app .account-card { display: none !important; }
+body[data-active-tab="chat"] #app .account-card { display: none !important; }
 
 /* 채팅 탭 unread 뱃지 — 탭 버튼 위에 떠 있는 동그라미 */
 .tab-btn { position: relative; }
@@ -6699,9 +6830,6 @@ body[data-active-tab="chat"]:not(.reorder-mode) #app .account-card { display: no
   100% { transform: scale(1); opacity: 1; }
 }
 
-/* 카드 순서 편집 모드: 모든 탭 카드를 보여 주어 이동·숨김 가능 */
-body.reorder-mode #app [data-card-id][data-in-tab] { display: block !important; }
-body.reorder-mode .tab-bar { opacity: 0.4; pointer-events: none; }
 
 /* 탭 전환 시 슬라이드 인 애니메이션 (모바일 감촉) */
 @keyframes tabFadeIn {
@@ -7326,3 +7454,709 @@ html[data-scheme="kid"] .reveal-card {
 html[data-scheme="hc"] .mood-card .card-title::before,
 html[data-scheme="hc"] .question-card .card-title::before,
 html[data-scheme="hc"] .reveal-card .card-title::before { content: none; }
+
+/* ========== 올해의 목표 ========== */
+.goals-card {
+  background: linear-gradient(145deg, #FFFCF2 0%, #FFF2F8 100%);
+  border: none;
+}
+@media (prefers-color-scheme: dark) {
+  .goals-card { background: linear-gradient(145deg, #1A1600 0%, #1A0010 100%); }
+}
+
+/* 목표 카테고리 탭 */
+.goal-cat-tabs {
+  display: flex;
+  gap: 6px;
+  margin: 0 0 14px;
+}
+.goal-cat-tab {
+  flex: 1;
+  padding: 7px 0;
+  border: 1.5px solid var(--line);
+  border-radius: 20px;
+  background: none;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--sub);
+  cursor: pointer;
+  transition: background .15s, color .15s, border-color .15s;
+}
+.goal-cat-tab.is-active {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: #fff;
+}
+
+/* 목표 추가 버튼 */
+.goal-add-btn {
+  font-size: 13px; font-weight: 700;
+  color: #fff;
+  background: linear-gradient(135deg, #FF8C42, #FF5C8A);
+  border: none; border-radius: 20px;
+  padding: 5px 14px; cursor: pointer; white-space: nowrap;
+  box-shadow: 0 2px 8px rgba(255, 100, 100, .25);
+  transition: opacity .15s, transform .1s;
+}
+.goal-add-btn:active { opacity: .85; transform: scale(.97); }
+
+/* 빈 상태 */
+.goals-empty {
+  font-size: 14px; color: var(--sub); padding: 24px 0 8px;
+  text-align: center; line-height: 1.6;
+}
+.goals-empty-pad { padding: 20px 0; text-align: center; }
+.goals-empty-hint { font-size: 13px; color: var(--sub); }
+
+/* 멤버 그룹 */
+.goal-member-group { margin-bottom: 22px; }
+.goal-member-group:last-child { margin-bottom: 4px; }
+.goal-member-head {
+  display: flex; align-items: center; gap: 10px; margin-bottom: 10px;
+  padding-bottom: 8px; border-bottom: 1.5px solid var(--line);
+}
+.goal-member-name {
+  font-size: 15px; font-weight: 800; color: var(--text);
+  letter-spacing: -0.3px;
+}
+.goal-member-count {
+  margin-left: auto; font-size: 12px; font-weight: 700;
+  color: var(--sub); background: var(--line);
+  padding: 2px 8px; border-radius: 20px;
+}
+
+/* 아바타 공통 */
+.goal-avatar {
+  width: 32px; height: 32px; border-radius: 50%; object-fit: cover;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--bg); font-size: 20px; flex-shrink: 0;
+  box-shadow: 0 0 0 2px var(--line);
+}
+.goal-avatar-sm { width: 24px; height: 24px; font-size: 15px; }
+.goal-avatar-emoji { background: var(--bg); }
+
+/* 목표 리스트 */
+.goal-items { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 10px; }
+
+.goal-item {
+  background: var(--card);
+  border-radius: 16px;
+  padding: 14px 16px 12px;
+  box-shadow: var(--shadow-sm);
+  cursor: pointer;
+  transition: transform .12s, box-shadow .12s;
+  border: none;
+}
+.goal-item:active {
+  transform: scale(.98);
+  box-shadow: 0 0 0 2.5px rgba(255,140,66,.5), var(--shadow-sm);
+}
+
+/* 목표 타이틀 행 */
+.goal-item-top {
+  display: flex; align-items: flex-start; gap: 8px; margin-bottom: 10px;
+}
+.goal-item-title {
+  font-size: 14px; font-weight: 700; color: var(--text);
+  flex: 1; line-height: 1.45; letter-spacing: -0.2px;
+}
+.goal-item-ev {
+  font-size: 11px; font-weight: 700; color: var(--sub);
+  background: var(--bg); border-radius: 20px; padding: 2px 7px;
+  white-space: nowrap; flex-shrink: 0; margin-top: 2px;
+}
+
+/* 진행률 바 */
+.goal-item-bar-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.goal-progress-bar-wrap {
+  flex: 1; height: 10px;
+  background: var(--line); border-radius: 999px; overflow: hidden;
+}
+.goal-progress-bar {
+  height: 100%; min-width: 0%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #FF8C42 0%, #FF5C8A 60%, #C84BFF 100%);
+  transition: width .5s cubic-bezier(.22,.61,.36,1);
+}
+.goal-progress-pct {
+  font-size: 13px; font-weight: 800; white-space: nowrap;
+  background: linear-gradient(135deg, #FF8C42, #C84BFF);
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* 하단 푸터 */
+.goal-item-footer { display: flex; align-items: center; justify-content: space-between; }
+.goal-item-more {
+  font-size: 12px; color: var(--sub); letter-spacing: -.1px;
+  display: flex; align-items: center; gap: 3px;
+}
+
+/* 카드 내 응원 버튼 */
+.goal-cheer-btn {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 13px; font-weight: 700; color: var(--sub);
+  background: var(--bg); border: 1.5px solid var(--line); border-radius: 20px;
+  padding: 4px 11px; cursor: pointer;
+  transition: background .15s, color .15s, border-color .15s, transform .1s;
+}
+.goal-cheer-btn:active { transform: scale(.94); }
+.goal-cheer-btn.cheered {
+  background: #FFF4DC; border-color: #FFBC42; color: #D07000;
+}
+@media (prefers-color-scheme: dark) {
+  .goal-cheer-btn.cheered { background: #2A2000; border-color: #A07000; color: #F0B030; }
+}
+@keyframes cheer-pop {
+  0%   { transform: scale(1); }
+  40%  { transform: scale(1.22); }
+  70%  { transform: scale(.94); }
+  100% { transform: scale(1); }
+}
+.goal-cheer-btn.pop { animation: cheer-pop .3s ease; }
+
+/* ===== 목표 상세 시트 ===== */
+.sheet-tall {
+  max-height: 88vh; overflow-y: auto;
+  /* iOS 오버스크롤 바운스 내부 스크롤 허용 */
+  -webkit-overflow-scrolling: touch;
+}
+
+.goal-detail-head {
+  background: linear-gradient(145deg, #FFF8EE, #FFF0F8);
+  border-radius: 16px; padding: 16px; margin-bottom: 14px;
+}
+@media (prefers-color-scheme: dark) {
+  .goal-detail-head { background: linear-gradient(145deg, #1A1200, #180010); }
+}
+
+.goal-detail-owner {
+  display: flex; align-items: center; gap: 8px; margin-bottom: 10px;
+}
+.goal-detail-owner-name {
+  font-size: 14px; font-weight: 700; color: var(--sub);
+}
+
+.goal-detail-title {
+  font-size: 18px; font-weight: 800; color: var(--text);
+  margin: 0 0 14px; line-height: 1.4; letter-spacing: -0.3px;
+  word-break: keep-all;
+}
+
+.goal-detail-progress-row {
+  display: flex; align-items: center; gap: 12px;
+}
+.goal-detail-progress-row .goal-progress-bar-wrap { height: 12px; }
+.goal-detail-progress-row .goal-progress-pct { font-size: 15px; }
+
+/* 응원 섹션 */
+.goal-detail-cheers {
+  margin: 14px 0;
+  padding: 12px 14px;
+  background: var(--bg);
+  border-radius: 14px;
+}
+.goal-cheer-section-label {
+  font-size: 12px; font-weight: 700; color: var(--sub);
+  letter-spacing: .3px; text-transform: uppercase;
+  margin-bottom: 10px;
+}
+.goal-cheer-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.goal-cheer-emoji-btn {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 20px; padding: 7px 13px;
+  border: 1.5px solid var(--line); border-radius: 22px;
+  background: var(--card); cursor: pointer;
+  transition: border-color .15s, background .15s, transform .1s;
+  line-height: 1;
+}
+.goal-cheer-emoji-btn span {
+  font-size: 13px; font-weight: 800; color: var(--sub);
+}
+.goal-cheer-emoji-btn.cheered {
+  border-color: #FFBC42;
+  background: linear-gradient(135deg, #FFF8DC, #FFE8F0);
+}
+@media (prefers-color-scheme: dark) {
+  .goal-cheer-emoji-btn.cheered { background: linear-gradient(135deg, #2A1E00, #2A0015); border-color: #906000; }
+}
+.goal-cheer-emoji-btn.cheered span { color: #C07000; }
+.goal-cheer-emoji-btn:active { transform: scale(.9); }
+@keyframes emoji-cheer {
+  0%   { transform: scale(1) rotate(0deg); }
+  25%  { transform: scale(1.3) rotate(-8deg); }
+  50%  { transform: scale(1.15) rotate(6deg); }
+  75%  { transform: scale(1.2) rotate(-3deg); }
+  100% { transform: scale(1) rotate(0deg); }
+}
+.goal-cheer-emoji-btn.pop { animation: emoji-cheer .35s ease; }
+
+/* 인증 섹션 헤더 */
+.goal-detail-ev-head {
+  display: flex; align-items: center; justify-content: space-between;
+  margin: 16px 0 10px; padding-top: 14px; border-top: 1.5px solid var(--line);
+}
+.goal-detail-ev-label {
+  font-size: 15px; font-weight: 800; color: var(--text); letter-spacing: -0.2px;
+}
+.goal-ev-add-btn {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 13px; font-weight: 700; color: #fff;
+  background: linear-gradient(135deg, #0A84FF, #5E5CE6);
+  border: none; border-radius: 20px;
+  padding: 6px 14px; cursor: pointer;
+  box-shadow: 0 2px 8px rgba(10,132,255,.25);
+  transition: opacity .15s, transform .1s;
+}
+.goal-ev-add-btn:active { opacity: .85; transform: scale(.97); }
+
+/* 증거 목록 */
+.goal-ev-list {
+  display: flex; flex-direction: column; gap: 14px; margin-bottom: 20px;
+}
+.goal-ev-item {
+  background: var(--card);
+  border-radius: 16px; overflow: hidden;
+  box-shadow: var(--shadow-sm);
+}
+.goal-ev-item-head {
+  display: flex; align-items: center; gap: 8px;
+  padding: 11px 14px 10px;
+}
+.goal-ev-item-name {
+  font-size: 13px; font-weight: 700; color: var(--text); flex: 1;
+}
+.goal-ev-item-date {
+  font-size: 12px; color: var(--sub); font-weight: 500;
+}
+.goal-ev-item-pct {
+  font-size: 11px; font-weight: 800; border-radius: 20px; padding: 3px 9px;
+  letter-spacing: .2px;
+}
+.goal-pct-0   { background: var(--bg);    color: var(--sub); }
+.goal-pct-25  { background: #FFF3DC; color: #B06800; }
+.goal-pct-50  { background: #FFF0B0; color: #8A5A00; }
+.goal-pct-75  { background: #FFE4C0; color: #C04000; }
+.goal-pct-100 { background: #D4F5D4; color: #1A6A1A;
+                box-shadow: 0 0 0 1px #1A6A1A30; }
+.goal-detail-actions {
+  display: flex; gap: 10px; margin-top: 16px;
+}
+.goal-action-btn {
+  flex: 1; height: 44px;
+  border: none; border-radius: var(--r-sm);
+  font-size: 14px; font-weight: 700;
+  cursor: pointer; transition: opacity .12s;
+}
+.goal-action-btn:active { opacity: .75; }
+.goal-action-edit { background: var(--line); color: var(--text); }
+.goal-action-del  { background: #FFF0F0; color: #D93025; }
+.goal-ev-del-btn {
+  font-size: 16px; color: var(--sub); background: none; border: none;
+  cursor: pointer; padding: 2px 6px; line-height: 1;
+  border-radius: 50%; transition: background .12s;
+}
+.goal-ev-del-btn:hover { background: var(--bg); color: var(--bad); }
+.goal-ev-img {
+  width: 100%; max-height: 300px; object-fit: cover; display: block;
+}
+.goal-ev-caption {
+  font-size: 13px; color: var(--text); line-height: 1.55;
+  padding: 10px 14px 12px; margin: 0;
+  border-top: 1px solid var(--line);
+}
+
+/* ===== 증거 추가 시트 ===== */
+.goal-ev-progress-label {
+  font-size: 12px; font-weight: 700; color: var(--sub);
+  letter-spacing: .3px; text-transform: uppercase;
+  margin-bottom: 10px;
+}
+.goal-ev-progress-opts {
+  display: flex; gap: 6px; margin-bottom: 16px;
+}
+.goal-ev-prog-btn {
+  flex: 1; padding: 10px 4px 8px;
+  border: 2px solid var(--line); border-radius: 14px;
+  background: var(--card); cursor: pointer; text-align: center;
+  font-size: 11px; line-height: 1.5; color: var(--sub);
+  transition: border-color .15s, background .15s, transform .1s;
+}
+.goal-ev-prog-btn span {
+  font-weight: 800; font-size: 14px; display: block; margin-top: 2px;
+}
+.goal-ev-prog-btn:active { transform: scale(.95); }
+.goal-ev-prog-btn[data-pct="0"].is-selected   { border-color: #888; background: #F8F8F8; color: #555; }
+.goal-ev-prog-btn[data-pct="25"].is-selected  { border-color: #F0A030; background: #FFF8E8; color: #B07000; }
+.goal-ev-prog-btn[data-pct="50"].is-selected  { border-color: #E09000; background: #FFF5D0; color: #9A6000; }
+.goal-ev-prog-btn[data-pct="75"].is-selected  { border-color: #E06020; background: #FFF0E0; color: #C04000; }
+.goal-ev-prog-btn[data-pct="100"].is-selected { border-color: #2A9A2A; background: #EAFAEA; color: #1A7A1A; }
+@media (prefers-color-scheme: dark) {
+  .goal-ev-prog-btn[data-pct="0"].is-selected   { background: #222; color: #aaa; }
+  .goal-ev-prog-btn[data-pct="25"].is-selected  { background: #2A1E00; color: #E0A030; }
+  .goal-ev-prog-btn[data-pct="50"].is-selected  { background: #261900; color: #D09020; }
+  .goal-ev-prog-btn[data-pct="75"].is-selected  { background: #2A1400; color: #E07030; }
+  .goal-ev-prog-btn[data-pct="100"].is-selected { background: #0A2A0A; color: #40C040; }
+}
+
+/* 사진 선택 영역 */
+.goal-ev-photo-row {
+  display: flex; align-items: stretch; gap: 10px; margin-bottom: 10px;
+}
+.goal-ev-photo-btn {
+  flex-shrink: 0;
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  font-size: 13px; font-weight: 700; color: var(--primary);
+  background: none; border: 1.5px dashed var(--primary);
+  border-radius: 14px; padding: 10px 16px; cursor: pointer;
+  transition: background .15s;
+}
+.goal-ev-photo-btn:hover { background: hsla(210,80%,97%,1); }
+.goal-ev-photo-preview {
+  flex: 1; border-radius: 14px; overflow: hidden;
+  border: 1px solid var(--line); background: var(--bg);
+  min-height: 64px; display: flex; align-items: center; justify-content: center;
+}
+.goal-ev-photo-preview img {
+  width: 100%; max-height: 160px; object-fit: cover; display: block;
+}
+
+/* 목표 추가 시트 타이틀 */
+.goal-add-sheet-title {
+  font-size: 20px; font-weight: 800; text-align: center;
+  margin: 0 0 18px; letter-spacing: -0.3px;
+}
+
+/* 100% 완료 축하 강조 */
+.goal-item.done .goal-item-title { color: var(--good); }
+.goal-item.done .goal-progress-bar { background: linear-gradient(90deg, #34C759, #30D158); }
+.goal-item.done .goal-progress-pct {
+  background: linear-gradient(135deg, #34C759, #30D158);
+  -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+}
+
+/* ========== 타로 카드 (메인 카드) ========== */
+.tarot-card .tarot-entry-wrap {
+  display: flex; align-items: center; gap: 14px; padding: 4px 0;
+}
+.tarot-deck-preview {
+  position: relative; width: 52px; height: 76px; flex-shrink: 0;
+}
+.tarot-deck-preview .tarot-mini {
+  position: absolute; width: 40px; height: 64px;
+  background: linear-gradient(135deg, #1a0035, #2d0060);
+  border: 1px solid rgba(180,100,255,.45);
+  border-radius: 6px;
+  box-shadow: 0 2px 8px rgba(100,40,200,.25);
+  left: 50%; top: 50%;
+}
+.tarot-entry-text { flex: 1; }
+.tarot-entry-title { font-size: 15px; font-weight: 700; margin: 0 0 3px; color: var(--fg); }
+.tarot-entry-sub   { font-size: 12.5px; color: var(--sub); margin: 0; }
+.tarot-start-btn {
+  flex-shrink: 0;
+  padding: 10px 18px;
+  background: linear-gradient(135deg, #5b21b6, #7c3aed);
+  color: #fff; border: none; border-radius: 20px;
+  font-size: 14px; font-weight: 700; cursor: pointer;
+  box-shadow: 0 4px 14px rgba(124,58,237,.4);
+  transition: transform .15s, box-shadow .15s;
+}
+.tarot-start-btn:active { transform: scale(.95); box-shadow: 0 2px 8px rgba(124,58,237,.3); }
+
+/* ========== 타로 풀스크린 오버레이 ========== */
+.tarot-overlay {
+  position: fixed; inset: 0;
+  background: linear-gradient(160deg, #0a0015 0%, #12002a 50%, #0a001a 100%);
+  z-index: 2000;
+  overflow: hidden;
+  display: flex; align-items: stretch; justify-content: center;
+}
+.tarot-overlay.hidden { display: none; }
+
+/* 내부 스크롤 컨테이너 */
+.tarot-scroll-body {
+  position: relative; z-index: 5;
+  width: 100%; max-width: 480px;
+  display: flex; align-items: center; justify-content: center;
+  overflow: hidden;
+}
+/* 결과 단계: 스크롤 활성 */
+.tarot-overlay.is-spread-mode .tarot-scroll-body {
+  align-items: flex-start;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: contain;
+  padding: 60px 0 40px;
+}
+
+.tarot-star-canvas {
+  position: fixed; inset: 0; width: 100%; height: 100%;
+  pointer-events: none;
+}
+
+.tarot-x-btn {
+  position: fixed; top: max(20px, env(safe-area-inset-top, 20px)); right: 20px;
+  width: 40px; height: 40px;
+  background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.15);
+  border-radius: 50%; color: rgba(255,255,255,.7); font-size: 18px;
+  cursor: pointer; display: flex; align-items: center; justify-content: center;
+  transition: background .2s, color .2s; z-index: 10;
+}
+.tarot-x-btn:hover { background: rgba(255,255,255,.16); color: #fff; }
+
+/* 단계 공통 */
+.tarot-phase {
+  display: flex; flex-direction: column; align-items: center;
+  width: 100%; padding: 20px;
+  gap: 24px;
+}
+.tarot-phase.hidden { display: none; }
+
+.tarot-phase-hint {
+  font-size: 17px; color: rgba(220,190,255,.85); font-weight: 500;
+  letter-spacing: 0.3px; text-align: center; margin: 0;
+}
+
+/* ---- 0단계: 컨셉 선택 ---- */
+.tarot-spread-grid {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
+  width: 100%;
+}
+.tarot-spread-btn {
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+  padding: 18px 12px;
+  background: rgba(255,255,255,.06);
+  border: 1px solid rgba(180,100,255,.3);
+  border-radius: 16px; cursor: pointer;
+  transition: background .2s, border-color .2s, transform .15s;
+}
+.tarot-spread-btn:hover  { background: rgba(180,100,255,.14); border-color: rgba(180,100,255,.6); }
+.tarot-spread-btn:active { transform: scale(.96); }
+.tsb-emoji { font-size: 30px; line-height: 1; }
+.tsb-label { font-size: 14px; font-weight: 700; color: #e8d5ff; text-align: center; }
+.tsb-count {
+  font-size: 11px; color: rgba(180,120,255,.7);
+  background: rgba(180,100,255,.15); border-radius: 20px; padding: 2px 8px;
+}
+
+/* ---- 1단계: 섞기 덱 ---- */
+.tarot-shuffle-deck { position: relative; width: 120px; height: 180px; }
+.tarot-shuffle-deck .ts-card {
+  position: absolute; width: 80px; height: 128px; left: 50%; top: 50%;
+  background: linear-gradient(135deg, #1a0035, #2d0060);
+  border: 1px solid rgba(180,100,255,.4); border-radius: 10px;
+  box-shadow: 0 0 20px rgba(140,60,255,.25);
+  transform-origin: center center;
+  animation: tarot-shuffle 2.4s ease-in-out infinite;
+  animation-delay: var(--delay, 0s);
+}
+@keyframes tarot-shuffle {
+  0%   { transform: translate(-50%,-50%) translateX(0) rotate(var(--r)) translateY(0); }
+  25%  { transform: translate(-50%,-50%) translateX(var(--dx)) rotate(calc(var(--r) + 15deg)) translateY(-18px); }
+  50%  { transform: translate(-50%,-50%) translateX(calc(var(--dx) * -.5)) rotate(calc(var(--r) - 10deg)) translateY(-10px); }
+  75%  { transform: translate(-50%,-50%) translateX(calc(var(--dx) * .3)) rotate(var(--r)) translateY(-5px); }
+  100% { transform: translate(-50%,-50%) translateX(0) rotate(0deg) translateY(0); }
+}
+
+.tarot-phase-dots { display: flex; gap: 8px; }
+.tarot-phase-dots span {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: rgba(180,100,255,.5);
+  animation: tarot-dot-pulse 1.2s ease-in-out infinite;
+}
+.tarot-phase-dots span:nth-child(2) { animation-delay: .2s; }
+.tarot-phase-dots span:nth-child(3) { animation-delay: .4s; }
+@keyframes tarot-dot-pulse {
+  0%,100% { opacity: .3; transform: scale(.8); }
+  50%      { opacity: 1;  transform: scale(1.2); }
+}
+
+/* ---- 2단계: 팬 선택 ---- */
+.tarot-fan-wrap {
+  position: relative; width: 300px; height: 200px;
+  display: flex; align-items: flex-end; justify-content: center;
+}
+.tarot-fan-wrap .tf-card {
+  position: absolute; width: 70px; height: 112px;
+  background: linear-gradient(135deg, #1a0035, #2d0060);
+  border: 1px solid rgba(180,100,255,.4); border-radius: 10px;
+  box-shadow: 0 0 16px rgba(140,60,255,.2);
+  cursor: pointer; transform-origin: bottom center;
+  transition: transform .25s cubic-bezier(.34,1.56,.64,1), box-shadow .25s;
+  bottom: 0;
+}
+.tarot-fan-wrap .tf-card:hover,
+.tarot-fan-wrap .tf-card:focus {
+  transform: var(--fan-transform) translateY(-14px) !important;
+  box-shadow: 0 0 28px rgba(180,100,255,.55), 0 8px 24px rgba(0,0,0,.4);
+  outline: none;
+}
+.tarot-fan-wrap .tf-card.selected {
+  transform: var(--fan-transform) scale(1.12) translateY(-22px) !important;
+  box-shadow: 0 0 36px rgba(200,140,255,.7), 0 10px 30px rgba(0,0,0,.5);
+}
+.tarot-fan-wrap .tf-card.tf-disabled { opacity: .4; pointer-events: none; }
+
+/* ---- 3단계: 스프레드 공개 ---- */
+.tarot-phase-spread {
+  padding: 64px 16px 40px;
+  min-height: 100dvh; justify-content: flex-start; max-width: 480px;
+}
+
+.tarot-spread-title {
+  font-size: 20px; font-weight: 800; color: #f0e0ff;
+  text-align: center; letter-spacing: .5px; margin: 0;
+}
+
+.tarot-spread-layout {
+  display: flex; flex-wrap: wrap; justify-content: center; gap: 12px;
+  width: 100%;
+}
+.tarot-spread-slot {
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+}
+.tarot-spread-pos {
+  font-size: 12px; font-weight: 700; color: rgba(200,160,255,.75);
+  text-transform: uppercase; letter-spacing: 1px;
+}
+
+/* 3장: 2+1 그리드 */
+.tarot-spread-layout[data-count="3"] {
+  display: grid; grid-template-columns: 1fr 1fr; justify-items: center;
+}
+.tarot-spread-layout[data-count="3"] .tarot-spread-slot:nth-child(3) {
+  grid-column: 1 / -1;
+}
+
+/* 스프레드용 카드 크기 */
+.tarot-spread-layout[data-count="1"] .tc-spread { width: 180px; height: 290px; }
+.tarot-spread-layout[data-count="2"] .tc-spread { width: 155px; height: 252px; }
+.tarot-spread-layout[data-count="3"] .tc-spread { width: 150px; height: 244px; }
+
+.tarot-flip-scene {
+  perspective: 1000px; display: flex; justify-content: center;
+}
+.tarot-flip-card {
+  position: relative; transform-style: preserve-3d;
+  transition: transform .85s cubic-bezier(.4,0,.2,1);
+  width: 180px; height: 300px;
+}
+.tarot-flip-card.flipped  { transform: rotateY(180deg); }
+.tarot-flip-card.tc-spread { width: inherit; height: inherit; }
+
+.tarot-face {
+  position: absolute; inset: 0;
+  backface-visibility: hidden; -webkit-backface-visibility: hidden;
+  border-radius: 14px;
+}
+.tarot-back {
+  background: linear-gradient(135deg, #1a0035 0%, #2d0060 50%, #1a0035 100%);
+  border: 1px solid rgba(180,100,255,.4); box-shadow: 0 0 28px rgba(140,60,255,.3);
+  display: flex; align-items: center; justify-content: center;
+}
+.tarot-back::after { content: '🔮'; font-size: 40px; opacity: .6; }
+.tarot-spread-layout[data-count="3"] .tarot-back::after { font-size: 28px; }
+
+.tarot-front {
+  transform: rotateY(180deg);
+  background: linear-gradient(160deg, #16002e 0%, #220050 60%, #1a0040 100%);
+  border: 1px solid rgba(200,150,255,.35); box-shadow: 0 0 32px rgba(160,80,255,.35);
+  color: #e8d5ff;
+  display: flex; flex-direction: column; align-items: center;
+  justify-content: flex-start; padding: 10px 8px;
+  text-align: center; overflow: hidden; position: relative;
+}
+.tarot-front.is-reversed {
+  border-color: rgba(255,120,80,.5);
+  box-shadow: 0 0 28px rgba(255,80,50,.35), 0 0 8px rgba(255,80,50,.2);
+}
+
+/* 내용 래퍼 — 역방향이면 180도 회전 */
+.tf-inner {
+  display: flex; flex-direction: column; align-items: center;
+  width: 100%; flex: 1; gap: 6px; min-height: 0;
+  transition: transform .4s ease;
+}
+.tarot-front.is-reversed .tf-inner {
+  transform: rotate(180deg);
+}
+
+.tarot-card-img {
+  width: 100%; flex: 1; min-height: 0; object-fit: contain;
+  border-radius: 6px; display: block;
+}
+.tarot-front-symbol { font-size: 40px; line-height: 1; }
+.tarot-front-name   { font-size: 13px; font-weight: 800; color: #f0e0ff; letter-spacing: .3px; }
+.tarot-spread-layout[data-count="1"] .tarot-front-name { font-size: 16px; }
+.tarot-front-kwrap  { display: flex; flex-wrap: wrap; gap: 4px; justify-content: center; }
+.tarot-front-kw {
+  font-size: 10px; padding: 2px 7px;
+  background: rgba(180,100,255,.2); border: 1px solid rgba(180,100,255,.35);
+  border-radius: 20px; color: #d4aaff;
+}
+
+/* 카드 아래 방향 라벨 */
+.tarot-ori-label {
+  font-size: 11px; font-weight: 700; letter-spacing: .5px;
+  color: rgba(180,140,255,.7); margin-top: 4px;
+  animation: tarot-fade-in .4s ease forwards;
+}
+.tarot-ori-label.is-rev { color: #ff8060; }
+.tarot-ori-label.hidden { display: none; }
+
+/* 역방향 뱃지 (요약 내) */
+.tss-rev {
+  font-size: 10px; font-weight: 700; padding: 1px 6px;
+  background: rgba(255,90,60,.85); color: #fff; border-radius: 6px;
+  vertical-align: middle; margin-left: 4px;
+}
+
+/* ---- 스프레드 요약 ---- */
+.tarot-spread-summary {
+  background: rgba(255,255,255,.05); border: 1px solid rgba(180,100,255,.2);
+  border-radius: 18px; padding: 20px 18px; width: 100%;
+  color: rgba(220,190,255,.9);
+  animation: tarot-fade-in .5s ease forwards;
+}
+.tarot-spread-summary.hidden { display: none; }
+
+.tss-tone {
+  font-size: 14px; font-weight: 700; color: #c8a0ff;
+  text-align: center; margin-bottom: 16px;
+  padding-bottom: 14px; border-bottom: 1px solid rgba(180,100,255,.2);
+}
+.tss-entry { padding: 6px 0; }
+.tss-header {
+  font-size: 13px; font-weight: 700; color: #e8d5ff; margin-bottom: 6px;
+}
+.tss-meaning { font-size: 13px; line-height: 1.65; margin: 0 0 6px; }
+.tss-advice  { font-size: 12px; font-weight: 600; color: #c8a0ff; margin: 0; line-height: 1.6; }
+.tss-divider { border: none; border-top: 1px solid rgba(180,100,255,.15); margin: 12px 0; }
+
+@keyframes tarot-fade-in {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* 다른 운세 보기 버튼 */
+.tarot-again-btn {
+  padding: 12px 32px;
+  background: rgba(255,255,255,.08); border: 1px solid rgba(180,100,255,.35);
+  border-radius: 24px; color: rgba(220,190,255,.85);
+  font-size: 15px; font-weight: 600; cursor: pointer;
+  transition: background .2s, transform .15s;
+}
+.tarot-again-btn:hover  { background: rgba(255,255,255,.14); }
+.tarot-again-btn:active { transform: scale(.96); }
+.tarot-again-btn.hidden { display: none; }
+
+/* ---- prefers-reduced-motion ---- */
+@media (prefers-reduced-motion: reduce) {
+  .tarot-shuffle-deck .ts-card { animation: none; }
+  .tarot-phase-dots span       { animation: none; opacity: 1; }
+  .tarot-flip-card             { transition: none; }
+  .tarot-spread-summary        { animation: none; }
+  .tarot-fan-wrap .tf-card     { transition: none; }
+}

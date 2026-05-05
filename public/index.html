@@ -10,7 +10,7 @@
 <link rel="manifest" href="/manifest.json" />
 <link rel="apple-touch-icon" href="/icons/icon-192.png" />
 <link rel="icon" href="/icons/icon-192.png" />
-<link rel="stylesheet" href="/style.css?v=66" />
+<link rel="stylesheet" href="/style.css?v=71" />
 <title>가족보드</title>
 </head>
 <body>
@@ -93,6 +93,16 @@
     </div>
     <div class="hero-summary hidden" id="heroSummary"></div>
   </header>
+
+  <!-- 생일 축하 카드 — 탭/정렬 무관, 생일 당일에만 최상단 표시 -->
+  <div id="birthdayBanner" class="bday-hero hidden">
+    <div class="bday-balloon-row" aria-hidden="true">🎈 🎊 🎉 🎈 🎊 🎉 🎈</div>
+    <div class="bday-center">
+      <div class="bday-av" id="bdHeroAv"></div>
+      <p class="bday-name" id="bdTitle">—</p>
+      <p class="bday-sub" id="bdSub"></p>
+    </div>
+  </div>
 
   <!-- 가족 투표 -->
   <section class="card poll-card hidden" data-card-id="poll" id="pollCard">
@@ -208,12 +218,82 @@
     <span class="nudge-arrow">›</span>
   </section>
 
-  <!-- 주간 가족 활동 요약 -->
-  <section class="card weekly-card hidden" data-card-id="weekly" id="weeklyCard">
-    <p class="card-title">📊 지난 7일 우리 가족</p>
-    <div class="weekly-grid" id="weeklyGrid"></div>
-    <div class="weekly-tops hidden" id="weeklyTops"></div>
+  <!-- 목표 -->
+  <section class="card goals-card hidden" data-card-id="goals" id="goalsCard">
+    <div class="card-head-row">
+      <p class="card-title">🎯 목표</p>
+      <button type="button" class="goal-add-btn" id="goalAddBtn">＋ 목표 추가</button>
+    </div>
+    <div class="goal-cat-tabs" id="goalCatTabs" role="tablist">
+      <button class="goal-cat-tab is-active" data-cat="year" role="tab">연간</button>
+      <button class="goal-cat-tab" data-cat="month" role="tab">이번달</button>
+    </div>
+    <div id="goalsList"></div>
   </section>
+
+  <!-- 목표 상세 시트 -->
+  <div id="goalDetailSheet" class="sheet-backdrop hidden" role="dialog">
+    <div class="sheet sheet-tall" role="document">
+      <div class="sheet-handle"></div>
+      <div class="goal-detail-head">
+        <div id="goalDetailOwner" class="goal-detail-owner"></div>
+        <h2 class="goal-detail-title" id="goalDetailTitle">—</h2>
+        <div class="goal-detail-progress-row">
+          <div class="goal-progress-bar-wrap">
+            <div class="goal-progress-bar" id="goalDetailProgressBar"></div>
+          </div>
+          <span class="goal-progress-pct" id="goalDetailProgressPct">0%</span>
+        </div>
+      </div>
+      <div class="goal-detail-cheers" id="goalDetailCheers"></div>
+      <div class="goal-detail-ev-head">
+        <span class="goal-detail-ev-label">인증 기록</span>
+        <button type="button" class="goal-ev-add-btn" id="goalEvAddBtn">📸 인증 추가</button>
+      </div>
+      <div id="goalDetailEvList" class="goal-ev-list"></div>
+      <div id="goalDetailActions" class="goal-detail-actions hidden">
+        <button type="button" class="goal-action-btn goal-action-edit" id="goalEditBtn">✏️ 제목 수정</button>
+        <button type="button" class="goal-action-btn goal-action-del"  id="goalDeleteBtn">🗑️ 삭제</button>
+      </div>
+      <button class="sheet-close" id="goalDetailClose">닫기</button>
+    </div>
+  </div>
+
+  <!-- 목표 추가 시트 -->
+  <div id="goalAddSheet" class="sheet-backdrop hidden" role="dialog">
+    <div class="sheet" role="document">
+      <div class="sheet-handle"></div>
+      <h2 class="sheet-title">🎯 새 목표 추가</h2>
+      <p class="sheet-sub" id="goalAddSub" style="text-align:center;margin:-8px 0 16px">올해 이루고 싶은 목표를 적어보세요</p>
+      <input id="goalTitleInput" class="ufi" type="text" placeholder="예: 올해 책 12권 읽기" maxlength="200" style="display:block;width:100%;margin-bottom:14px;" />
+      <button id="goalAddConfirm" type="button" class="auth-btn">추가하기</button>
+      <button class="sheet-close" id="goalAddClose">취소</button>
+    </div>
+  </div>
+
+  <!-- 증거 업로드 시트 -->
+  <div id="goalEvSheet" class="sheet-backdrop hidden" role="dialog">
+    <div class="sheet" role="document">
+      <div class="sheet-handle"></div>
+      <h2 class="sheet-title">📸 인증 추가</h2>
+      <div class="goal-ev-progress-label">달성 단계 선택</div>
+      <div class="goal-ev-progress-opts" id="goalEvProgressOpts">
+        <button type="button" class="goal-ev-prog-btn is-selected" data-pct="0">시작 전<br/><span>0%</span></button>
+        <button type="button" class="goal-ev-prog-btn" data-pct="25">조금씩<br/><span>25%</span></button>
+        <button type="button" class="goal-ev-prog-btn" data-pct="50">절반!<br/><span>50%</span></button>
+        <button type="button" class="goal-ev-prog-btn" data-pct="75">거의다<br/><span>75%</span></button>
+        <button type="button" class="goal-ev-prog-btn" data-pct="100">완료🎉<br/><span>100%</span></button>
+      </div>
+      <div class="goal-ev-photo-row">
+        <div id="goalEvPhotoPreview" class="goal-ev-photo-preview hidden"></div>
+        <button type="button" class="goal-ev-photo-btn" id="goalEvPhotoBtn">📷 사진 선택</button>
+        <input id="goalEvPhotoFile" type="file" accept="image/*" style="display:none" />
+      </div>
+      <textarea id="goalEvCaption" class="ufi" placeholder="한 줄 코멘트 (선택)" maxlength="300" rows="2" style="display:block;width:100%;margin:8px 0 12px;resize:none;"></textarea>
+      <button id="goalEvConfirm" type="button" class="auth-btn">올리기</button>
+      <button class="sheet-close" id="goalEvClose">취소</button>
+    </div>
+  </div>
 
   <!-- 오늘의 한 마디 -->
   <section class="card daily-quote-card" data-card-id="quote" id="quoteCard">
@@ -391,14 +471,6 @@
       <button class="sheet-close" id="sheetClose">닫기</button>
     </div>
   </div>
-
-  <section id="birthdayBanner" class="banner hidden" data-card-id="birthday" style="cursor:pointer">
-    <span class="banner-emoji" id="bdEmoji">🎂</span>
-    <div class="banner-body">
-      <p class="banner-title" id="bdTitle">—</p>
-      <p class="banner-sub" id="bdSub"></p>
-    </div>
-  </section>
 
   <section class="card weather-card" data-card-id="weather">
     <button class="tts-btn tts-float" data-tts="weather" aria-label="읽어주기">🔊</button>
@@ -642,6 +714,20 @@
     </div>
   </div>
 
+  <!-- 업데이트 내역 모달 -->
+  <div id="changelogModal" class="sheet-backdrop hidden" role="dialog" aria-modal="true">
+    <div class="sheet changelog-sheet" role="document">
+      <div class="sheet-handle"></div>
+      <h2 class="sheet-title">📋 업데이트 내역</h2>
+      <div class="changelog-list" id="changelogList"></div>
+      <label class="cl-dont-show-row">
+        <input type="checkbox" id="changelogDontShow" class="cl-dont-show-chk" />
+        <span>다시 보지 않기</span>
+      </label>
+      <button class="auth-btn" id="changelogClose" style="margin-top:8px">확인</button>
+    </div>
+  </div>
+
   <!-- 도움말 바텀시트 -->
   <div id="helpSheet" class="sheet-backdrop hidden" role="dialog">
     <div class="sheet sheet-tall" role="document">
@@ -722,7 +808,20 @@
     </ul>
   </section>
 
-<!-- (원래 위치 그대로 placeholder) -->
+  <!-- 타로 카드 -->
+  <section class="card tarot-card hidden" data-card-id="tarot" id="tarotCard">
+    <div class="card-head-row">
+      <p class="card-title">🔮 타로 카드</p>
+    </div>
+    <div class="tarot-entry-wrap">
+      <div class="tarot-deck-preview" id="tarotDeckPreview"></div>
+      <div class="tarot-entry-text">
+        <p class="tarot-entry-title">오늘 카드 한 장</p>
+        <p class="tarot-entry-sub">카드가 당신의 오늘을 비춥니다</p>
+      </div>
+      <button class="tarot-start-btn" id="tarotStartBtn">뽑기 →</button>
+    </div>
+  </section>
 
   <section class="card fx-card" data-card-id="fx">
     <p class="card-title">오늘의 환율</p>
@@ -1052,8 +1151,10 @@
       <button id="myProfileBtn" type="button" class="account-menu-btn">👤 내 정보 편집</button>
       <button id="favoritesBtn" type="button" class="account-menu-btn">⭐ 즐겨찾은 답변</button>
       <button id="helpBtn" type="button" class="account-menu-btn">❓ 도움말</button>
-      <button id="reorderToggleBtn" type="button" class="account-menu-btn">🧩 카드 순서·표시 편집</button>
-      <button id="openSettingsBtn" type="button" class="account-menu-btn hidden">⚙️ 가족 관리 설정</button>
+      <button id="changelogBtn" type="button" class="account-menu-btn">
+        📋 업데이트 내역 <span class="ver-badge">v1.01</span><span id="changelogDot" class="ver-new-dot">NEW</span>
+      </button>
+<button id="openSettingsBtn" type="button" class="account-menu-btn hidden">⚙️ 가족 관리 설정</button>
       <button id="logoutBtn" class="account-menu-btn danger">로그아웃</button>
     </div>
   </section>
@@ -1067,7 +1168,7 @@
         <button type="button" id="galleryOpenAllBtn" class="ufi-btn">전체보기</button>
       </div>
     </div>
-    <input type="file" id="galleryFile" class="hidden" accept="image/jpeg,image/png,image/webp,image/heic,image/*" />
+    <input type="file" id="galleryFile" class="hidden" accept="image/jpeg,image/png,image/webp,image/heic,image/*" multiple />
     <div id="galleryGrid" class="gallery-grid"></div>
     <p id="galleryEmpty" class="gallery-empty hidden">아직 공유된 사진이 없어요. ＋ 사진을 눌러 첫 장을 올려 보세요.</p>
   </section>
@@ -1124,7 +1225,7 @@
       <a href="/games/gostop/?mode=single" class="game-tile">
         <span class="game-tile-emoji">🎴</span>
         <span class="game-tile-name">고스톱 — 싱글</span>
-        <span class="game-tile-meta">AI Lv.1 → 20 도전</span>
+        <span class="game-tile-meta">AI와 1:1 대결</span>
         <span class="game-tile-badge">SOLO</span>
       </a>
     </div>
@@ -1134,6 +1235,44 @@
     <p class="foot-ver">familyboard — 부모님을 위한 하루 안내</p>
   </footer>
 </main>
+
+<!-- 타로 풀스크린 오버레이 -->
+<div id="tarotOverlay" class="tarot-overlay hidden" role="dialog" aria-modal="true" aria-label="타로 카드 뽑기">
+  <button class="tarot-x-btn" id="tarotXBtn" aria-label="닫기">✕</button>
+  <canvas id="tarotStarCanvas" class="tarot-star-canvas"></canvas>
+
+  <!-- 스크롤 컨테이너 (결과 단계에서만 활성) -->
+  <div class="tarot-scroll-body" id="tarotScrollBody">
+
+    <!-- 0단계: 컨셉 선택 -->
+    <div class="tarot-phase" id="tarotPhasePick">
+      <p class="tarot-phase-hint">어떤 운세를 보시겠어요?</p>
+      <div class="tarot-spread-grid" id="tarotSpreadGrid"></div>
+    </div>
+
+    <!-- 1단계: 섞기 -->
+    <div class="tarot-phase hidden" id="tarotPhaseShuffling">
+      <p class="tarot-phase-hint" id="tarotShuffleHint">카드를 섞고 있어요</p>
+      <div class="tarot-shuffle-deck" id="tarotShuffleDeck"></div>
+      <div class="tarot-phase-dots"><span></span><span></span><span></span></div>
+    </div>
+
+    <!-- 2단계: 뽑기 -->
+    <div class="tarot-phase hidden" id="tarotPhaseSelect">
+      <p class="tarot-phase-hint" id="tarotSelectHint">마음을 비우고 카드를 선택하세요</p>
+      <div class="tarot-fan-wrap" id="tarotFanWrap"></div>
+    </div>
+
+    <!-- 3단계: 공개 -->
+    <div class="tarot-phase tarot-phase-spread hidden" id="tarotPhaseReveal">
+      <p class="tarot-spread-title" id="tarotSpreadTitle"></p>
+      <div class="tarot-spread-layout" id="tarotSpreadLayout"></div>
+      <div class="tarot-spread-summary hidden" id="tarotSpreadSummary"></div>
+      <button class="tarot-again-btn hidden" id="tarotAgainBtn">다른 운세 보기</button>
+    </div>
+
+  </div>
+</div>
 
 <!-- 온보딩 투어 오버레이 -->
 <div id="tourOverlay" class="tour-overlay hidden" role="dialog">
@@ -1199,9 +1338,10 @@
   <div class="sheet" role="document">
     <div class="sheet-handle"></div>
     <h2 class="sheet-title">사진 올리기</h2>
-    <div class="gup-preview-wrap">
+    <div class="gup-preview-wrap" id="galleryPreviewWrap">
       <img id="galleryUploadPreview" class="gup-preview" alt="" />
     </div>
+    <div id="gupMultiStrip" class="gup-multi-strip hidden"></div>
     <label class="admin-label" style="margin-top: 14px">설명 (선택)</label>
     <textarea id="galleryUploadCaption" class="ufi gup-caption" maxlength="300" placeholder="사진에 짧은 한 줄 남겨 보세요" rows="2"></textarea>
     <button type="button" id="galleryUploadConfirm" class="auth-btn">올리기</button>
@@ -1230,6 +1370,7 @@
           <span class="ig-heart" id="galleryLikeHeart">♡</span>
         </button>
         <button type="button" id="galleryCommentFocusBtn" class="ig-icon-btn" aria-label="댓글">💬</button>
+        <button type="button" id="galleryDownloadBtn" class="ig-icon-btn" aria-label="내 사진첩에 저장">⬇</button>
         <button type="button" id="galleryDetailDeleteBtn" class="ig-icon-btn ig-delete-btn hidden" aria-label="사진 삭제">🗑</button>
       </div>
 
@@ -1270,11 +1411,10 @@
 <div id="lightbox" class="lightbox hidden" role="dialog" aria-label="이미지 확대">
   <button class="lightbox-close" id="lightboxClose" aria-label="닫기">✕</button>
   <button class="lightbox-action hidden" id="lightboxSaveBtn" type="button">💾 가족 갤러리에 저장</button>
+  <button class="lightbox-action lightbox-dl-btn" id="lightboxDownloadBtn" type="button" aria-label="내 사진첩에 저장">⬇ 저장</button>
   <img id="lightboxImg" src="" alt="" />
 </div>
 
-<!-- 고스톱 진입 FAB -->
-<a id="gostopFab" class="gostop-fab" href="/games/gostop/" aria-label="고스톱 열기">🎴</a>
 
 <!-- 고스톱 셋업 시트 (/고스톱 명령으로 호출) -->
 <div id="gostopSetupSheet" class="sheet-backdrop hidden" role="dialog">
@@ -1321,6 +1461,7 @@
     <div id="ladderLobbyCountdown" class="ladder-countdown hidden"></div>
 
     <div class="ladder-action-row" id="ladderLobbyActions">
+      <button type="button" id="ladderLobbyStartBtn" class="ladder-shuffle-btn ladder-lobby-start-btn hidden" disabled>🎲 시작</button>
       <button type="button" id="ladderLobbyReadyBtn" class="ladder-shuffle-btn hidden">✓ 준비</button>
       <button type="button" id="ladderLobbyLeaveBtn" class="ladder-reveal-btn hidden">자리 비우기</button>
     </div>
@@ -1398,6 +1539,6 @@
     caches.keys().then((ks) => ks.forEach((k) => caches.delete(k))).catch(() => {});
   }
 </script>
-<script src="/app.js?v=77" defer></script>
+<script src="/app.js?v=79" defer></script>
 </body>
 </html>

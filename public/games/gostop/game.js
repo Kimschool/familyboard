@@ -6,8 +6,9 @@
   let VIEW = null;            // 서버가 보내준 내 시점 뷰
   let PREV_VIEW = null;        // 직전 뷰 — diff 로 애니메이션 트리거
   let PENDING_HAND_CARD = null; // 선택해 둔 손패 카드 id (멀티매칭 선택 중)
-  let HAND_PRESELECT_ID = null; // play-hand: 첫 탭으로 살짝 든 카드(두 번째 탭에 실제 냄)
+  let HAND_PRESELECT_ID = null; // play-hand: 탭으로 살짝 드는 표시(실제로 내기 X — 위로 드래그할 때만 냄)
   let _autoFlipPending = false; // 자동 뒤집기 중복 호출 방지 플래그
+  let _playCardPending = false; // 연타 방지 — 서버 응답 전까지 중복 emit 차단
   let TURN_TIMER_START = 0;    // 현재 턴이 시작된 시각 (클라 기준)
   let TURN_TIMER_ID = null;    // setInterval 핸들
   const TURN_LIMIT_MS = 30000; // 30 초 제한
@@ -16,6 +17,22 @@
   let BOARD_SLOT_USED = new Array(16).fill(false);
 
   function socket() { return window.GostopSocket; }
+
+  function ttsMent(phrase) {
+    if (window.GostopTTS && GostopTTS.isEnabled() && phrase) {
+      GostopTTS.speak(phrase);
+    }
+  }
+  /** @returns {boolean} true = 전용 짧은 멘트를 냈으니 showToast 전문 TTS 생략 */
+  function ttsForGameLogMessage(msg) {
+    if (!msg) return false;
+    if (/^쓸!/.test(msg)) { ttsMent('쌋어요'); return true; }
+    var gn = msg.match(/(\d+)고!\s*계속/);
+    if (gn) { ttsMent(String(Number(gn[1])) + '고'); return true; }
+    if (/고!\s*계속/.test(msg) && !/(\d+)고!/.test(msg)) { ttsMent('1고'); return true; }
+    if (/뻑 먹기|뻑 싹쓸이|뻑먹기|뒤집어서 뻑 먹기/.test(msg)) { ttsMent('싹쓸이'); return true; }
+    return false;
+  }
 
   function start(payload) {
     // 게임이 막 시작됨 (또는 reconnect 으로 복귀). 서버가 곧 game:view 를 보내줄 것.
@@ -28,12 +45,16 @@
     if (log) log.innerHTML = '';
     const status = $('gameStatus');
     if (status) status.textContent = '게임이 시작됐어요. 덱을 나누는 중…';
+    try {
+      document.body.setAttribute('data-gostop-mode', window._gostopSingleActive ? 'single' : 'multi');
+    } catch (_) {}
     PENDING_HAND_CARD = null;
     HAND_PRESELECT_ID = null;
     VIEW = null;
     PREV_VIEW = null;
     VIEW_QUEUE = [];
     VIEW_PROCESSING = false;
+    PENDING_POST_OVERLAY_RENDER = false;
     CARD_EVENT_QUEUE = [];
     CARD_EVENT_RUNNING = false;
     _autoFlipPending = false;
@@ -41,16 +62,19 @@
     stopTurnTimer();
     BOARD_SLOT_FOR_MONTH = {};
     BOARD_SLOT_USED = new Array(16).fill(false);
-    // 새 게임 시작 — 이전 게임의 손패 reorder 잔존 제거. 카드 ID 같아도 새 게임은 새 정렬부터.
-    window.HAND_CUSTOM_ORDER = [];
+    if (window.GostopTTS && typeof GostopTTS.resetHintTracking === 'function') GostopTTS.resetHintTracking();
     if (_scoreAnimHandle) { cancelAnimationFrame(_scoreAnimHandle); _scoreAnimHandle = 0; }
+    _lastEventTs = 0;
+    _lastUrgentSec = -1;
+    _playCardPending = false;
   }
 
   // ★ view queue — centerpiece 애니가 끝나기 전에 다음 view 를 받지 않도록 직렬화
-  // 이전엔 server view 가 빠르게 연속 도착하면 board 만 먼저 update 되고 centerpiece 는
-  // 뒤늦게 따라가서 싱크가 박살남. 이제 centerpiece 큐 비고 + 220ms 렌더 끝난 다음에 다음 view 처리.
+  // 보드 갱신(render)은 가운데 카드 오버레이가 끝난 뒤로 미루어, 잡기 전 바닥 패와
+  // 이동 동선이 끊기지 않게 함.
   let VIEW_QUEUE = [];
   let VIEW_PROCESSING = false;
+  let PENDING_POST_OVERLAY_RENDER = false;
   function onView(view) {
     VIEW_QUEUE.push(view);
     if (!VIEW_PROCESSING) processNextView();
@@ -74,16 +98,16 @@
       if (stockDropped || newBoardCount > 0 || captured.length > 0) hasBoardChange = true;
     }
     if (hasBoardChange) {
-      // 1) centerpiece + 사운드 먼저 (보드는 아직 옛 상태)
+      PENDING_POST_OVERLAY_RENDER = true;
       fireDiffEffects();
-      // 2) 카드 가운데 도달 시점(220ms)에 보드 update
-      setTimeout(function () {
-        render();
-        startTurnTimer();
-        // 3) centerpiece 큐가 다 비면 다음 view 처리. 큐가 남아있으면
-        //    processCardEventQueue() done 콜백이 호출함 (아래 maybeProcessNextView)
-        maybeProcessNextView();
-      }, 220);
+      if (CARD_EVENT_QUEUE.length === 0 && !CARD_EVENT_RUNNING) {
+        PENDING_POST_OVERLAY_RENDER = false;
+        setTimeout(function () {
+          render();
+          startTurnTimer();
+          maybeProcessNextView();
+        }, 0);
+      }
     } else {
       render();
       fireDiffEffects();
@@ -116,6 +140,7 @@
     const remaining = Math.max(0, TURN_LIMIT_MS - elapsed);
     const sec = Math.ceil(remaining / 1000);
     el.textContent = sec + 's';
+    el.setAttribute('aria-label', '남은 턴 시간 ' + sec + '초');
     el.classList.toggle('is-warning', sec <= 10 && sec > 0);
     el.classList.toggle('is-expired', sec === 0);
     // 자동 패 — 내 차례에만, play-hand 또는 choose-go-stop 에서 시간 초과 시
@@ -160,12 +185,12 @@
     if (VIEW.phase === 'declare-shake') {
       // 자동: 거부 (안전 선택)
       socket().emit('game:declareShake', { accept: false }, function () {});
-      showToast('⏰ 시간 초과! 흔들기 패스');
+      showToast('⏰ 시간 초과! 흔들기 패스', { kind: 'warn' });
     } else if (VIEW.phase === 'play-hand' && VIEW.myHand.length) {
       HAND_PRESELECT_ID = null;
       const c = VIEW.myHand[Math.floor(Math.random() * VIEW.myHand.length)];
       socket().emit('game:play', { cardId: c.id }, function () {});
-      showToast('⏰ 시간 초과! 자동으로 냈어요');
+      showToast('⏰ 시간 초과! 자동으로 냈어요', { kind: 'warn' });
     } else if (VIEW.phase === 'choose-hand-match' && VIEW.pending && VIEW.pending.choices && VIEW.pending.choices.length) {
       const m = VIEW.pending.choices[0];
       socket().emit('game:match', { matchCardId: m }, function () {});
@@ -175,8 +200,22 @@
     } else if (VIEW.phase === 'choose-go-stop') {
       // 자동으로 '스톱' (안전 선택)
       socket().emit('game:gostop', { choice: 'stop' }, function () {});
-      showToast('⏰ 시간 초과! 자동 스톱');
+      showToast('⏰ 시간 초과! 자동 스톱', { kind: 'warn' });
     }
+  }
+
+  // 바닥에 아직 DOM 이 있을 때( render 전) 짝이 되는 패의 화면 좌표 — 가운데 연출 끝점
+  function getBoardCardRectById(id) {
+    if (id == null) return null;
+    const node = document.querySelector('#gameBoard [data-id="' + id + '"]');
+    if (!node) return null;
+    const r = node.getBoundingClientRect();
+    return (r && r.width > 0) ? r : null;
+  }
+  function getMatchEndRect(played, captured, isMatched) {
+    if (!isMatched || !captured || !captured.length || !played) return null;
+    const pair = captured.find(function (c) { return c.month === played.month; });
+    return getBoardCardRectById((pair || captured[0]).id);
   }
 
   function fireDiffEffects() {
@@ -201,11 +240,13 @@
       const boardCardEl = document.querySelector('#gameBoard [data-id="' + capCard.id + '"]');
       if (boardCardEl) {
         boardCardEl.style.transition = 'filter 0.18s ease, box-shadow 0.2s ease, opacity 0.2s ease';
-        boardCardEl.style.filter = 'brightness(1.55) saturate(1.4)';
+        boardCardEl.style.filter = 'brightness(1.6) saturate(1.5)';
         boardCardEl.style.boxShadow = '0 0 22px 6px rgba(255,230,100,0.85)';
         boardCardEl.style.zIndex = '20';
+        boardCardEl.classList.add('is-match-target');
       }
     });
+    let didQueueCardEvent = false;
     if (stockDropped) {
       let flipCard = null;
       if (newBoardCount > 0) flipCard = newBoardCards[newBoardCount - 1];
@@ -220,7 +261,9 @@
       }
       if (flipCard) {
         const deckRect = deckEl ? deckEl.getBoundingClientRect() : null;
-        queueCardEvent(flipCard, matched ? 'flip-match' : 'flip-nomatch', null, deckRect);
+        const endR = getMatchEndRect(flipCard, captured, matched);
+        queueCardEvent(flipCard, matched ? 'flip-match' : 'flip-nomatch', null, deckRect, endR);
+        didQueueCardEvent = true;
       }
     } else {
       let playCardEv = null;
@@ -235,7 +278,7 @@
           if (handEl) {
             startRect = handEl.getBoundingClientRect();
             // ★ 손패 자리 즉시 페이드 — centerpiece 가 손에서 나오는 듯한 일체감
-            // (220ms 뒤 render() 가 손패 전체를 다시 그리므로 일시적 효과)
+            // (가운데→바닥 연출 끝난 뒤 render() 가 손패를 다시 그림)
             handEl.style.transition = 'opacity 0.18s ease, transform 0.18s ease';
             handEl.style.opacity = '0';
             handEl.style.transform = 'scale(0.85)';
@@ -251,37 +294,51 @@
           if (oppBox) startRect = oppBox.getBoundingClientRect();
         }
       }
-      if (playCardEv) queueCardEvent(playCardEv, matched ? 'play-match' : 'play-nomatch', isMyAct ? 'me' : actorName, startRect);
+      if (playCardEv) {
+        const endR = getMatchEndRect(playCardEv, captured, matched);
+        queueCardEvent(playCardEv, matched ? 'play-match' : 'play-nomatch', isMyAct ? 'me' : actorName, startRect, endR);
+        didQueueCardEvent = true;
+      }
     }
-    // ★ 사운드 — centerpiece 카드 안착 시점(280ms) 과 정렬
-    // 매치 시 cardPlace (탁), 매치 실패 시 cardSlide (가벼운 sliding)
-    if (SFX) {
+    // 사운드·햅틱: 가운데 연출(오버레이)에서 맞는 경우는 연출 쪽에서 처리, 연출이 없을 때만 여기
+    if (SFX && !didQueueCardEvent) {
       if (matched) setTimeout(function () { SFX.clack(); }, 275);
       else if (newBoardCount > 0) setTimeout(function () { SFX.ching(); }, 275);
     }
-    // 매치 햅틱 — 카드 임팩트 피크(280ms)에 진동
-    if (matched && navigator.vibrate) {
+    if (matched && navigator.vibrate && !didQueueCardEvent) {
       setTimeout(function () { try { navigator.vibrate([18, 24, 18]); } catch {} }, 280);
     }
-    // 내 차례로 바뀌었으면 알림 삐
-    // 내 차례로 바뀌었으면 종소리 — 단, centerpiece + clack/ching 사운드와 겹치지 않게 지연
-    // (상대 카드 시각화가 끝난 직후 ~700ms 시점에 종소리. 이전엔 0ms 발사로 swish 와 겹침)
+    // 내 차례로 바뀌면 종 — 연출(손·덱·바닥)이 끝난 뒤쯤으로 지연(이전~900ms, 오버레이는 더 길어질 수 있음)
     if (PREV_VIEW.turn !== VIEW.turn && VIEW.turn === me && !VIEW.finished && SFX) {
-      const turnSoundDelay = stockDropped || matched || newBoardCount > 0 ? 720 : 0;
+      const turnSoundDelay = (stockDropped || matched || newBoardCount > 0) && didQueueCardEvent
+        ? 1020
+        : (stockDropped || matched || newBoardCount > 0 ? 720 : 0);
       setTimeout(function () { SFX.myturn(); }, turnSoundDelay);
     }
     // 1) 최근 로그가 바뀌었으면 토스트
     const newLog = VIEW.log && VIEW.log.length ? VIEW.log[VIEW.log.length - 1] : null;
     const oldLog = PREV_VIEW.log && PREV_VIEW.log.length ? PREV_VIEW.log[PREV_VIEW.log.length - 1] : null;
     if (newLog && (!oldLog || newLog.ts !== oldLog.ts)) {
-      showToast(newLog.msg);
-      // 2-1) 고/스톱 로그 감지 → 중앙 콜아웃
-      if (/고!\s*계속/.test(newLog.msg)) bigCallout('고!', 'go');
-      else if (/스톱!/.test(newLog.msg) || /승리/.test(newLog.msg)) {
-        // 스톱/승리는 게임 종료에서 처리
-      } else if (/먹었어요/.test(newLog.msg)) {
-        // 먹은 플레이어가 나인지에 따라 톤 조절
-        if (newLog.msg.indexOf(VIEW.players[me].name) === 0) bigCallout('먹었다!', 'good');
+      // 토스트 과다 방지: 내가 패를 먹은 일상 로그(…먹었어요)는 띄우지 않음. 상대·뻑·고 등은 그대로.
+      const hideMyCaptureLine = isMyAct && /먹었어요\s*$/.test(newLog.msg);
+      const logShortTts = ttsForGameLogMessage(newLog.msg);
+      if (!hideMyCaptureLine) showToast(newLog.msg, { tts: !logShortTts });
+      // 2-1) 고/스톱 로그 (N고! 계속 > 단순 고! 계속 > 스톱)
+      {
+        const goNlog = newLog.msg.match(/(\d+)고!\s*계속/);
+        if (goNlog) {
+          const n = Number(goNlog[1]);
+          bigCallout(n + '고!', 'go', 1600);
+          if (SFX) {
+            if (SFX.go) SFX.go();
+            setTimeout(function () { SFX.gong(); }, n >= 2 ? 200 : 260);
+          }
+        } else if (/고!\s*계속/.test(newLog.msg)) {
+          bigCallout('고!', 'go');
+          if (SFX && SFX.go) SFX.go();
+        } else if (/스톱!/.test(newLog.msg) && !/승리/.test(newLog.msg) && SFX && SFX.stop) {
+          SFX.stop();
+        }
       }
     }
     // 2) 점수 임계치 크로싱 (3·5·7·10)
@@ -320,15 +377,21 @@
         setDefs.forEach(function (def) {
           const p = prevS[def.key] || 0, c = curS[def.key] || 0;
           if (p < 3 && c >= 3) {
+            if (def.key === 'godori') ttsMent('고도리');
+            if (def.key === 'hongdan') ttsMent('홍단');
             bigCallout(def.name + ' 완성! +' + def.pts + '점', 'gold', 1800);
             if (SFX) setTimeout(function () { SFX.fanfare(); }, 380);
           } else if (p < 2 && c === 2) {
-            showToast(def.name + ' 2/3 — 한 장만 더!');
+            showToast(def.name + ' 2/3 — 한 장만 더!', { tts: false });
           }
         });
-        // 광 3장 최초 달성
-        if (prevS.light < 3 && curS.light >= 3) {
-          bigCallout('광 ' + curS.light + '장! +' + curS.light + '점', 'gold', 1700);
+        // 광 3/4/5 — 삼광·사광·오광 (한 턴에 2→4장 늘어나도 각각 읽힘)
+        var pl = prevS.light, cl = curS.light;
+        if (cl >= 3 && pl < 3) ttsMent('삼광');
+        if (cl >= 4 && pl < 4) ttsMent('사광');
+        if (cl >= 5 && pl < 5) ttsMent('오광');
+        if (pl < 3 && cl >= 3) {
+          bigCallout('광 ' + cl + '장! +' + cl + '점', 'gold', 1700);
           if (SFX) setTimeout(function () { SFX.fanfare(); }, 380);
         }
       }
@@ -338,7 +401,7 @@
     if (VIEW.finished && !PREV_VIEW.finished) {
       if (VIEW.winner === me) {
         fireConfetti();
-        if (SFX) setTimeout(function () { SFX.fanfare(); }, 200);
+        if (SFX) setTimeout(function () { (SFX.win ? SFX.win() : SFX.fanfare()); }, 200);
       } else if (VIEW.winner != null && SFX) {
         setTimeout(function () { SFX.lose(); }, 200);
       }
@@ -360,12 +423,6 @@
       } else if (/뻑 먹기|뻑 싹쓸이|뻑먹기/.test(newLog.msg)) {
         bigCallout('싹쓸이!', 'gold', 1800);
         if (SFX) setTimeout(function () { SFX.fanfare(); }, 320);
-      }
-      const goMatch = newLog.msg.match(/(\d+)고!\s*계속/);
-      if (goMatch) {
-        const n = Number(goMatch[1]);
-        bigCallout(n + '고!', 'go', 1600);
-        if (SFX) setTimeout(function () { SFX.gong(); }, 280);
       }
     }
     // R26: 신규 룰 이벤트 자동 결선 — SFX + 토스트 (PREV/CURR diff 기준)
@@ -400,6 +457,7 @@
     if (!VIEW || !VIEW.finished) return;
     const me = VIEW.myIndex;
     const dlg = $('endDialog');
+    if (!dlg) return; // 요소 미존재 방어
     // ★ 강제 화면 정중앙 풀스크린 + 진한 불투명 배경
     dlg.style.cssText = 'display:flex !important;position:fixed !important;' +
       'top:0 !important;left:0 !important;right:0 !important;bottom:0 !important;' +
@@ -410,6 +468,8 @@
     const title = $('endTitle');
     const sub = $('endSub');
     const list = $('endScoreList');
+    // 필수 요소 누락 시 조용히 중단 (DOM 구성 불완전 상황 방어)
+    if (!crown || !title || !sub || !list) return;
     const winner = VIEW.winner;
     if (winner === me) {
       crown.textContent = '🏆';
@@ -417,7 +477,7 @@
       title.style.color = '#C67200';
     } else if (winner != null) {
       crown.textContent = '🙃';
-      title.textContent = VIEW.players[winner].name + '님 승';
+      title.textContent = (VIEW.players[winner] ? VIEW.players[winner].name : '상대') + '님 승';
       title.style.color = '#374151';
     } else {
       crown.textContent = '🤝';
@@ -437,7 +497,8 @@
     }
     sub.innerHTML = roundN + '번째 판 최종 점수' + bakHtml + mvpHtml;
     // 점수 정렬 (내림차순)
-    const ranked = VIEW.players.map(function (p, i) { return { name: p.name, score: VIEW.scores[i] || 0, idx: i }; });
+    const _scores = VIEW.scores || [];
+    const ranked = VIEW.players.map(function (p, i) { return { name: p.name, score: _scores[i] || 0, idx: i }; });
     ranked.sort(function (a, b) { return b.score - a.score; });
     // 누적 점수 맵 (userId → total)
     const cumMap = {};
@@ -459,20 +520,29 @@
     }).join('');
     dlg.classList.remove('hidden');
     dlg.style.display = 'flex';
+    dlg.setAttribute('aria-hidden', 'false');
+    if (window.GostopTTS && GostopTTS.isEnabled()) {
+      if (winner === me) GostopTTS.speak('이겼어요');
+      else if (winner != null) GostopTTS.speak('아쉽지만 졌어요');
+    }
+    const rem = $('btnRematch');
+    requestAnimationFrame(function () {
+      if (rem) rem.focus({ preventScroll: true });
+    });
   }
 
   // 결과 오버레이 버튼
   $('btnRematch').addEventListener('click', function () {
     socket().emit('game:rematch', null, function (res) {
-      if (!res || !res.ok) return showToast('⚠️ 재대결 시작 실패: ' + (res && res.error));
-      $('endDialog').style.display = 'none';
-      $('endDialog').classList.add('hidden');
+      if (!res || !res.ok) return showToast('⚠️ 재대결 시작 실패: ' + (res && res.error), { kind: 'warn' });
+      const ed = $('endDialog');
+      if (ed) { ed.style.display = 'none'; ed.classList.add('hidden'); ed.setAttribute('aria-hidden', 'true'); }
       PREV_VIEW = null;
     });
   });
   $('btnEndExit').addEventListener('click', function () {
-    $('endDialog').style.display = 'none';
-    $('endDialog').classList.add('hidden');
+    const ed = $('endDialog');
+    if (ed) { ed.style.display = 'none'; ed.classList.add('hidden'); ed.setAttribute('aria-hidden', 'true'); }
     const wasSingle = !!window._gostopSingleActive || !!window._gostopSingleResult;
     socket().emit('room:leave', null, function () {});
     $('game').classList.add('hidden');
@@ -504,7 +574,7 @@
     VIEW = null; PREV_VIEW = null;
   });
 
-  // 중앙 큰 콜아웃 — "먹었다!" "3점 달성!" "고!" "승리!"
+  // 중앙 큰 콜아웃 — "3점 달성!" "고!" "승리!" 등
   // ===== 속도 시스템 =====
   // 'fast' / 'normal' / 'slow' (localStorage)
   function getSpeedKey() {
@@ -518,12 +588,22 @@
     const k = getSpeedKey();
     return k === 'fast' ? '⚡상' : k === 'slow' ? '⚡하' : '⚡중';
   }
+  function getSpeedTitle() {
+    const k = getSpeedKey();
+    if (k === 'fast') return '진행 속도: 빠름 (연출이 짧아져요)';
+    if (k === 'slow') return '진행 속도: 느림 (연출이 길어져요)';
+    return '진행 속도: 보통 (탭해 상·중·하 순환)';
+  }
   function cycleSpeed() {
     const cur = getSpeedKey();
     const next = cur === 'fast' ? 'normal' : cur === 'normal' ? 'slow' : 'fast';
     try { localStorage.setItem('gostop_speed', next); } catch {}
     const btn = $('btnSpeed');
-    if (btn) btn.textContent = getSpeedLabel();
+    if (btn) {
+      btn.textContent = getSpeedLabel();
+      btn.title = getSpeedTitle();
+      btn.setAttribute('aria-label', getSpeedTitle());
+    }
   }
 
   // ===== 가운데 카드 이벤트 오버레이 =====
@@ -531,14 +611,22 @@
   // who: 'me' | name string | null
   let CARD_EVENT_QUEUE = [];
   let CARD_EVENT_RUNNING = false;
-  function queueCardEvent(card, kind, who, startRect) {
-    CARD_EVENT_QUEUE.push({ card: card, kind: kind, who: who, startRect: startRect });
+  function queueCardEvent(card, kind, who, startRect, endRect) {
+    CARD_EVENT_QUEUE.push({
+      card: card, kind: kind, who: who, startRect: startRect, endRect: endRect != null ? endRect : null,
+    });
     if (!CARD_EVENT_RUNNING) processCardEventQueue();
   }
   function processCardEventQueue() {
     if (!CARD_EVENT_QUEUE.length) {
       CARD_EVENT_RUNNING = false;
-      // ★ centerpiece 가 다 끝났으면 — 대기 view 가 있으면 60ms 후 진행, 없으면 lock 풀기
+      if (PENDING_POST_OVERLAY_RENDER) {
+        PENDING_POST_OVERLAY_RENDER = false;
+        setTimeout(function () {
+          render();
+          startTurnTimer();
+        }, 0);
+      }
       if (typeof VIEW_QUEUE !== 'undefined' && VIEW_QUEUE.length > 0) {
         setTimeout(function () { processNextView(); }, 60);
       } else if (typeof VIEW_PROCESSING !== 'undefined') {
@@ -548,65 +636,133 @@
     }
     CARD_EVENT_RUNNING = true;
     const item = CARD_EVENT_QUEUE.shift();
-    showCardEventOverlay(item.card, item.kind, item.who, item.startRect, function () {
+    showCardEventOverlay(item.card, item.kind, item.who, item.startRect, item.endRect, function () {
       processCardEventQueue();
     });
   }
-  function showCardEventOverlay(card, kind, who, startRect, done) {
+  function showCardEventOverlay(card, kind, who, startRect, endRect, done) {
     if (!card) { if (done) done(); return; }
+    const SFX = window.GostopSFX ? window.GostopSFX.sfx : null;
     const mult = getSpeedMultiplier();
-    // ★ reduced-motion 사용자 — slide/scale 모션 단축. 카드는 짧게 비치고 사라짐.
     const _rm = isReducedMotion();
-    const inMs = _rm ? 0 : 280; // 시작 → 중앙 슬라이드 시간
-    const holdMs = _rm ? Math.round(350 * mult) : Math.round(500 * mult);
-    const outMs = _rm ? 80 : 240;
     const isMatch = kind === 'play-match' || kind === 'flip-match';
-
-    // 시작 위치 — startRect 가 있으면 거기서, 없으면 화면 중앙(작게)
+    const inMs = _rm ? 0 : 280;
+    const holdMs = _rm ? Math.round(200 * mult) : Math.round((isMatch ? 320 : 120) * mult);
+    const outMs = _rm ? 80 : 180;
+    const toBoardMs = _rm ? 120 : Math.round(520 * mult);
     const vw = window.innerWidth;
     const vh = window.innerHeight;
+    const hasBoardTarget = !!(isMatch && endRect && endRect.width > 0);
+
+    function playOverlaySfxAtCenter() {
+      if (!SFX) return;
+      if (isMatch) {
+        if (!hasBoardTarget) {
+          SFX.clack();
+          if (navigator.vibrate) { try { navigator.vibrate([18, 24, 18]); } catch {} }
+        }
+      } else if (kind === 'play-nomatch' || kind === 'flip-nomatch') {
+        SFX.ching();
+      }
+    }
+    function playClackOnLand() {
+      if (SFX) SFX.clack();
+      if (navigator.vibrate) { try { navigator.vibrate([18, 24, 18]); } catch {} }
+    }
+
+    // 시작 위치 — startRect 가 있으면 거기서, 없으면 화면 중앙(작게)
     let offX = 0, offY = 0, startScale = 0.4, startRot = -10;
     if (startRect && startRect.width > 0) {
       offX = (startRect.left + startRect.width / 2) - vw / 2;
       offY = (startRect.top + startRect.height / 2) - vh / 2;
-      startScale = startRect.width / 120;  // 손 카드 크기에 맞춤
-      startRot = 0; // 손에서 나오는 거니까 회전 X
+      startScale = startRect.width / 120;
+      startRot = 0;
     }
 
+    if (_rm) {
+      if (SFX) {
+        if (isMatch) SFX.clack();
+        else SFX.ching();
+      }
+      if (done) setTimeout(done, 0);
+      return;
+    }
+
+    if (hasBoardTarget) {
+      const el = GostopCards.renderCard(card, {});
+      const ex = (endRect.left + endRect.width / 2) - vw / 2;
+      const ey = (endRect.top + endRect.height / 2) - vh / 2;
+      const endScale = (endRect.width / 120) * 0.98;
+      const initTransform = 'translate(calc(-50% + ' + offX + 'px), calc(-50% + ' + offY + 'px)) ' +
+        'scale(' + startScale + ') rotate(0deg)';
+      el.style.cssText =
+        'position:fixed;top:50%;left:50%;' +
+        'width:120px !important;height:192px !important;flex:none !important;' +
+        'transform:' + initTransform + ';opacity:' + (startRect ? '1' : '0') + ';' +
+        'z-index:10001;pointer-events:none;border-radius:8px;' +
+        'box-shadow:0 24px 60px rgba(0,0,0,0.55),0 0 50px rgba(52,211,153,0.5);' +
+        'will-change:transform;';
+      const img = el.querySelector('img, .hwa-img, .hwa-card');
+      if (img) img.style.cssText = 'width:100% !important;height:100% !important;display:block;border-radius:8px;';
+      document.body.appendChild(el);
+      // 1) 손(또는 덱) → 화면 중앙
+      requestAnimationFrame(function () {
+        el.style.transition = 'transform 0.28s cubic-bezier(.34,1.56,.64,1), opacity 0.2s ease, box-shadow 0.2s ease';
+        el.style.transform = 'translate(-50%, -50%) scale(1) rotate(0deg)';
+        el.style.opacity = '1';
+      });
+      // 2) 잠시 유지 → 3) 바닥의 짝 패 자리로 이동·축소 (동선이 이어짐)
+      const landRot = (Math.random() < 0.5 ? 1 : -1) * (5 + Math.random() * 8);
+      setTimeout(function () {
+        el.style.transition = 'transform ' + (toBoardMs / 1000) + 's cubic-bezier(0.33,0.1,0.2,1), ' +
+          'box-shadow 0.25s ease, opacity 0.15s ease';
+        el.style.transform = 'translate(calc(-50% + ' + ex + 'px), calc(-50% + ' + ey + 'px)) ' +
+          'scale(' + endScale + ') rotate(' + landRot + 'deg)';
+        el.style.boxShadow = '0 4px 14px rgba(0,0,0,0.25)';
+      }, 20 + inMs + holdMs);
+      setTimeout(function () { playClackOnLand(); }, 20 + inMs + holdMs + toBoardMs);
+      setTimeout(function () {
+        el.style.transition = 'opacity 0.14s ease';
+        el.style.opacity = '0';
+        setTimeout(function () { el.remove(); if (done) done(); }, outMs);
+      }, 20 + inMs + holdMs + toBoardMs + 260);
+      return;
+    }
+
+    // 매칭 대상 rect 없을 때(폴백) / 논매치: 기존 가운데 연출 후 페이드
     const cardEl = GostopCards.renderCard(card, {});
-    const initTransform = 'translate(calc(-50% + ' + offX + 'px), calc(-50% + ' + offY + 'px)) ' +
-                          'scale(' + startScale + ') rotate(' + startRot + 'deg)';
+    const initTransform2 = 'translate(calc(-50% + ' + offX + 'px), calc(-50% + ' + offY + 'px)) ' +
+      'scale(' + startScale + ') rotate(' + startRot + 'deg)';
     cardEl.style.cssText =
       'position:fixed;top:50%;left:50%;' +
       'width:120px !important;height:192px !important;flex:none !important;' +
-      'transform:' + initTransform + ';opacity:' + (startRect ? '1' : '0') + ';' +
-      'z-index:9999;pointer-events:none;border-radius:8px;' +
+      'transform:' + initTransform2 + ';opacity:' + (startRect ? '1' : '0') + ';' +
+      'z-index:10001;pointer-events:none;border-radius:8px;' +
       'box-shadow:0 24px 60px rgba(0,0,0,0.55)' + (isMatch ? ', 0 0 70px rgba(52,211,153,0.75)' : '') + ';' +
       'transition:transform 0.28s cubic-bezier(.34,1.56,.64,1), opacity 0.2s ease, box-shadow 0.2s ease;';
     const innerImg = cardEl.querySelector('img, .hwa-img, .hwa-card');
     if (innerImg) innerImg.style.cssText = 'width:100% !important;height:100% !important;display:block;border-radius:8px;';
     document.body.appendChild(cardEl);
-    // 등장 — 정중앙으로 슬라이드 + 확대
     setTimeout(function () {
       cardEl.style.transform = 'translate(-50%, -50%) scale(1) rotate(0deg)';
       cardEl.style.opacity = '1';
     }, 20);
-    // 매치 살짝 임팩트 (피크에서 1.1× pop)
     if (isMatch) {
       setTimeout(function () {
-        cardEl.style.transform = 'translate(-50%, -50%) scale(1.1) rotate(2deg)';
+        cardEl.style.transform = 'translate(-50%, -50%) scale(1.08) rotate(2deg)';
       }, inMs);
       setTimeout(function () {
         cardEl.style.transform = 'translate(-50%, -50%) scale(1) rotate(0deg)';
-      }, inMs + 120);
+      }, inMs + 100);
     }
+    setTimeout(function () { playOverlaySfxAtCenter(); }, 20 + inMs + 40);
     setTimeout(function () {
       cardEl.style.transform = isMatch
-        ? 'translate(-50%, -50%) scale(1.15) rotate(8deg)'
-        : 'translate(-50%, -50%) scale(0.6)';
+        ? 'translate(-50%, -50%) scale(1.1) rotate(5deg)'
+        : 'translate(-50%, -50%) scale(0.65)';
       cardEl.style.opacity = '0';
       setTimeout(function () { cardEl.remove(); if (done) done(); }, outMs);
-    }, inMs + holdMs);
+    }, 20 + inMs + (isMatch ? Math.round(220 * mult) : holdMs));
   }
 
   function bigCallout(text, tone, duration) {
@@ -713,7 +869,13 @@
     if (!p || !cap || !window.GostopEngine || !window.GostopEngine.scoreBreakdown) return;
     const bd = window.GostopEngine.scoreBreakdown(cap);
     const goN = (VIEW.goCounts && VIEW.goCounts[playerIdx]) || 0;
-    const goMult = Math.pow(2, goN);
+    // goBonus 규칙: 1고→+1(×1), 2고→+2(×1), 3고+→+2 후 ×2^(n-2)
+    const goAdd = goN === 1 ? 1 : goN === 2 ? 2 : goN >= 3 ? 2 : 0;
+    const goMult = goN >= 3 ? Math.pow(2, goN - 2) : 1;
+    // 흔들기·폭탄·자뻑 보너스 multiplier — VIEW.scores 는 이미 적용됐으나
+    // bd.total 은 기본 점수(카드 조합만)라 별도 반영 필요
+    const bon = (VIEW.bonuses && VIEW.bonuses[playerIdx]) || {};
+    const ruleMult = Math.pow(2, (bon.shake || 0) + (bon.bomb || 0) + (bon.jaBbuk || 0));
     let dlg = $('scoreBdDlg');
     if (!dlg) {
       dlg = document.createElement('div');
@@ -732,7 +894,23 @@
         '</li>';
     }).join('');
     const baseTotal = bd.total;
-    const finalTotal = baseTotal * goMult;
+    // ruleMult(흔들기/폭탄/자뻑) 적용 후 고보너스 계산
+    const ruleApplied = baseTotal * ruleMult;
+    const finalTotal = (ruleApplied + goAdd) * goMult;
+    let multLabel = '';
+    if (ruleMult > 1) {
+      const parts = [];
+      if (bon.shake)  parts.push('🌀×' + Math.pow(2, bon.shake));
+      if (bon.bomb)   parts.push('💣×' + Math.pow(2, bon.bomb));
+      if (bon.jaBbuk) parts.push('✨×' + Math.pow(2, bon.jaBbuk));
+      multLabel = ' <span class="g-bd-mult">' + parts.join(' ') + ' = <b>' + ruleApplied + '점</b></span>';
+    }
+    let goLabel = '';
+    if (goN >= 1) {
+      if (goN <= 2) goLabel = ' +' + goAdd;
+      else goLabel = ' +' + goAdd + ' ×' + goMult;
+    }
+    const shownBase = ruleMult > 1 ? ruleApplied : baseTotal;
     dlg.innerHTML =
       '<div class="g-score-bd">' +
         '<div class="g-score-bd-head">' +
@@ -743,7 +921,8 @@
         '<div class="g-bd-total">' +
           '<span>합계</span>' +
           '<b>' + baseTotal + '점</b>' +
-          (goN > 0 ? ' <span class="g-bd-mult">× ' + goMult + ' = <b>' + finalTotal + '점</b></span>' : '') +
+          (ruleMult > 1 ? multLabel : '') +
+          (goN > 0 ? ' <span class="g-bd-mult">' + goLabel + ' = <b>' + finalTotal + '점</b></span>' : '') +
         '</div>' +
       '</div>';
     dlg.querySelector('.g-score-bd-close').onclick = function () { dlg.remove(); };
@@ -891,7 +1070,7 @@
       // 햅틱
       if (navigator.vibrate) { try { navigator.vibrate([12, 30, 12]); } catch (_) {} }
       socket().emit('game:playBomb', { month: month }, function (res) {
-        if (!res || !res.ok) showToast('⚠️ 폭탄 실패: ' + (res && res.error || ''));
+        if (!res || !res.ok) showToast('⚠️ 폭탄 실패: ' + (res && res.error || ''), { kind: 'warn' });
       });
     };
     document.body.appendChild(fab);
@@ -991,23 +1170,35 @@
       '<ul class="g-gostop-bd-list">' + (rowsHtml || '<li class="g-gostop-bd-empty">아직 득점 카드 없음</li>') + '</ul>';
   }
 
-  function showToast(msg) {
+  function showToast(msg, opts) {
+    opts = opts || {};
     let t = $('gameToast');
     if (!t) {
       t = document.createElement('div');
       t.id = 'gameToast';
       t.className = 'g-toast';
+      t.setAttribute('role', 'status');
+      t.setAttribute('aria-live', 'polite');
+      t.setAttribute('aria-relevant', 'additions text');
       document.body.appendChild(t);
     }
     t.textContent = msg;
+    const isWarn = opts.kind === 'warn' || /^⚠️/.test(String(msg));
+    t.classList.toggle('is-warn', isWarn);
+    t.classList.toggle('is-long', String(msg).length > 40);
+    const baseMs = isWarn ? 3000 : 2200;
+    const extra = Math.max(0, String(msg).length - 32) * 40;
+    const duration = opts.duration != null ? opts.duration : Math.min(7800, baseMs + extra);
     t.classList.remove('hidden', 'show');
-    // reflow 강제해 애니메이션 재시작
     void t.offsetWidth;
     t.classList.add('show');
     clearTimeout(t._hideTimer);
     t._hideTimer = setTimeout(function () {
       t.classList.remove('show');
-    }, 2400);
+    }, duration);
+    if (window.GostopTTS && GostopTTS.isEnabled() && opts.tts !== false) {
+      GostopTTS.speakToast(msg);
+    }
   }
 
   function popScore(text, slot) {
@@ -1052,7 +1243,8 @@
     const statusEl = $('gameStatus');
     if (VIEW.finished) {
       const winName = VIEW.winner != null && VIEW.players[VIEW.winner] ? VIEW.players[VIEW.winner].name : '';
-      statusEl.innerHTML = '<span class="g-status-end">' + (winName ? (winName + '님 승리!') : '무승부') + ' · 최종 ' + VIEW.scores.join(' : ') + '점</span>';
+      statusEl.innerHTML = '<span class="g-status-end">' + (winName ? (winName + '님 승리!') : '무승부') + ' · 최종 ' + (VIEW.scores || []).join(' : ') + '점</span>';
+      statusEl.setAttribute('title', '게임 종료');
     } else {
       const roundNum = VIEW.gameRound || 1;
       statusEl.innerHTML =
@@ -1062,6 +1254,42 @@
         '<span class="g-status-phase">' + phaseLabel + '</span>' +
         (roundNum > 1 ? '<span class="g-status-round">' + roundNum + '판</span>' : '') +
         '<span class="g-status-stock">덱 ' + VIEW.stockCount + '장</span>';
+      statusEl.setAttribute('title', (isMyTurn ? '내 차례' : turnName + '님 차례') + ' · ' + phaseLabel + ' · 덱 ' + VIEW.stockCount + '장');
+    }
+
+    // 한 줄 힌트 — 단계·차례에 맞는 행동 안내
+    const phaseHintEl = $('gamePhaseHint');
+    if (phaseHintEl) {
+      if (VIEW.finished) {
+        phaseHintEl.textContent = '';
+        phaseHintEl.setAttribute('aria-hidden', 'true');
+        phaseHintEl.classList.remove('is-my-turn');
+      } else {
+        let h = '';
+        if (isMyTurn) {
+          if (VIEW.phase === 'play-hand') {
+            h = '';
+          } else if (VIEW.phase === 'choose-hand-match' || VIEW.phase === 'choose-flip-match') {
+            h = '노랗게 빛나는 바닥 패를 한 장 탭하세요';
+          } else if (VIEW.phase === 'flip-stock') {
+            h = '잠시 후 덱에서 패가 뒤집혀요';
+          } else if (VIEW.phase === 'choose-go-stop') {
+            h = '고(계속) 또는 스톱(끝내기)을 고르세요';
+          } else if (VIEW.phase === 'declare-shake') {
+            h = '흔들기 여부를 정해 주세요';
+          } else {
+            h = phaseLabel;
+          }
+        } else {
+          h = turnName + '님 진행 중 — 잠시만 기다려 주세요';
+        }
+        phaseHintEl.textContent = h;
+        if (h && isMyTurn && window.GostopTTS && GostopTTS.isEnabled()) {
+          GostopTTS.speakHintOnce(String(VIEW.turn) + '|' + String(VIEW.phase) + '|' + h, h);
+        }
+        phaseHintEl.setAttribute('aria-hidden', 'false');
+        phaseHintEl.classList.toggle('is-my-turn', isMyTurn);
+      }
     }
 
     // 선택이 필요한 단계에선 도움말 배너를 상단에 추가
@@ -1070,9 +1298,11 @@
       helpBanner.innerHTML = '👉 바닥에서 <b>같은 달 카드(노랗게 빛나는)</b> 한 장을 탭해 주세요';
       helpBanner.classList.remove('hidden');
       helpBanner.style.display = 'block';
+      helpBanner.setAttribute('aria-hidden', 'false');
     } else {
       helpBanner.classList.add('hidden');
       helpBanner.style.display = 'none';
+      helpBanner.setAttribute('aria-hidden', 'true');
     }
     // R26: 신규 phase UI — 흔들기 모달 + 폭탄 floating 버튼 (정식 UI)
     renderShakeModal(isMyTurn);
@@ -1083,6 +1313,7 @@
     oppEl.innerHTML = '';
     const oppCount = VIEW.playerCount - 1;
     oppEl.className = 'g-opp-wrap g-opp-wrap-' + oppCount; // 1/2/3 에 따라 다른 레이아웃
+    const _botLevel = parseInt(document.body.getAttribute('data-ai-level') || '1', 10) || 1;
     VIEW.players.forEach(function (p, i) {
       if (i === me) return;
       const box = document.createElement('div');
@@ -1095,9 +1326,13 @@
       for (let k = 0; k < shown; k++) {
         cardsHtml += '<span class="g-opp-card" style="left:' + (k * 8) + 'px">' + GostopCards.faceDownSvg() + '</span>';
       }
+      const isBot = p.userId < 0;
+      const _fallbackEmoji = iconEmoji(p.icon).replace(/'/g, '&#39;');
       const avatarHtml = p.photoUrl
         ? '<img src="' + escapeHtml(p.photoUrl) + '" alt="" />'
-        : iconEmoji(p.icon);
+        : isBot
+          ? '<img src="assets/ai-photo-' + _botLevel + '.png" alt="" onerror="this.outerHTML=\'' + _fallbackEmoji + '\'" />'
+          : iconEmoji(p.icon);
       const turnArrow = isTurn ? '<span class="g-turn-arrow" aria-hidden="true">▼</span>' : '';
       const goCount = (VIEW.goCounts && VIEW.goCounts[i]) || 0;
       const goBadge = goCount > 0 ? '<span class="g-go-badge">' + goCount + '고</span>' : '';
@@ -1107,6 +1342,7 @@
         : '';
       const oppCapId = 'oppCapPeek-' + i;
       box.innerHTML =
+        '<div class="g-opp-portrait" aria-hidden="true"><span class="g-opp-portrait-img">' + avatarHtml + '</span></div>' +
         '<div class="g-opp-inner">' +
           '<span class="g-pl-avatar g-opp-avatar">' + avatarHtml + '</span>' +
           '<div class="g-opp-body">' +
@@ -1201,6 +1437,9 @@
     const bbukMonths = new Set((VIEW.bbukGroups || []).map(function (g) { return g.month; }));
     VIEW.board.forEach(function (c, idx) {
       const wrap = GostopCards.renderCard(c, { highlight: highlightIds.has(c.id) });
+      const cardTip = (c.label || '패') + ' · ' + c.month + '월';
+      wrap.setAttribute('title', cardTip);
+      wrap.setAttribute('aria-label', cardTip);
       if (bbukMonths.has(c.month)) wrap.classList.add('is-bbuk');
       if (monthCounts[c.month] >= 2) wrap.classList.add('has-month-mate');
       if (!prevBoardIds.has(c.id)) {
@@ -1309,10 +1548,10 @@
       }
     }
 
-    // 내 손패 — 사용자 커스텀 순서가 있으면 그대로, 없으면 월 + 타입 자동 정렬
+    // 내 손패 — 월 + 타입 자동 정렬(서버 순서)
     const handEl = $('gameHand');
     if (isMyTurn && VIEW.phase === 'play-hand') {
-      handEl.title = '같은 패를 한 번 탭하면 살짝 뜨고, 다시 탭하면 냅니다. 위로 드래그해도 한 번에 낼 수 있어요.';
+      handEl.title = '패는 위로 드래그해 냅니다. 탭은 살짝 드는 표시만(실수로 안 나감).';
     } else {
       handEl.removeAttribute('title');
     }
@@ -1326,29 +1565,27 @@
       'padding:6px 4px 4px !important;width:100% !important;' +
       'overflow:visible !important;justify-content:center;position:relative;';
     const typeOrder = { light: 0, animal: 1, ribbon: 2, junk: 3 };
-    let sortedHand;
-    if (window.HAND_CUSTOM_ORDER && window.HAND_CUSTOM_ORDER.length) {
-      // 커스텀 순서 우선
-      const orderMap = new Map();
-      window.HAND_CUSTOM_ORDER.forEach(function (id, idx) { orderMap.set(id, idx); });
-      sortedHand = VIEW.myHand.slice().sort(function (a, b) {
-        const ai = orderMap.has(a.id) ? orderMap.get(a.id) : 9999 + a.month * 10;
-        const bi = orderMap.has(b.id) ? orderMap.get(b.id) : 9999 + b.month * 10;
-        return ai - bi;
-      });
-    } else {
-      sortedHand = VIEW.myHand.slice().sort(function (a, b) {
-        if (a.month !== b.month) return a.month - b.month;
-        return (typeOrder[a.type] || 9) - (typeOrder[b.type] || 9);
-      });
-    }
+    const sortedHand = VIEW.myHand.slice().sort(function (a, b) {
+      if (a.month !== b.month) return a.month - b.month;
+      return (typeOrder[a.type] || 9) - (typeOrder[b.type] || 9);
+    });
     const boardMonths = new Set(VIEW.board.map(function (c) { return c.month; }));
     const prevHandIds = new Set((PREV_VIEW && PREV_VIEW.myHand ? PREV_VIEW.myHand : []).map(function (c) { return c.id; }));
     sortedHand.forEach(function (c, i) {
       const opts = { selected: PENDING_HAND_CARD === c.id };
       const wrap = GostopCards.renderCard(c, opts);
       if (VIEW.phase === 'play-hand' && isMyTurn && HAND_PRESELECT_ID === c.id) wrap.classList.add('is-hand-prelift');
-      if (boardMonths.has(c.month)) wrap.classList.add('is-matchable');
+      if (boardMonths.has(c.month)) {
+        wrap.classList.add('is-matchable');
+        wrap.setAttribute('title', c.month + '월 — 바닥에 같은 달이 있어 먹을 수 있어요' +
+          (VIEW.phase === 'play-hand' && isMyTurn ? ' · 위로 드래그해 냄' : ''));
+      } else {
+        wrap.setAttribute('title', c.month + '월 · ' + (c.label || '패') +
+          (VIEW.phase === 'play-hand' && isMyTurn ? ' — 위로 드래그해 냄' : ''));
+      }
+      wrap.setAttribute('aria-label', (VIEW.phase === 'play-hand' && isMyTurn)
+        ? (c.month + '월 · ' + (c.label || '패') + ' — 위로 드래그해 냅니다')
+        : (c.month + '월 · ' + (c.label || '패')));
       // 첫 딜링(이전에 손패 없었고 지금 생김) → stagger deal-in
       // ★ reduced-motion 사용자 — stagger delay 제거 (CSS 측에서도 fade 만 남김)
       if (wasEmpty || !prevHandIds.has(c.id)) {
@@ -1360,7 +1597,7 @@
           setTimeout(function () { window.GostopSFX.sfx.shuffleBurst(); }, i * 60);
         }
       }
-      // 클릭/탭 핸들링은 attachHandDragReorder 의 pointerup 에서 통합 처리 (drag/tap 구분)
+      // 클릭/탭·드래그는 attachHandPlayDrag 가 처리
       // ★ 손패 카드 사이즈 인라인 강제 — grid cell 안에 자동 축소
       wrap.style.width = '100%';
       wrap.style.maxWidth = '70px';
@@ -1377,8 +1614,7 @@
         innerH.style.height = '100%';
         innerH.style.objectFit = 'contain';
       }
-      // ★ Long-press 드래그 reorder
-      attachHandDragReorder(wrap, c.id);
+      attachHandPlayDrag(wrap, c.id);
       handEl.appendChild(wrap);
     });
 
@@ -1420,6 +1656,63 @@
       myNameEl.innerHTML = escapeHtml((VIEW.players[me] && VIEW.players[me].name) || '나') +
         (mgo > 0 ? ' <span class="g-go-badge">' + mgo + '고</span>' : '');
     }
+    // 소지금 표시 — 싱글모드에서만, localStorage에서 읽어 pill 우측에 배지로 표시
+    (function renderMoneyBadge() {
+      const pill = $('gameMyMetaPill');
+      if (!pill) return;
+      // 기존 배지 제거
+      var oldBadge = pill.querySelector('.g-money-badge');
+      if (oldBadge) oldBadge.remove();
+      if (!window._gostopSingleActive) return;
+      try {
+        var pKey = (window.GostopEcon && window.GostopEcon.singleStorageKey) || 'gostop_single_progress_v4';
+        var prog = JSON.parse(localStorage.getItem(pKey) || '{}');
+        var myMoney = Number(prog.myMoney) || 0;
+        if (myMoney <= 0) return;
+        var fmt = myMoney >= 10000
+          ? Math.floor(myMoney / 10000) + '만' + (myMoney % 10000 ? (myMoney % 10000 / 1000).toFixed(0) + '천' : '') + '원'
+          : myMoney.toLocaleString('ko-KR') + '원';
+        var badge = document.createElement('span');
+        badge.className = 'g-money-badge';
+        badge.title = '내 소지금';
+        badge.textContent = fmt;
+        badge.style.cssText = 'font-size:10px;font-weight:700;color:#7A4A00;' +
+          'background:rgba(255,220,80,0.35);border-radius:999px;padding:1px 6px;white-space:nowrap;';
+        pill.appendChild(badge);
+      } catch (_) {}
+    })();
+    // AI(상대) 소지금 표시 — 싱글모드에서 상대 박스에 추가
+    (function renderOppMoneyBadge() {
+      if (!window._gostopSingleActive) return;
+      try {
+        var pKey = (window.GostopEcon && window.GostopEcon.singleStorageKey) || 'gostop_single_progress_v4';
+        var prog = JSON.parse(localStorage.getItem(pKey) || '{}');
+        var lv = Math.max(1, Math.min(40, Number(prog.level) || 1));
+        var startM = window.GostopEcon && typeof window.GostopEcon.startingMoney === 'function'
+          ? window.GostopEcon.startingMoney(lv)
+          : Math.round(100 * Math.pow(5, lv - 1)) * 300;
+        var fmt = startM >= 10000
+          ? Math.floor(startM / 10000) + '만' + (startM % 10000 ? (startM % 10000 / 1000).toFixed(0) + '천' : '') + '원'
+          : startM.toLocaleString('ko-KR') + '원';
+        // 상대 박스 찾기 (AI는 항상 playerIdx !== me)
+        VIEW.players.forEach(function (p, i) {
+          if (i === me) return;
+          var box = document.querySelector('.g-opp[data-player-idx="' + i + '"]');
+          if (!box) return;
+          var oldB = box.querySelector('.g-money-badge');
+          if (oldB) oldB.remove();
+          var b = document.createElement('span');
+          b.className = 'g-money-badge';
+          b.title = '봇 소지금';
+          b.textContent = fmt;
+          b.style.cssText = 'font-size:10px;font-weight:700;color:#7A4A00;' +
+            'background:rgba(255,220,80,0.35);border-radius:999px;padding:1px 6px;' +
+            'white-space:nowrap;margin-left:4px;';
+          var head = box.querySelector('.g-opp-head');
+          if (head) head.appendChild(b);
+        });
+      } catch (_) {}
+    })();
     // R26: 흔들기/폭탄/자뻑 곱셈 배지 — 점수 pill 안쪽
     renderBonusBadges();
     // 내 아바타
@@ -1444,6 +1737,8 @@
     if (deckEl) {
       deckEl.classList.toggle('is-empty', stock === 0);
       deckEl.classList.toggle('is-low', stock > 0 && stock <= 5);
+      const deckLabel = stock === 0 ? '덱이 비었어요' : '남은 덱 ' + stock + '장';
+      deckEl.setAttribute('aria-label', deckLabel);
     }
 
     // 덱 뒤집기는 자동 실행 — 손패 낸 뒤 centerpiece 애니 종료 직후 트리거
@@ -1451,10 +1746,8 @@
     btnFlip.classList.add('hidden');
     if (isMyTurn && VIEW.phase === 'flip-stock' && !_autoFlipPending) {
       _autoFlipPending = true;
-      // centerpiece 총 길이 = 280(slide-in) + 500*mult(hold) + 240(exit) + 80ms 여유
-      // → fast 880 / normal 1080 / slow 1430 (이전엔 fast 시 centerpiece 와 겹침)
-      const mult = getSpeedMultiplier();
-      const flipDelay = Math.round(280 + 500 * mult + 240 + 80);
+      // render 는 손/덱 → 바닥 연출이 끝난 뒤에만 올 수 있으므로, 여기서는 짧은 쿨다운만
+      const flipDelay = 180;
       setTimeout(function () {
         _autoFlipPending = false;
         socket().emit('game:flip', null, function () {});
@@ -1475,9 +1768,13 @@
       const justOpened = !PREV_VIEW || PREV_VIEW.phase !== 'choose-go-stop';
       if (justOpened) {
         const SFX = window.GostopSFX ? window.GostopSFX.sfx : null;
-        if (SFX) SFX.dialogOpen();
+        if (SFX) {
+          if (SFX.goStopPrompt) SFX.goStopPrompt();
+          else SFX.dialogOpen();
+        }
       }
       gsDlg.classList.remove('hidden');
+      gsDlg.setAttribute('aria-hidden', 'false');
       // 게임판이 보이도록 살짝만 dim, 다이얼로그는 하단으로 — 손패/바닥 보고 판단 가능
       gsDlg.style.cssText = 'display:flex !important;position:fixed !important;' +
         'top:0 !important;left:0 !important;right:0 !important;bottom:0 !important;' +
@@ -1494,16 +1791,26 @@
           'padding:14px 16px 12px !important;';
       }
       const myGo = (VIEW.goCounts && VIEW.goCounts[me]) || 0;
-      const currentMult = Math.pow(2, myGo);
+      // goBonus: 1고→+1점, 2고→+2점, 3고+→(base+2)×2^(n-2) 추가 곱셈
+      // 화면 표시용 근사치: 1·2고는 +1/+2점 덧셈, 3고+는 곱셈 우선 표시
       const baseScore = VIEW.scores[me];
-      const finalScore = baseScore * currentMult;
-      $('gsScore').textContent = baseScore + '점' + (myGo >= 1 ? ' × ' + currentMult : '');
+      const goAdd = myGo === 1 ? 1 : myGo === 2 ? 2 : myGo >= 3 ? 2 : 0;
+      const goMult = myGo >= 3 ? Math.pow(2, myGo - 2) : 1;
+      const finalScore = (baseScore + goAdd) * goMult;
+      let scoreLabel = baseScore + '점';
+      if (myGo >= 1) {
+        if (myGo <= 2) scoreLabel += ' +' + goAdd;
+        else scoreLabel += ' +' + goAdd + ' ×' + goMult;
+      }
+      $('gsScore').textContent = scoreLabel;
       // 싱글모드면 점당 환산해 "획득 가능 X원" 표시
       let moneyTxt;
       try {
-        const prog = JSON.parse(localStorage.getItem('gostop_single_progress_v2') || '{}');
-        const lv = Number(prog.level) || 1;
-        const pv = 10 + (lv - 1) * 10;
+        const pKey = (window.GostopEcon && window.GostopEcon.singleStorageKey) || 'gostop_single_progress_v4';
+        const pvFn = (window.GostopEcon && window.GostopEcon.pointValue) || function (lv) { return Math.round(100 * Math.pow(5, Math.max(1,lv|0) - 1)); };
+        const prog = JSON.parse(localStorage.getItem(pKey) || '{}');
+        const lv = Math.max(1, Math.min(40, Number(prog.level) || 1));
+        const pv = pvFn(lv);
         const won = finalScore * pv;
         moneyTxt = won >= 10000
           ? (Math.floor(won / 10000) + '만 ' + (won % 10000 ? (won % 10000).toLocaleString('ko-KR') + '원' : '원'))
@@ -1520,7 +1827,21 @@
       }
       // 점수 브레이크다운 인라인 — 어떤 카드 조합으로 N점인지
       injectGoStopBreakdown(inner, me);
-    } else {
+      if (justOpened) {
+        if (window.GostopTTS && GostopTTS.isEnabled() && moneyEl) {
+          var gtitle = $('gsDialogTitle');
+          var ttsG = (gtitle && gtitle.textContent ? gtitle.textContent : '고를 이어갈지') +
+            ' 현재 ' + baseScore + '점' + (myGo >= 1 ? ', ' + myGo + '고' + (goMult > 1 ? ' ' + goMult + '곱' : '') : '') +
+            ', 획득 가능 ' + (moneyEl.textContent || '') + '. 고와 스톱 중에서 눌러 주세요';
+          GostopTTS.speak(ttsG);
+        }
+        requestAnimationFrame(function () {
+          const goB = $('btnGo');
+          if (goB) goB.focus({ preventScroll: true });
+        });
+      }
+    } else if (gsDlg) {
+      gsDlg.setAttribute('aria-hidden', 'true');
       gsDlg.classList.add('hidden');
       gsDlg.style.display = 'none';
     }
@@ -1706,8 +2027,7 @@
     return layout[idx % layout.length];
   }
 
-  // ★ 손패 즉각 드래그 — 위로 빠지면 내기, 손패 영역 안에선 재정렬
-  window.HAND_CUSTOM_ORDER = window.HAND_CUSTOM_ORDER || [];
+  // ★ 손패 드래그 — 위로 끌면 내기(손패 안에서 놓으면 원위치)
   function handClearPrelift(exceptWrap) {
     const handEl = $('gameHand');
     if (!handEl) return;
@@ -1720,9 +2040,10 @@
     if (!VIEW || VIEW.finished) return;
     if (VIEW.turn !== VIEW.myIndex || VIEW.phase !== 'play-hand') return;
     if (HAND_PRESELECT_ID === cardId) {
+      // 선택된 카드를 다시 탭 → 패 내기
       HAND_PRESELECT_ID = null;
-      wrap.classList.remove('is-hand-prelift');
-      playCard(cardId);
+      handClearPrelift(null);
+      if (typeof playCard === 'function') playCard(cardId);
     } else {
       handClearPrelift(wrap);
       HAND_PRESELECT_ID = cardId;
@@ -1730,13 +2051,14 @@
     }
   }
 
-  function attachHandDragReorder(wrap, cardId) {
+  function attachHandPlayDrag(wrap, cardId) {
     let pid = null;
     let startX = 0, startY = 0;
     let dragging = false;
     let moved = false;
     let suppressClick = false;
     const DRAG_THRESHOLD = 4; // 4px 이상 움직이면 즉시 드래그 모드
+    const MIN_UP_TO_PLAY = 20; // 위로 끌어올려 내기(실수 클릭·미세 떨림과 구분)
     // click 가로채기 — 드래그 후 click 이벤트 무시
     wrap.addEventListener('click', function (e) {
       if (suppressClick) {
@@ -1772,7 +2094,7 @@
         wrap.style.transform = 'translate(' + dx + 'px, ' + dy + 'px) scale(1.08)';
         wrap.style.boxShadow = '0 12px 28px rgba(0,0,0,0.4)';
       }
-    });
+    }, { passive: false });
     function tryPlay() {
       // 내 차례 + play-hand phase 일 때만 patch
       if (!VIEW || VIEW.finished) return;
@@ -1795,46 +2117,25 @@
       const handEl = $('gameHand');
       const handRect = handEl.getBoundingClientRect();
       const releasedY = e.clientY;
-      // ★ Y축으로 손패 영역 위쪽으로 빠짐 → 패 내기
+      // ★ 손패를 위로 충분히 끌어올렸을 때만 패 내기(탭/클릭과 구분)
+      const netUp = startY - releasedY;
       const draggedAbove = releasedY < handRect.top - 8;
-      if (draggedAbove) {
-        HAND_PRESELECT_ID = null;
+      if (draggedAbove && netUp >= MIN_UP_TO_PLAY) {
+        // 위로 충분히 끌어올리면 즉시 패 내기
         handClearPrelift(null);
-        // 카드 빠지는 시각 효과 + 패 내기
-        wrap.style.transition = 'transform 0.25s ease, opacity 0.25s ease';
-        wrap.style.transform = 'translate(' + (e.clientX - startX) + 'px, ' + (e.clientY - startY - 30) + 'px) scale(0.85)';
-        wrap.style.opacity = '0.4';
+        HAND_PRESELECT_ID = null;
         tryPlay();
       } else {
-          // 영역 안 → 가장 가까운 카드 위치로 재정렬
-          const allCards = Array.from(handEl.querySelectorAll('.hwa-card-wrap'));
-          let nearest = null, minD = Infinity;
-          allCards.forEach(function (other) {
-            if (other === wrap) return;
-            const r = other.getBoundingClientRect();
-            const cx = r.left + r.width / 2;
-            const cy = r.top + r.height / 2;
-            const d = Math.hypot(e.clientX - cx, e.clientY - cy);
-            if (d < minD) { minD = d; nearest = other; }
-          });
-          if (nearest && minD < 120) {
-            const fromId = Number(wrap.dataset.cardId);
-            const toId = Number(nearest.dataset.cardId);
-            const curOrder = allCards.map(function (el) { return Number(el.dataset.cardId); });
-            const fromIdx = curOrder.indexOf(fromId);
-            const toIdx = curOrder.indexOf(toId);
-            if (fromIdx >= 0 && toIdx >= 0 && fromIdx !== toIdx) {
-              curOrder.splice(fromIdx, 1);
-              curOrder.splice(toIdx, 0, fromId);
-              window.HAND_CUSTOM_ORDER = curOrder;
-              try { render(); } catch {}
-            }
-          }
-          // 원위치로 부드럽게 복귀
-          wrap.style.transition = 'transform 0.2s cubic-bezier(.34,1.56,.64,1), box-shadow 0.2s ease';
-          wrap.style.transform = '';
-          wrap.style.boxShadow = '';
+        // 손패 영역 안에 놓음 — 재정렬 없이 원위치
+        // ★ 드래그 취소 시 prelift 상태 반드시 초기화 — 잔류하면 다음 탭에서 즉시 playCard() 발동
+        if (HAND_PRESELECT_ID === cardId) {
+          HAND_PRESELECT_ID = null;
+          handClearPrelift(null);
         }
+        wrap.style.transition = 'transform 0.2s cubic-bezier(.34,1.56,.64,1), box-shadow 0.2s ease';
+        wrap.style.transform = '';
+        wrap.style.boxShadow = '';
+      }
       // 클래스 / cursor 정리
       setTimeout(function () {
         wrap.style.zIndex = '';
@@ -1860,13 +2161,17 @@
 
   function playCard(cardId) {
     if (!VIEW) return;
+    // ★ 중복 호출 방지: 이미 emit 된 카드가 있으면 서버 응답 전까지 무시
+    if (_playCardPending) return;
+    _playCardPending = true;
     PENDING_HAND_CARD = cardId;
     pauseTurnTimerForAction();
     // 사용자 입력 즉시 confirm — 0 latency feedback (centerpiece 사운드는 275ms 후 발화)
     const SFX = window.GostopSFX ? window.GostopSFX.sfx : null;
     if (SFX) SFX.tap();
     socket().emit('game:play', { cardId: cardId }, function (res) {
-      if (!res || !res.ok) showToast('⚠️ ' + (res && res.error || '못 냈어요'));
+      _playCardPending = false;
+      if (!res || !res.ok) showToast('⚠️ ' + (res && res.error || '못 냈어요'), { kind: 'warn' });
     });
   }
 
@@ -1875,14 +2180,14 @@
     const SFX = window.GostopSFX ? window.GostopSFX.sfx : null;
     if (SFX) SFX.tap();
     socket().emit('game:match', { matchCardId: matchCardId }, function (res) {
-      if (!res || !res.ok) showToast('⚠️ ' + (res && res.error || '선택 실패'));
+      if (!res || !res.ok) showToast('⚠️ ' + (res && res.error || '선택 실패'), { kind: 'warn' });
     });
   }
 
   $('btnFlip').addEventListener('click', function () {
     pauseTurnTimerForAction();
     socket().emit('game:flip', null, function (res) {
-      if (!res || !res.ok) showToast('⚠️ ' + (res && res.error || '뒤집기 실패'));
+      if (!res || !res.ok) showToast('⚠️ ' + (res && res.error || '뒤집기 실패'), { kind: 'warn' });
     });
   });
 
@@ -1935,11 +2240,11 @@
     const wake = function () {
       try { window.GostopSFX.ensure && window.GostopSFX.ensure(); } catch {}
       document.removeEventListener('pointerdown', wake, true);
-      document.removeEventListener('touchstart', wake, true);
+      document.removeEventListener('touchstart', wake, { passive: true, capture: true });
       document.removeEventListener('keydown', wake, true);
     };
     document.addEventListener('pointerdown', wake, true);
-    document.addEventListener('touchstart', wake, true);
+    document.addEventListener('touchstart', wake, { passive: true, capture: true });
     document.addEventListener('keydown', wake, true);
   })();
 
@@ -1951,6 +2256,9 @@
       const m = window.GostopSFX.isMuted();
       btn.textContent = m ? '🔇' : '🔊';
       btn.classList.toggle('is-muted', m);
+      const t = m ? '음소거 중 — 탭하면 소리 켜기' : '소리 켜짐 — 탭하면 음소거';
+      btn.title = t;
+      btn.setAttribute('aria-label', t);
     };
     render();
     btn.addEventListener('click', function () {
@@ -1965,14 +2273,26 @@
     const btn = $('btnSpeed');
     if (!btn) return;
     btn.textContent = getSpeedLabel();
+    btn.title = getSpeedTitle();
+    btn.setAttribute('aria-label', getSpeedTitle());
     btn.addEventListener('click', function () { cycleSpeed(); });
   })();
   $('btnGo').addEventListener('click', function () {
     pauseTurnTimerForAction();
+    const SFX = window.GostopSFX ? window.GostopSFX.sfx : null;
+    if (SFX) {
+      if (SFX.go) SFX.go();
+      else SFX.tap();
+    }
     socket().emit('game:gostop', { choice: 'go' }, function () {});
   });
   $('btnStop').addEventListener('click', function () {
     pauseTurnTimerForAction();
+    const SFX = window.GostopSFX ? window.GostopSFX.sfx : null;
+    if (SFX) {
+      if (SFX.stop) SFX.stop();
+      else SFX.tap();
+    }
     socket().emit('game:gostop', { choice: 'stop' }, function () {});
   });
 
@@ -1995,5 +2315,38 @@
 
   function escapeHtml(s) { return String(s).replace(/[&<>"']/g, function (c) { return { '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]; }); }
 
-  window.GostopGame = { start: start, onView: onView };
+  function openGostopHelp() {
+    const dlg = $('helpSheet');
+    if (!dlg) return;
+    dlg.classList.remove('hidden');
+    dlg.style.display = 'flex';
+    dlg.setAttribute('aria-hidden', 'false');
+    requestAnimationFrame(function () {
+      const c = $('btnHelpClose');
+      if (c) c.focus({ preventScroll: true });
+    });
+  }
+  window.GostopOpenHelp = openGostopHelp;
+
+  const btnGameHelp = $('btnGameHelp');
+  if (btnGameHelp) {
+    btnGameHelp.addEventListener('click', function () { openGostopHelp(); });
+  }
+  document.addEventListener('keydown', function (e) {
+    if (e.key !== 'Escape') return;
+    const hs = $('helpSheet');
+    if (hs && !hs.classList.contains('hidden') && (hs.style.display === 'flex' || hs.style.display === '')) {
+      e.preventDefault();
+      if (typeof window.GostopCloseHelp === 'function') window.GostopCloseHelp();
+      return;
+    }
+    const ed = $('endDialog');
+    if (!ed || ed.classList.contains('hidden')) return;
+    e.preventDefault();
+    const ex = $('btnEndExit');
+    if (ex) ex.click();
+  }, true);
+
+  window.GostopGame = { start: start, onView: onView, openHelp: openGostopHelp };
+  if (window.GostopTTS) GostopTTS.init({ btn: $('btnTts') });
 })();

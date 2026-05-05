@@ -129,7 +129,7 @@
       board: board,
       stock: stock,
       captured: captured,
-      turn: 0,
+      turn: opts.firstTurn || 0,
       phase: 'play-hand',
       pending: null,
       log: [{ ts: Date.now(), msg: '게임 시작' }],
@@ -514,7 +514,7 @@
     if (state.finished) throw new Error('game finished');
     if (state.phase !== 'flip-stock') throw new Error('not flip-stock phase');
     const s = cloneState(state);
-    if (!s.stock.length) return endTurn(s);
+    if (!s.stock.length) return afterFlip(s);
     const flipped = s.stock.shift();
     const matches = s.board.filter(function (b) { return b.month === flipped.month; });
     const playerIdx = s.turn;
