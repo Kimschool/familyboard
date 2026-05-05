@@ -31,7 +31,7 @@ fi
 ARCHIVE_PATH="/tmp/familyboard.xcarchive"
 EXPORT_PATH="/tmp/familyboard-export"
 EXPORT_OPTIONS="$PROJECT_ROOT/scripts/ios-export-options.plist"
-IPA_PATH="$EXPORT_PATH/가족보드.ipa"
+IPA_PATH="$EXPORT_PATH/Familyboard.ipa"
 BUILD_NUMBER=$(date +%y%m%d%H%M)
 
 echo "=========================================="

@@ -327,7 +327,7 @@
 				MARKETING_VERSION = 1.0;
 				OTHER_SWIFT_FLAGS = "$(inherited) \"-D\" \"COCOAPODS\" \"-DDEBUG\"";
 				PRODUCT_BUNDLE_IDENTIFIER = com.weavus.familyboard;
-				PRODUCT_NAME = "가족보드";
+				PRODUCT_NAME = Familyboard;
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
 				SWIFT_VERSION = 5.0;
@@ -353,7 +353,7 @@
 				);
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.weavus.familyboard;
-				PRODUCT_NAME = "가족보드";
+				PRODUCT_NAME = Familyboard;
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				"PROVISIONING_PROFILE_SPECIFIER[sdk=iphoneos*]" = "FamilyBoard AppStore Distribution";
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "";
