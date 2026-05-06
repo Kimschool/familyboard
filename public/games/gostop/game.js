@@ -213,9 +213,33 @@
     return (r && r.width > 0) ? r : null;
   }
   function getMatchEndRect(played, captured, isMatched) {
-    if (!isMatched || !captured || !captured.length || !played) return null;
-    const pair = captured.find(function (c) { return c.month === played.month; });
-    return getBoardCardRectById((pair || captured[0]).id);
+    // 매칭: 짝패 위치 (이미 DOM 에 있음 — render() 는 overlay 끝나야 호출)
+    if (isMatched && captured && captured.length && played) {
+      const pair = captured.find(function (c) { return c.month === played.month; });
+      const r = getBoardCardRectById((pair || captured[0]).id);
+      if (r) return r;
+    }
+    // 논매치(쪽/뻑/쓸 등): 새로 바닥에 깔릴 자리 — 아직 DOM 없음 → 보드 컨테이너 중앙으로 안착 동선
+    // 같은 월 카드가 이미 바닥에 있으면 그 옆 (그룹 영역) 으로
+    if (played) {
+      try {
+        const sameMonth = (VIEW && VIEW.board || []).find(function (c) { return c.month === played.month && c.id !== played.id; });
+        if (sameMonth) {
+          const r = getBoardCardRectById(sameMonth.id);
+          if (r) return r;
+        }
+      } catch (_) {}
+      const boardEl = document.getElementById('gameBoard');
+      if (boardEl) {
+        const br = boardEl.getBoundingClientRect();
+        if (br && br.width > 0) {
+          // 카드 한 장 크기로 보드 중앙 부근에 가상의 rect 생성
+          const W = 64, H = 102;
+          return { left: br.left + br.width / 2 - W / 2, top: br.top + br.height / 2 - H / 2, width: W, height: H };
+        }
+      }
+    }
+    return null;
   }
 
   function fireDiffEffects() {
@@ -646,13 +670,16 @@
     const mult = getSpeedMultiplier();
     const _rm = isReducedMotion();
     const isMatch = kind === 'play-match' || kind === 'flip-match';
-    const inMs = _rm ? 0 : 280;
-    const holdMs = _rm ? Math.round(200 * mult) : Math.round((isMatch ? 320 : 120) * mult);
+    const inMs = _rm ? 0 : 260;
+    // ★ 화면 중앙에 머무는 시간 — 짧게: 매칭은 인지에 충분한 정도, 논매치는 거의 즉시 바닥행
+    const holdMs = _rm ? Math.round(180 * mult) : Math.round((isMatch ? 180 : 60) * mult);
     const outMs = _rm ? 80 : 180;
-    const toBoardMs = _rm ? 120 : Math.round(520 * mult);
+    const toBoardMs = _rm ? 120 : Math.round((isMatch ? 460 : 380) * mult);
     const vw = window.innerWidth;
     const vh = window.innerHeight;
-    const hasBoardTarget = !!(isMatch && endRect && endRect.width > 0);
+    // ★ 매칭이 아니어도 endRect 가 있으면 (보드 컨테이너 fallback) 바닥에 안착시키는 동선 사용
+    //    → 사용자 제보: "내가 낸 패가 바닥에 떨어지는 동작이 어색" 의 핵심 수정점
+    const hasBoardTarget = !!(endRect && endRect.width > 0);
 
     function playOverlaySfxAtCenter() {
       if (!SFX) return;
@@ -695,24 +722,27 @@
       const endScale = (endRect.width / 120) * 0.98;
       const initTransform = 'translate(calc(-50% + ' + offX + 'px), calc(-50% + ' + offY + 'px)) ' +
         'scale(' + startScale + ') rotate(0deg)';
+      // 매칭이면 녹색 글로우, 논매치면 평범한 깊은 그림자만 (시각 차별화)
+      const matchGlow = isMatch ? '0 24px 60px rgba(0,0,0,0.55),0 0 50px rgba(52,211,153,0.5)'
+                                : '0 18px 44px rgba(0,0,0,0.5)';
       el.style.cssText =
         'position:fixed;top:50%;left:50%;' +
         'width:120px !important;height:192px !important;flex:none !important;' +
         'transform:' + initTransform + ';opacity:' + (startRect ? '1' : '0') + ';' +
         'z-index:10001;pointer-events:none;border-radius:8px;' +
-        'box-shadow:0 24px 60px rgba(0,0,0,0.55),0 0 50px rgba(52,211,153,0.5);' +
+        'box-shadow:' + matchGlow + ';' +
         'will-change:transform;';
       const img = el.querySelector('img, .hwa-img, .hwa-card');
       if (img) img.style.cssText = 'width:100% !important;height:100% !important;display:block;border-radius:8px;';
       document.body.appendChild(el);
       // 1) 손(또는 덱) → 화면 중앙
       requestAnimationFrame(function () {
-        el.style.transition = 'transform 0.28s cubic-bezier(.34,1.56,.64,1), opacity 0.2s ease, box-shadow 0.2s ease';
+        el.style.transition = 'transform 0.26s cubic-bezier(.34,1.56,.64,1), opacity 0.18s ease, box-shadow 0.2s ease';
         el.style.transform = 'translate(-50%, -50%) scale(1) rotate(0deg)';
         el.style.opacity = '1';
       });
-      // 2) 잠시 유지 → 3) 바닥의 짝 패 자리로 이동·축소 (동선이 이어짐)
-      const landRot = (Math.random() < 0.5 ? 1 : -1) * (5 + Math.random() * 8);
+      // 2) 잠시 유지 → 3) 바닥(짝패 또는 보드 빈자리)으로 이동·축소
+      const landRot = (Math.random() < 0.5 ? 1 : -1) * (4 + Math.random() * 6);
       setTimeout(function () {
         el.style.transition = 'transform ' + (toBoardMs / 1000) + 's cubic-bezier(0.33,0.1,0.2,1), ' +
           'box-shadow 0.25s ease, opacity 0.15s ease';
@@ -720,12 +750,23 @@
           'scale(' + endScale + ') rotate(' + landRot + 'deg)';
         el.style.boxShadow = '0 4px 14px rgba(0,0,0,0.25)';
       }, 20 + inMs + holdMs);
-      setTimeout(function () { playClackOnLand(); }, 20 + inMs + holdMs + toBoardMs);
+      // 착지 사운드: 매칭이면 clack(따닥) + 진동, 논매치면 ching (조용)
+      setTimeout(function () {
+        if (!SFX) return;
+        if (isMatch) {
+          SFX.clack();
+          if (navigator.vibrate) { try { navigator.vibrate([18, 24, 18]); } catch {} }
+        } else {
+          SFX.ching();
+        }
+      }, 20 + inMs + holdMs + toBoardMs);
+      // 착지 후 페이드 — 매칭은 짝패 위에 잠시 머물러 인지(160ms), 논매치는 즉시 사라져 다음 render 가 자연스럽게 이어받음(40ms)
+      const landHold = isMatch ? 160 : 40;
       setTimeout(function () {
         el.style.transition = 'opacity 0.14s ease';
         el.style.opacity = '0';
         setTimeout(function () { el.remove(); if (done) done(); }, outMs);
-      }, 20 + inMs + holdMs + toBoardMs + 260);
+      }, 20 + inMs + holdMs + toBoardMs + landHold);
       return;
     }
 

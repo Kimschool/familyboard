@@ -10,3 +10,6 @@ dist/
 
 # 배포 인증 (App Store Connect API 키 ID 등 비밀값)
 scripts/.env.local
+
+# Android signing
+android/key.properties
