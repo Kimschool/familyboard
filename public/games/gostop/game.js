@@ -259,16 +259,22 @@
     const isMyAct = playerActed === me;
     const actorName = (VIEW.players[playerActed] && VIEW.players[playerActed].name) || '';
     const matched = captured.length > 0;
-    // ★ 매치된 바닥 카드 잠깐 빛나는 효과 (render() 가 220ms 뒤 제거하기 전)
+    // ★ 매치된 바닥 카드 글로우 — overlay 카드가 도착하는 시점에 켜져야 자연스러움
+    //    이전엔 즉시 켜져 어떤 카드가 매치되는지 미리 노출 = 스포일러였음.
+    //    overlay 도착 시각 = 20 + inMs(260) + holdMs(180) + toBoardMs(460) ≈ 920ms (매칭 시).
+    //    reduced-motion 환경(overlay 없음)에선 즉시 켬.
+    const _glowDelay = (typeof isReducedMotion === 'function' && isReducedMotion()) ? 0 : 900;
     captured.forEach(function (capCard) {
-      const boardCardEl = document.querySelector('#gameBoard [data-id="' + capCard.id + '"]');
-      if (boardCardEl) {
-        boardCardEl.style.transition = 'filter 0.18s ease, box-shadow 0.2s ease, opacity 0.2s ease';
-        boardCardEl.style.filter = 'brightness(1.6) saturate(1.5)';
-        boardCardEl.style.boxShadow = '0 0 22px 6px rgba(255,230,100,0.85)';
-        boardCardEl.style.zIndex = '20';
-        boardCardEl.classList.add('is-match-target');
-      }
+      setTimeout(function () {
+        const boardCardEl = document.querySelector('#gameBoard [data-id="' + capCard.id + '"]');
+        if (boardCardEl) {
+          boardCardEl.style.transition = 'filter 0.18s ease, box-shadow 0.2s ease, opacity 0.2s ease';
+          boardCardEl.style.filter = 'brightness(1.6) saturate(1.5)';
+          boardCardEl.style.boxShadow = '0 0 22px 6px rgba(255,230,100,0.85)';
+          boardCardEl.style.zIndex = '20';
+          boardCardEl.classList.add('is-match-target');
+        }
+      }, _glowDelay);
     });
     let didQueueCardEvent = false;
     if (stockDropped) {
