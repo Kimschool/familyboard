@@ -264,6 +264,10 @@
     //    overlay 도착 시각 = 20 + inMs(260) + holdMs(180) + toBoardMs(460) ≈ 920ms (매칭 시).
     //    reduced-motion 환경(overlay 없음)에선 즉시 켬.
     const _glowDelay = (typeof isReducedMotion === 'function' && isReducedMotion()) ? 0 : 900;
+    // overlay 카드 페이드 시작 시점 (920ms 도착 + 160ms hold = 1080ms) 에 맞춰
+    // captured 보드 카드도 같이 페이드. 이전엔 render() 가 1260ms 에 DOM 을
+    // 통째로 재렌더해 board 카드만 하드 컷으로 사라지는 단절감 있었음.
+    const _capFadeDelay = (typeof isReducedMotion === 'function' && isReducedMotion()) ? 0 : 1080;
     captured.forEach(function (capCard) {
       setTimeout(function () {
         const boardCardEl = document.querySelector('#gameBoard [data-id="' + capCard.id + '"]');
@@ -275,6 +279,15 @@
           boardCardEl.classList.add('is-match-target');
         }
       }, _glowDelay);
+      setTimeout(function () {
+        const boardCardEl = document.querySelector('#gameBoard [data-id="' + capCard.id + '"]');
+        if (boardCardEl) {
+          // overlay 페이드와 같은 곡선으로 살짝 축소되며 사라짐
+          boardCardEl.style.transition = 'opacity 0.16s ease, transform 0.18s ease, filter 0.18s ease';
+          boardCardEl.style.opacity = '0';
+          boardCardEl.style.transform = (boardCardEl.style.transform || '') + ' scale(0.92)';
+        }
+      }, _capFadeDelay);
     });
     let didQueueCardEvent = false;
     if (stockDropped) {
