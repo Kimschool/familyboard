@@ -6173,7 +6173,7 @@ let GALLERY_NAV_SET = null; // null = 전체 GALLERY_CACHE, array = 현재 앨�
 
 async function loadGallery() {
   try {
-    const list = await api('/api/gallery?limit=12');
+    const list = await api('/api/gallery?limit=30');
     GALLERY_CACHE = list || [];
     renderGalleryCard();
   } catch {}
@@ -6243,7 +6243,7 @@ function renderGallerySheet(append = false) {
     grid.appendChild(div);
   }
   const more = $('galleryLoadMoreBtn');
-  if (more) more.classList.toggle('hidden', GALLERY_CACHE.length < 12);
+  if (more) more.classList.toggle('hidden', GALLERY_CACHE.length < 30);
 }
 
 async function openGallerySheet() {
@@ -6490,6 +6490,7 @@ function navigateGalleryDetail(delta) {
   const p = navSet[newIdx];
   GALLERY_DETAIL_ID = p.id;
   renderGalleryDetail(p);
+  loadGalleryComments(p.id);
 }
 
 async function deleteGalleryPhoto(id) {
