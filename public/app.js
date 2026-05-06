@@ -6250,6 +6250,25 @@ async function openGallerySheet() {
   $('gallerySheet').classList.remove('hidden');
   if (!GALLERY_CACHE.length) await loadGallery();
   renderGallerySheet(false);
+  setupGalleryInfiniteScroll();
+}
+
+let _galleryObserver = null;
+function setupGalleryInfiniteScroll() {
+  if (_galleryObserver) return;
+  const body = document.getElementById('gallerySheetBody');
+  if (!body) return;
+  let sentinel = document.getElementById('gallerySentinel');
+  if (!sentinel) {
+    sentinel = document.createElement('div');
+    sentinel.id = 'gallerySentinel';
+    sentinel.style.cssText = 'height:1px;width:100%';
+    body.appendChild(sentinel);
+  }
+  _galleryObserver = new IntersectionObserver((entries) => {
+    if (entries[0].isIntersecting && !GALLERY_LOADING) loadMoreGallery();
+  }, { root: body, rootMargin: '300px' });
+  _galleryObserver.observe(sentinel);
 }
 
 async function loadMoreGallery() {
@@ -6266,6 +6285,7 @@ async function loadMoreGallery() {
     }
     if (!more || more.length < 24) {
       if (btn) btn.classList.add('hidden');
+      if (_galleryObserver) { _galleryObserver.disconnect(); _galleryObserver = null; }
     }
   } catch {} finally {
     GALLERY_LOADING = false;
