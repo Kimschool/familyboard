@@ -713,7 +713,10 @@
     if (startRect && startRect.width > 0) {
       offX = (startRect.left + startRect.width / 2) - vw / 2;
       offY = (startRect.top + startRect.height / 2) - vh / 2;
-      startScale = startRect.width / 120;
+      // ★ 카드 너비(120px) 기준으로 환산하지만, 0.3~0.85 사이로 클램프.
+      //    옵포 박스(300~480px) 같은 큰 컨테이너에서 startScale 이 2.5~4 가 되어
+      //    카드가 화면을 덮을 만큼 거대화되며 등장하는 어색한 모션 방지.
+      startScale = Math.min(0.85, Math.max(0.3, startRect.width / 120));
       startRot = 0;
     }
 
