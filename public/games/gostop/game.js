@@ -445,30 +445,35 @@
       // myTurn 알림과 시간 차 두고 발사 (myTurn 720ms 뒤 → +260ms ≈ 980ms 시점)
       setTimeout(function () { SFX.chooseHint(); }, 980);
     }
-    // 뻑 / 뻑먹기 / 고 감지 — 사운드 + 시각
+    // 뻑 / 뻑먹기 / 싹쓸이 콜아웃·사운드 — overlay 카드가 바닥에 도착한 뒤 발화해야
+    //   "행동의 결과" 로 인지됨. 이전엔 0ms~280ms 에 즉시 띄워서 카드가 공중에 있는데
+    //   화면 한가운데 '뻑!' 이 떠 있는 어색한 미스매치 발생.
+    //   overlay land ≈ 920ms → 콜아웃 900ms, SFX 1100ms (살짝 뒤따라).
+    const _eventDelayBase = (typeof isReducedMotion === 'function' && isReducedMotion()) ? 0 : 900;
     if (newLog && (!oldLog || newLog.ts !== oldLog.ts)) {
       if (/^뻑!/.test(newLog.msg)) {
-        bigCallout('뻑!', 'go', 1600);
-        if (SFX) setTimeout(function () { SFX.gong(); }, 280);
+        setTimeout(function () { bigCallout('뻑!', 'go', 1600); }, _eventDelayBase);
+        if (SFX) setTimeout(function () { SFX.gong(); }, _eventDelayBase + 200);
       } else if (/뻑 먹기|뻑 싹쓸이|뻑먹기/.test(newLog.msg)) {
-        bigCallout('싹쓸이!', 'gold', 1800);
-        if (SFX) setTimeout(function () { SFX.fanfare(); }, 320);
+        setTimeout(function () { bigCallout('싹쓸이!', 'gold', 1800); }, _eventDelayBase);
+        if (SFX) setTimeout(function () { SFX.fanfare(); }, _eventDelayBase + 240);
       }
     }
     // R26: 신규 룰 이벤트 자동 결선 — SFX + 토스트 (PREV/CURR diff 기준)
     // events 큐에서 prev 마지막 ts 이후 새 이벤트만 발화. SFX 키는 type 과 동일.
+    // overlay 카드 도착 시점에 맞춰 발화 (위 콜아웃과 같은 타이밍 정렬).
     if (Array.isArray(VIEW.events)) {
       const prevEvts = (PREV_VIEW && Array.isArray(PREV_VIEW.events)) ? PREV_VIEW.events : [];
       const lastPrevTs = prevEvts.length ? prevEvts[prevEvts.length - 1].ts : 0;
       VIEW.events.forEach(function (ev) {
         if (!ev || ev.ts <= lastPrevTs) return;
         if (SFX && typeof SFX[ev.type] === 'function') {
-          try { SFX[ev.type](); } catch (_) {}
+          setTimeout(function () { try { SFX[ev.type](); } catch (_) {} }, _eventDelayBase);
         }
       });
     }
-    // 신규 이벤트 토스트 오버레이 (SFX 와 같은 프레임에 정렬)
-    renderEventOverlays();
+    // 신규 이벤트 토스트 오버레이 — overlay 카드 도착에 맞춰 (위 SFX/콜아웃과 정렬)
+    setTimeout(function () { renderEventOverlays(); }, _eventDelayBase);
   }
 
   // 종료 다이얼로그 — winner 의 captured 분석해 가장 굵직한 콤보 1개 추출
