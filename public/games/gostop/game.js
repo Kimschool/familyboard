@@ -233,9 +233,22 @@
       if (boardEl) {
         const br = boardEl.getBoundingClientRect();
         if (br && br.width > 0) {
-          // 카드 한 장 크기로 보드 중앙 부근에 가상의 rect 생성
+          // ★ render() 가 새 카드를 boardCardPosition 으로 8방향 중 한 곳에 배치할 위치를
+          //    미리 계산해 정확히 그 자리로 안착 (이전엔 보드 중앙으로 보낸 뒤 render 가
+          //    다른 위치로 점프 → 사용자 제보 "가운데에 먼저 깔리고 위치가 자동으로 변경").
+          let slotIdx = (typeof BOARD_SLOT_FOR_MONTH !== 'undefined') ? BOARD_SLOT_FOR_MONTH[played.month] : null;
+          if (slotIdx == null && typeof BOARD_SLOT_USED !== 'undefined') {
+            const freeIdx = BOARD_SLOT_USED.indexOf(false);
+            slotIdx = freeIdx >= 0 ? freeIdx : 0;
+          }
+          if (slotIdx == null) slotIdx = 0;
+          const pos = (typeof boardCardPosition === 'function')
+            ? boardCardPosition(slotIdx, 16)
+            : { x: 50, y: 50 };
           const W = 64, H = 102;
-          return { left: br.left + br.width / 2 - W / 2, top: br.top + br.height / 2 - H / 2, width: W, height: H };
+          const cx = br.left + (br.width  * pos.x / 100);
+          const cy = br.top  + (br.height * pos.y / 100);
+          return { left: cx - W / 2, top: cy - H / 2, width: W, height: H };
         }
       }
     }
@@ -292,8 +305,28 @@
     let didQueueCardEvent = false;
     if (stockDropped) {
       let flipCard = null;
-      if (newBoardCount > 0) flipCard = newBoardCards[newBoardCount - 1];
-      else if (matched) flipCard = captured[captured.length - 1];
+      if (newBoardCount > 0) {
+        flipCard = newBoardCards[newBoardCount - 1];
+      } else if (matched) {
+        // ★ 덱 카드가 즉시 매칭됐을 때, captured 는 PREV board 에 있던 카드들이므로
+        //    captured[last] 를 쓰면 "이미 바닥에 깔려있던 패가 덱에서 나오는 것처럼" 보임
+        //    (= 사용자 제보 핵심 버그). VIEW.captured 와 PREV_VIEW.captured diff 후
+        //    prevBoardIds 에 없던 카드 = 덱에서 새로 나온 카드.
+        try {
+          const flat = function (c) {
+            return [].concat((c && c.light) || [], (c && c.animal) || [],
+                             (c && c.ribbon) || [], (c && c.junk) || []);
+          };
+          const curC = (VIEW.captured && VIEW.captured[playerActed]) || null;
+          const prvC = (PREV_VIEW.captured && PREV_VIEW.captured[playerActed]) || null;
+          const allCur = flat(curC);
+          const allPrv = flat(prvC);
+          const prvIds = new Set(allPrv.map(function (x) { return x.id; }));
+          const newlyCap = allCur.filter(function (x) { return !prvIds.has(x.id); });
+          flipCard = newlyCap.find(function (x) { return !prevBoardIds.has(x.id); }) || null;
+        } catch (_) {}
+        if (!flipCard) flipCard = captured[captured.length - 1]; // 안전장치
+      }
       const deckEl = $('gameDeck');
       // ★ 덱이 카드 뽑히는 듯한 살짝 들썩 — flip 사운드와 같이 발화 (CSS keyframe 재시작)
       if (deckEl) {
