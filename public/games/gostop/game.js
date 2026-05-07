@@ -308,24 +308,13 @@
       if (newBoardCount > 0) {
         flipCard = newBoardCards[newBoardCount - 1];
       } else if (matched) {
-        // ★ 덱 카드가 즉시 매칭됐을 때, captured 는 PREV board 에 있던 카드들이므로
-        //    captured[last] 를 쓰면 "이미 바닥에 깔려있던 패가 덱에서 나오는 것처럼" 보임
-        //    (= 사용자 제보 핵심 버그). VIEW.captured 와 PREV_VIEW.captured diff 후
-        //    prevBoardIds 에 없던 카드 = 덱에서 새로 나온 카드.
-        try {
-          const flat = function (c) {
-            return [].concat((c && c.light) || [], (c && c.animal) || [],
-                             (c && c.ribbon) || [], (c && c.junk) || []);
-          };
-          const curC = (VIEW.captured && VIEW.captured[playerActed]) || null;
-          const prvC = (PREV_VIEW.captured && PREV_VIEW.captured[playerActed]) || null;
-          const allCur = flat(curC);
-          const allPrv = flat(prvC);
-          const prvIds = new Set(allPrv.map(function (x) { return x.id; }));
-          const newlyCap = allCur.filter(function (x) { return !prvIds.has(x.id); });
-          flipCard = newlyCap.find(function (x) { return !prevBoardIds.has(x.id); }) || null;
-        } catch (_) {}
-        if (!flipCard) flipCard = captured[captured.length - 1]; // 안전장치
+        // ★ 덱에서 뒤집힌 카드가 즉시 매칭된 경우 — 보드에 머물지 않고 곧장
+        //    captured 로 가므로 overlay 자체가 부정확한 시각 정보를 낳음.
+        //    이전엔 captured[last] (PREV board 에 있던 카드) 를 잡아 "이미 깔려있던
+        //    패가 덱에서 나오는 것처럼" 보이는 버그가 반복됨. diff 로 deck 카드를
+        //    찾는 시도도 실패했기에, 가장 확실한 방법은 이 케이스에서 overlay 를
+        //    아예 안 띄우는 것. 덱 pulse + captured zone 갱신만으로 인지됨.
+        flipCard = null;
       }
       const deckEl = $('gameDeck');
       // ★ 덱이 카드 뽑히는 듯한 살짝 들썩 — flip 사운드와 같이 발화 (CSS keyframe 재시작)
