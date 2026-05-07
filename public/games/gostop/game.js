@@ -352,7 +352,9 @@
       }
       if (!playCardEv) {
         if (newBoardCount > 0) playCardEv = newBoardCards[0];
-        else if (matched) playCardEv = captured[0];
+        // ★ 'else if (matched) playCardEv = captured[0]' 는 PREV board 에 있던 카드를
+        //    잡아 "이미 깔려있던 패가 새로 낸 패처럼" 보이는 버그 (사용자 반복 제보).
+        //    카드를 정확히 식별 못하는 케이스에선 overlay 자체를 띄우지 않음.
         // 상대가 낸 패 — 상대 영역에서 나오는 것처럼
         if (!isMyAct) {
           const oppBox = document.querySelector('#gameOpponents .g-opp[data-player-idx="' + playerActed + '"]');
