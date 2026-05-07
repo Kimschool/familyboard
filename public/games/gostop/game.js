@@ -308,13 +308,21 @@
       if (newBoardCount > 0) {
         flipCard = newBoardCards[newBoardCount - 1];
       } else if (matched) {
-        // ★ 덱에서 뒤집힌 카드가 즉시 매칭된 경우 — 보드에 머물지 않고 곧장
-        //    captured 로 가므로 overlay 자체가 부정확한 시각 정보를 낳음.
-        //    이전엔 captured[last] (PREV board 에 있던 카드) 를 잡아 "이미 깔려있던
-        //    패가 덱에서 나오는 것처럼" 보이는 버그가 반복됨. diff 로 deck 카드를
-        //    찾는 시도도 실패했기에, 가장 확실한 방법은 이 케이스에서 overlay 를
-        //    아예 안 띄우는 것. 덱 pulse + captured zone 갱신만으로 인지됨.
-        flipCard = null;
+        // ★ 덱 카드가 즉시 매칭됐을 때 — captured 는 PREV board 에 있던 카드들이라
+        //    captured[last] 를 쓰면 "이미 깔려있던 패가 덱에서 나오는 것처럼" 보임.
+        //    정답: VIEW.captured / PREV_VIEW.captured diff → PREV board 에 없던 카드
+        //    = 덱에서 새로 나온 진짜 카드.
+        try {
+          const flat = function (c) {
+            return [].concat((c && c.light) || [], (c && c.animal) || [],
+                             (c && c.ribbon) || [], (c && c.junk) || []);
+          };
+          const allCur = flat((VIEW.captured && VIEW.captured[playerActed]) || null);
+          const allPrv = flat((PREV_VIEW.captured && PREV_VIEW.captured[playerActed]) || null);
+          const prvIds = new Set(allPrv.map(function (x) { return x.id; }));
+          const newlyCap = allCur.filter(function (x) { return !prvIds.has(x.id); });
+          flipCard = newlyCap.find(function (x) { return !prevBoardIds.has(x.id); }) || null;
+        } catch (_) {}
       }
       const deckEl = $('gameDeck');
       // ★ 덱이 카드 뽑히는 듯한 살짝 들썩 — flip 사운드와 같이 발화 (CSS keyframe 재시작)
@@ -351,10 +359,26 @@
         }
       }
       if (!playCardEv) {
-        if (newBoardCount > 0) playCardEv = newBoardCards[0];
-        // ★ 'else if (matched) playCardEv = captured[0]' 는 PREV board 에 있던 카드를
-        //    잡아 "이미 깔려있던 패가 새로 낸 패처럼" 보이는 버그 (사용자 반복 제보).
-        //    카드를 정확히 식별 못하는 케이스에선 overlay 자체를 띄우지 않음.
+        if (newBoardCount > 0) {
+          playCardEv = newBoardCards[0];
+        } else if (matched) {
+          // ★ 이전엔 captured[0] (PREV board 카드)를 fallback 으로 써서 "보드 카드가
+          //    overlay 에 잡히는" 버그 발생. 그렇다고 fallback 자체를 빼면 "상대가 낸
+          //    카드가 화면에 안 보임" (사용자 제보).
+          //    정답: VIEW.captured 와 PREV_VIEW.captured diff 로 새로 잡힌 카드 중
+          //    PREV board 에 없던 카드 = 상대 손에서 나온 진짜 카드.
+          try {
+            const flat = function (c) {
+              return [].concat((c && c.light) || [], (c && c.animal) || [],
+                               (c && c.ribbon) || [], (c && c.junk) || []);
+            };
+            const allCur = flat((VIEW.captured && VIEW.captured[playerActed]) || null);
+            const allPrv = flat((PREV_VIEW.captured && PREV_VIEW.captured[playerActed]) || null);
+            const prvIds = new Set(allPrv.map(function (x) { return x.id; }));
+            const newlyCap = allCur.filter(function (x) { return !prvIds.has(x.id); });
+            playCardEv = newlyCap.find(function (x) { return !prevBoardIds.has(x.id); }) || null;
+          } catch (_) {}
+        }
         // 상대가 낸 패 — 상대 영역에서 나오는 것처럼
         if (!isMyAct) {
           const oppBox = document.querySelector('#gameOpponents .g-opp[data-player-idx="' + playerActed + '"]');
