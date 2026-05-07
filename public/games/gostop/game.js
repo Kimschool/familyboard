@@ -294,12 +294,63 @@
       }, _glowDelay);
       setTimeout(function () {
         const boardCardEl = document.querySelector('#gameBoard [data-id="' + capCard.id + '"]');
-        if (boardCardEl) {
-          // overlay 페이드와 같은 곡선으로 살짝 축소되며 사라짐
-          boardCardEl.style.transition = 'opacity 0.16s ease, transform 0.18s ease, filter 0.18s ease';
+        if (!boardCardEl) return;
+        // ★ 매칭된 보드 카드를 잡은 플레이어의 captured 영역으로 날려보냄.
+        //    사용자 의도: 누가 어떤 카드를 먹었는지 시각적으로 명확히 표시.
+        const startRect = boardCardEl.getBoundingClientRect();
+        // 잡은 플레이어의 captured zone 위치 — 본인이면 #gameMyCapturedPeek, 상대면 #oppCapPeek-{idx}
+        let endEl = null;
+        const myIdx = (VIEW && VIEW.myIndex);
+        if (playerActed === myIdx) {
+          endEl = document.getElementById('gameMyCapturedPeek');
+        } else {
+          endEl = document.getElementById('oppCapPeek-' + playerActed)
+                  || document.querySelector('.g-opp[data-player-idx="' + playerActed + '"]');
+        }
+        const endRect = endEl ? endEl.getBoundingClientRect() : null;
+        if (!endRect || !endRect.width) {
+          // captured zone 못 찾을 때 폴백 — 기존 단순 페이드
+          boardCardEl.style.transition = 'opacity 0.16s ease, transform 0.18s ease';
           boardCardEl.style.opacity = '0';
           boardCardEl.style.transform = (boardCardEl.style.transform || '') + ' scale(0.92)';
+          return;
         }
+        // 1) 원본 카드는 즉시 invisible (clone 이 그 위치에서 출발하니 자연스러움)
+        boardCardEl.style.opacity = '0';
+        boardCardEl.style.transition = 'opacity 0.05s linear';
+        // 2) 카드 clone 을 body 에 fixed 로 띄움 — 위치는 startRect 그대로
+        const clone = boardCardEl.cloneNode(true);
+        clone.style.cssText =
+          'position:fixed !important;' +
+          'left:' + startRect.left + 'px !important;' +
+          'top:'  + startRect.top  + 'px !important;' +
+          'width:' + startRect.width  + 'px !important;' +
+          'height:' + startRect.height + 'px !important;' +
+          'margin:0 !important;' +
+          'z-index:9990 !important;' +
+          'pointer-events:none;' +
+          'transform-origin:center center;' +
+          'transition:transform 0.5s cubic-bezier(0.5,0.0,0.75,0.0),' +
+                     'opacity 0.5s cubic-bezier(0.5,0.0,0.75,0.0);' +
+          'will-change:transform,opacity;';
+        // R2 글로우 효과 잠시 유지 (캡처 직전 노란 빛)
+        clone.style.filter = 'brightness(1.4) saturate(1.3)';
+        clone.style.boxShadow = '0 0 18px 4px rgba(255,230,100,0.7)';
+        document.body.appendChild(clone);
+        // 3) 다음 프레임에 transform 으로 captured zone 으로 이동 + 작아짐
+        requestAnimationFrame(function () {
+          const targetCx = endRect.left + endRect.width / 2;
+          const targetCy = endRect.top  + endRect.height / 2;
+          const startCx  = startRect.left + startRect.width / 2;
+          const startCy  = startRect.top  + startRect.height / 2;
+          const dx = targetCx - startCx;
+          const dy = targetCy - startCy;
+          // captured zone 안에 들어갈 정도로 축소 (높이 기준 약 0.5x)
+          const scale = Math.max(0.18, Math.min(0.6, (endRect.height * 0.7) / startRect.height));
+          clone.style.transform = 'translate(' + dx + 'px, ' + dy + 'px) scale(' + scale + ') rotate(-6deg)';
+          clone.style.opacity = '0.15';
+        });
+        setTimeout(function () { if (clone && clone.parentNode) clone.remove(); }, 540);
       }, _capFadeDelay);
     });
     let didQueueCardEvent = false;
