@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "751929322251",
+    "project_id": "familyboard-a0dfa",
+    "storage_bucket": "familyboard-a0dfa.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:751929322251:android:a442557463ec64e2e2500e",
+        "android_client_info": {
+          "package_name": "com.weavus.familyboard"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDdrbiKSMiI6LN9TLCb3S0mfrrsQnFX8NM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

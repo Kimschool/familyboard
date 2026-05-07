@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">가족보드</string>
+    <string name="title_activity_main">가족보드</string>
+    <string name="package_name">com.weavus.familyboard</string>
+    <string name="custom_url_scheme">com.weavus.familyboard</string>
+</resources>
