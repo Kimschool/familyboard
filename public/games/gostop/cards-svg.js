@@ -28,13 +28,19 @@
   const TYPE_LABEL = { light:'광', animal:'열끗', ribbon:'띠', junk:'피' };
 
   function fallbackSvg(card) {
-    const bg = THEME[card.month] || '#FAF3E3';
+    card = card || {};
+    const m = Number(card.month);
+    const validMonth = Number.isFinite(m) && m >= 1 && m <= 12;
+    const bg = (validMonth && THEME[m]) || '#FAF3E3';
     const label = TYPE_LABEL[card.type] || '';
     const dbl = card.doubleJunk ? '쌍' : '';
+    // ★ month 가 0/null/undefined/범위 밖일 때 "0月" 같은 깨진 표기 보이던 버그 수정.
+    //    유효 월일 때만 라벨 표시, 아니면 빈 문자열.
+    const monthText = validMonth ? (m + '月') : '';
     return (
       '<svg viewBox="0 0 100 160" width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">' +
         '<rect x="0" y="0" width="100" height="160" rx="10" fill="' + bg + '" stroke="#3A2418" stroke-width="2"/>' +
-        '<text x="10" y="22" font-size="13" font-weight="800" fill="#3A2418" opacity=".6">' + card.month + '月</text>' +
+        (monthText ? '<text x="10" y="22" font-size="13" font-weight="800" fill="#3A2418" opacity=".6">' + monthText + '</text>' : '') +
         '<text x="50" y="90" text-anchor="middle" font-size="40" fill="#3A2418" font-weight="800">' + label + '</text>' +
         (dbl ? '<text x="50" y="130" text-anchor="middle" font-size="18" fill="#C0392B" font-weight="900">' + dbl + '</text>' : '') +
       '</svg>'

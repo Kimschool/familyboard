@@ -887,9 +887,6 @@
         // 봇이 가진 만큼만 받을 수 있음
         delta = Math.min(myScore * pv, botMoneyAtStart);
         prog.wins += 1;
-        // 레벨 클리어 — cleared 목록에 추가하고 다음 레벨 자동 진입
-        if (prog.cleared.indexOf(lv) < 0) prog.cleared.push(lv);
-        if (lv < 40) prog.level = lv + 1;
       } else if (view.winner === botIdx) {
         // 봇이 이김 — 내 소지금 차감
         delta = -Math.min(botScore * pv, prog.myMoney);
@@ -901,14 +898,30 @@
       if (prog.myMoney === 0) {
         prog.myMoney = startingMoney(prog.level);
       }
+      // ★ 레벨 해금 조건: 한 판 이김 ❌ → 소지금이 다음 레벨 시작금 도달 시 ✅
+      //   이전 코드는 한 판만 이겨도 자동 다음 레벨로 가버려 사용자 제보 발생.
+      //   소지금 기반으로 자연스럽게 진척되도록 변경.
+      const wasClearedBefore = prog.cleared.indexOf(lv) >= 0;
+      let justCleared = false;
+      if (lv < 40) {
+        const nextLevelMoney = startingMoney(lv + 1);
+        if (prog.myMoney >= nextLevelMoney) {
+          if (!wasClearedBefore) {
+            prog.cleared.push(lv);
+            justCleared = true;
+          }
+          prog.level = lv + 1;
+        }
+      }
       saveSingleProgress(prog);
       // 결과 알림 — 다음 게임:view 가 아닌 endDialog 닫을 때 보여주려고 잠시 후 처리
       window._gostopSingleResult = {
         delta: delta,
         iWon: iWon,
-        levelCleared: iWon,
+        levelCleared: justCleared,
         nextLevel: prog.level,
         myMoney: prog.myMoney,
+        nextLevelNeeded: lv < 40 ? startingMoney(lv + 1) : null,
       };
       setTimeout(function () {
         window._gostopSingleActive = false;

@@ -706,6 +706,14 @@
           if (r.iWon && r.levelCleared) {
             msg = '🏆 클리어! 봇으로부터 ' + sign + Number(r.delta).toLocaleString('ko-KR') + '원 획득\n' +
                   '다음 단계 Lv.' + r.nextLevel + ' 해금되었어요\n소지금: ' + Number(r.myMoney).toLocaleString('ko-KR') + '원';
+          } else if (r.iWon) {
+            // 이겼지만 다음 레벨 해금 조건(소지금) 미달
+            msg = '🎉 승리! 봇으로부터 ' + sign + Number(r.delta).toLocaleString('ko-KR') + '원 획득\n' +
+                  '소지금: ' + Number(r.myMoney).toLocaleString('ko-KR') + '원';
+            if (r.nextLevelNeeded) {
+              const need = Math.max(0, r.nextLevelNeeded - r.myMoney);
+              msg += '\n다음 레벨 해금까지: ' + Number(need).toLocaleString('ko-KR') + '원 더 필요';
+            }
           } else if (r.delta < 0) {
             msg = '💸 패배. ' + Number(r.delta).toLocaleString('ko-KR') + '원 차감\n현재 소지금: ' + Number(r.myMoney).toLocaleString('ko-KR') + '원';
           } else {
