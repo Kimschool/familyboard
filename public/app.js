@@ -6826,6 +6826,41 @@ async function refreshChatUnread() {
   } catch {}
 }
 
+// 채팅 메시지의 URL 을 자동으로 클릭 가능한 링크로 변환.
+// XSS 방지: 전체 텍스트는 escape 후 URL 부분만 anchor 로 감싸 다시 합침.
+function linkifyChatText(text) {
+  const s = String(text == null ? '' : text);
+  function escape(str) {
+    return str.replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+  // 공백·줄바꿈·HTML 특수문자가 아닌 모든 character 를 URL body 로 허용 (꽤 관대).
+  const urlRe = /(https?:\/\/[^\s<>"'`]+)/g;
+  let out = '';
+  let last = 0;
+  let m;
+  while ((m = urlRe.exec(s)) !== null) {
+    out += escape(s.slice(last, m.index));
+    const url = m[1];
+    // 끝의 구두점은 링크에서 떼어냄 (한국어 채팅 패턴 ".)],!?")
+    const trailMatch = url.match(/[.,!?)\]]+$/);
+    let cleanUrl = url;
+    let trail = '';
+    if (trailMatch) {
+      trail = trailMatch[0];
+      cleanUrl = url.slice(0, url.length - trail.length);
+    }
+    const safeUrl = escape(cleanUrl);
+    out += '<a href="' + safeUrl + '" target="_blank" rel="noopener noreferrer" class="chat-link">' + safeUrl + '</a>';
+    if (trail) out += escape(trail);
+    last = m.index + url.length;
+  }
+  out += escape(s.slice(last));
+  // 줄바꿈 보존
+  return out.replace(/\n/g, '<br>');
+}
+
 function renderChatMessages() {
   const ul = $('chatMessages');
   const emptyEl = $('chatEmpty');
@@ -6921,7 +6956,7 @@ function renderChatMessages() {
       bubble.style.padding = '0';
       bubble.style.background = 'transparent';
       bubble.appendChild(renderGostopChatCard(code));
-    } else if (hasText) li.querySelector('.chat-bubble').textContent = m.text;
+    } else if (hasText) li.querySelector('.chat-bubble').innerHTML = linkifyChatText(m.text);
     if (hasImage) {
       const imgEl = li.querySelector('.chat-msg-image');
       imgEl.src = m.imageUrl;
