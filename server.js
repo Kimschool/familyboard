@@ -3818,6 +3818,37 @@ const FORTUNE = {
   ],
 };
 
+// ★ FORTUNE 배열 grade 인터리브 — 각 띠 21개 운세에서 대길/중길/소길/평/주의 가
+//   인덱스 0,1,2... 에 골고루 분산되도록 재정렬. 이전엔 대길 2개가 인덱스 0,1
+//   에만 있어서 가족 멤버 id 패턴에 따라 21일 중 75% 가족 누구도 대길 못 보는
+//   버그(사용자 제보).
+//   인터리브 후 대길은 0번, 5번 인덱스에 위치 → 21일 중 약 50% 매일 누군가 대길.
+(function reshuffleFortune() {
+  const order = ['대길', '중길', '소길', '평', '주의'];
+  Object.keys(FORTUNE).forEach(function (z) {
+    const pool = FORTUNE[z];
+    const byGrade = {};
+    pool.forEach(function (p) {
+      if (!byGrade[p.g]) byGrade[p.g] = [];
+      byGrade[p.g].push(p);
+    });
+    const out = [];
+    while (out.length < pool.length) {
+      let added = false;
+      for (let i = 0; i < order.length; i++) {
+        const g = order[i];
+        if (byGrade[g] && byGrade[g].length) {
+          out.push(byGrade[g].shift());
+          added = true;
+          if (out.length >= pool.length) break;
+        }
+      }
+      if (!added) break;
+    }
+    FORTUNE[z] = out;
+  });
+})();
+
 // 올해의 띠별 운세 — birth_year % 5 로 인덱스 선택
 const YEAR_FORTUNE = {
   '쥐': [
