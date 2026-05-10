@@ -670,13 +670,23 @@
   const SINGLE_KEY = 'gostop_single_progress_v5';
   const SINGLE_KEY_V4 = 'gostop_single_progress_v4';
   const SINGLE_KEY_V3 = 'gostop_single_progress_v3';
-  // ★ 레벨별 점당(₩) — 1단계 100원, 단계마다 1.2배 (완만한 지수 상승)
-  //    이전엔 5배 → Lv.40 에서 점당 1.16×10²³ 원 (3.5×10²⁷ 원 시작금) 비현실적.
-  //    1.2배: Lv.40 점당 약 14.7만원, 시작금 약 4400만원 — 현실적인 곡선.
-  //    Lv.1=100, Lv.10=516, Lv.20=3180, Lv.30=19,627, Lv.40=146,977.
+  // ★ 레벨별 점당(₩) — 1.2배 지수 + 레벨별 prime offset.
+  //    이전 5배 곡선은 Lv.40 에서 천문학적, 현재 1.2배는 현실적.
+  //    추가: 끝자리 0 회피 — 점당이 100/200/500 같이 깔끔하면 "성의 없다" 인상,
+  //    레벨별 결정적 prime offset 더해 자연스러운 숫자 생성.
+  //    예) Lv.1=103, Lv.5=210→ +13=223, Lv.10=516+41=557, Lv.40=122,481+191=122,672.
+  const _PV_OFFSETS = [
+    3, 7, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59, 61, 67, 71, 73, 79, 83,
+    89, 97, 101, 103, 107, 109, 113, 127, 131, 137, 139, 149, 151, 157, 163, 167, 173, 179, 181, 191,
+  ];
   function pointValue(level) {
     const L = Math.max(1, Math.min(40, level | 0));
-    return Math.round(100 * Math.pow(1.2, L - 1));
+    const base = Math.round(100 * Math.pow(1.2, L - 1));
+    const off = _PV_OFFSETS[L - 1] || 7;
+    let v = base + off;
+    // 보수: 만에 하나 끝자리 0 이면 +1
+    if (v % 10 === 0) v += 1;
+    return v;
   }
   // 레벨별 시작(나·봇) 소지금 — 점당 × 300
   function startingMoney(level) {
