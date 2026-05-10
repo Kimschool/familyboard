@@ -667,41 +667,52 @@
   });
 
   // ===== 싱글모드 =====
-  const SINGLE_KEY = 'gostop_single_progress_v4';
+  const SINGLE_KEY = 'gostop_single_progress_v5';
+  const SINGLE_KEY_V4 = 'gostop_single_progress_v4';
   const SINGLE_KEY_V3 = 'gostop_single_progress_v3';
-  // 레벨별 점당(₩) — 1단계 100원, 단계마다 5배 (지수 상승)
+  // ★ 레벨별 점당(₩) — 1단계 100원, 단계마다 1.2배 (완만한 지수 상승)
+  //    이전엔 5배 → Lv.40 에서 점당 1.16×10²³ 원 (3.5×10²⁷ 원 시작금) 비현실적.
+  //    1.2배: Lv.40 점당 약 14.7만원, 시작금 약 4400만원 — 현실적인 곡선.
+  //    Lv.1=100, Lv.10=516, Lv.20=3180, Lv.30=19,627, Lv.40=146,977.
   function pointValue(level) {
     const L = Math.max(1, Math.min(40, level | 0));
-    return Math.round(100 * Math.pow(5, L - 1));
+    return Math.round(100 * Math.pow(1.2, L - 1));
   }
-  // 레벨별 시작(나·봇) 소지금 — 점당 × 300 (1단계 3만 원, 이후 5배씩)
+  // 레벨별 시작(나·봇) 소지금 — 점당 × 300
   function startingMoney(level) {
     return pointValue(level) * 300;
   }
-  // v3 → v4 마이그레이션: 전적·레벨은 유지, 소지금은 새 공식으로 재계산
-  function migrateSingleFromV3() {
+  // 마이그레이션: v3/v4 → v5. 전적·레벨은 유지, 소지금은 새 공식으로 재계산.
+  function migrateSingleProgress() {
     try {
       if (localStorage.getItem(SINGLE_KEY)) return;
-      const leg = localStorage.getItem(SINGLE_KEY_V3);
-      const j = leg ? JSON.parse(leg) : {};
+      const legV4 = localStorage.getItem(SINGLE_KEY_V4);
+      const legV3 = localStorage.getItem(SINGLE_KEY_V3);
+      const leg = legV4 || legV3;
+      if (!leg) return;
+      const j = JSON.parse(leg);
       const level = Math.max(1, Math.min(40, Number(j.level) || 1));
       const p = {
         level: level,
         wins: Number(j.wins) || 0,
         losses: Number(j.losses) || 0,
         cleared: Array.isArray(j.cleared) ? j.cleared : [],
-        myMoney: startingMoney(level), // 새 공식으로 초기화
+        myMoney: startingMoney(level), // 새 공식으로 초기화 (이전 천문학적 금액 폐기)
       };
       localStorage.setItem(SINGLE_KEY, JSON.stringify(p));
     } catch { /* empty */ }
   }
   function loadSingleProgress() {
     try {
-      migrateSingleFromV3();
+      migrateSingleProgress();
       const j = JSON.parse(localStorage.getItem(SINGLE_KEY) || '{}');
       const cleared = Array.isArray(j.cleared) ? j.cleared : [];
       const level = Math.max(1, Math.min(40, Number(j.level) || 1));
-      const myMoney = (j.myMoney != null) ? Number(j.myMoney) : startingMoney(level);
+      let myMoney = (j.myMoney != null) ? Number(j.myMoney) : startingMoney(level);
+      // ★ 안전장치: myMoney 가 새 곡선 기준으로 비현실적 (>= 다음 레벨 시작금 × 100)
+      //    이면 현재 레벨 시작금으로 리셋. 이전 5배 곡선 시절 누적된 천문학적 잔고 정리.
+      const cap = startingMoney(Math.min(40, level + 1)) * 100;
+      if (myMoney > cap) myMoney = startingMoney(level);
       return {
         level: level,
         wins: Number(j.wins) || 0,
